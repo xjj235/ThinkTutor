@@ -1,0 +1,48 @@
+{
+  "name": "thinktutor",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "postinstall": "prisma generate",
+    "dev": "next dev -H 127.0.0.1",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "test": "tsx scripts/prepare-test.ts && vitest run",
+    "test:unit": "cross-env AI_PROVIDER=mock DATABASE_URL=file:./test.db vitest run tests/unit",
+    "test:integration": "tsx scripts/prepare-test.ts && vitest run tests/integration",
+    "test:e2e": "cross-env AI_PROVIDER=mock DATABASE_URL=file:./e2e.db playwright test",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "cross-env RUST_LOG=info prisma migrate deploy",
+    "prisma:seed": "prisma db seed"
+  },
+  "dependencies": {
+    "@libsql/client": "latest",
+    "@prisma/adapter-libsql": "7.9.1",
+    "@prisma/client": "7.9.1",
+    "dotenv": "latest",
+    "next": "latest",
+    "openai": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "server-only": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@playwright/test": "latest",
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "cross-env": "latest",
+    "eslint": "9.39.2",
+    "eslint-config-next": "latest",
+    "postcss": "latest",
+    "prisma": "7.9.1",
+    "tailwindcss": "latest",
+    "tsx": "latest",
+    "typescript": "6.0.2",
+    "vitest": "latest"
+  }
+}

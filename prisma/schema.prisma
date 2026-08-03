@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum LearningPhase {
+  DIAGNOSIS
+  SOCRATIC
+  FEYNMAN
+  COMPLETED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM_EVENT
+}
+
+enum QuestionType {
+  CONCEPT_CLARIFICATION
+  CAUSE_PROBE
+  ASSUMPTION_TEST
+  COUNTEREXAMPLE
+  TRANSFER
+  SCAFFOLDED_HINT
+}
+
+model LearningSession {
+  id                  String          @id @default(cuid())
+  course              String?
+  chapter             String?
+  topic               String
+  goal                String
+  learnerLevel        String
+  referenceText       String?
+  phase               LearningPhase   @default(DIAGNOSIS)
+  socraticRound       Int             @default(0)
+  unknownStreak       Int             @default(0)
+  feynmanExplanation  String?
+  parentSessionId     String?
+  retryRequestId      String?
+  parentSession       LearningSession? @relation("RetrySessions", fields: [parentSessionId], references: [id], onDelete: SetNull)
+  retrySessions       LearningSession[] @relation("RetrySessions")
+  messages            Message[]
+  report              LearningReport?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([parentSessionId])
+  @@index([phase])
+  @@unique([parentSessionId, retryRequestId])
+}
+
+model Message {
+  id              String        @id @default(cuid())
+  sessionId       String
+  session         LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role            MessageRole
+  phase           LearningPhase
+  content         String
+  questionType    QuestionType?
+  clientRequestId String?
+  createdAt       DateTime      @default(now())
+
+  @@index([sessionId, createdAt])
+  @@unique([sessionId, clientRequestId])
+}
+
+model LearningReport {
+  id              String          @id @default(cuid())
+  sessionId       String          @unique
+  session         LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  summary         String
+  conceptScore    Int
+  logicScore      Int
+  clarityScore    Int
+  exampleScore    Int
+  transferScore   Int
+  overallScore    Int
+  dimensionsJson  String
+  masteredJson    String
+  gapsJson        String
+  nextStepsJson   String
+  disclaimer      String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
