@@ -3,20 +3,40 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  DELETED
+}
+
+enum SessionSource {
+  SELF_DIRECTED
+  ASSIGNMENT
+  RETRY
 }
 
 enum LearningPhase {
   DIAGNOSIS
   SOCRATIC
   FEYNMAN
+  REPORTING
   COMPLETED
+  ABANDONED
 }
 
 enum MessageRole {
   USER
   ASSISTANT
-  SYSTEM_EVENT
+  SYSTEM
 }
 
 enum QuestionType {
@@ -24,67 +44,532 @@ enum QuestionType {
   CAUSE_PROBE
   ASSUMPTION_TEST
   COUNTEREXAMPLE
+  EVIDENCE_PROBE
   TRANSFER
   SCAFFOLDED_HINT
 }
 
-model LearningSession {
-  id                  String          @id @default(cuid())
-  course              String?
-  chapter             String?
-  topic               String
-  goal                String
-  learnerLevel        String
-  referenceText       String?
-  phase               LearningPhase   @default(DIAGNOSIS)
-  socraticRound       Int             @default(0)
-  unknownStreak       Int             @default(0)
-  feynmanExplanation  String?
-  parentSessionId     String?
-  retryRequestId      String?
-  parentSession       LearningSession? @relation("RetrySessions", fields: [parentSessionId], references: [id], onDelete: SetNull)
-  retrySessions       LearningSession[] @relation("RetrySessions")
-  messages            Message[]
-  report              LearningReport?
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
 
+enum EnrollmentStatus {
+  ACTIVE
+  REMOVED
+}
+
+enum AssignmentStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
+enum ClassroomStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AssignmentProgress {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum MaterialStatus {
+  PENDING_UPLOAD
+  UPLOADED
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+  UNSUPPORTED
+  DELETED
+}
+
+enum MaterialKind {
+  PDF
+  DOCX
+  TXT
+  MARKDOWN
+}
+
+enum GapStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  DISMISSED
+}
+
+enum ReportDimensionKey {
+  CONCEPT_COMPLETENESS
+  LOGIC_COMPLETENESS
+  EXPRESSION_CLARITY
+  EXAMPLE_ABILITY
+  TRANSFER_ABILITY
+}
+
+enum AuditAction {
+  AUTH_LOGIN
+  AUTH_LOGOUT
+  AUTH_LOGIN_FAILED
+  USER_REGISTERED
+  USER_PASSWORD_CHANGED
+  USER_DELETED
+  USER_ROLE_CHANGED
+  USER_STATUS_CHANGED
+  COURSE_CREATED
+  COURSE_UPDATED
+  MATERIAL_UPLOADED
+  MATERIAL_DELETED
+  CLASSROOM_CREATED
+  ENROLLMENT_CHANGED
+  ASSIGNMENT_PUBLISHED
+  SESSION_CREATED
+  SESSION_COMPLETED
+  REPORT_CREATED
+  ADMIN_CREATED
+  ROLE_CHANGE
+  USER_DISABLE
+  COURSE_DELETE
+  MATERIAL_DELETE
+  ASSIGNMENT_PUBLISH
+  ADMIN_LOGIN
+}
+
+enum AIUsageStatus {
+  SUCCESS
+  FAILED
+}
+
+model User {
+  id              String     @id @default(cuid())
+  email           String     @unique
+  passwordHash    String
+  name            String
+  role            UserRole   @default(STUDENT)
+  status          UserStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  authSessions       AuthSession[]
+  learningSessions   LearningSession[]
+  ownedCourses       Course[]            @relation("CourseOwner")
+  createdClassrooms  Classroom[]         @relation("ClassroomCreator")
+  enrollments        Enrollment[]
+  createdAssignments Assignment[]        @relation("AssignmentCreator")
+  assignmentProgress AssignmentStudent[]
+  uploadedMaterials  Material[]
+  aiUsage            AIUsage[]
+  auditEvents        AuditLog[]          @relation("AuditActor")
+
+  @@index([role, status])
+  @@index([createdAt])
+}
+
+model AuthSession {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  ipHash     String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model Course {
+  id          String       @id @default(cuid())
+  ownerId     String
+  title       String
+  description String?
+  audience    String?
+  subject     String?
+  status      CourseStatus @default(DRAFT)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  owner          User              @relation("CourseOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  chapters       Chapter[]
+  goals          LearningGoal[]
+  materials      Material[]
+  materialChunks MaterialChunk[]
+  classrooms     Classroom[]
+  assignments    Assignment[]
+  sessions       LearningSession[]
+
+  @@index([ownerId, status, updatedAt])
+}
+
+model Chapter {
+  id          String   @id @default(cuid())
+  courseId    String
+  title       String
+  description String?
+  sortOrder   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course         Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  goals          LearningGoal[]
+  materials      Material[]
+  materialChunks MaterialChunk[]
+  assignments    Assignment[]
+  sessions       LearningSession[]
+
+  @@unique([courseId, sortOrder])
+  @@index([courseId, title])
+}
+
+model LearningGoal {
+  id            String   @id @default(cuid())
+  courseId      String
+  chapterId     String?
+  title         String
+  objective     String
+  description   String?
+  expectedLevel String?
+  sortOrder     Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  course      Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chapter     Chapter?          @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+  sessions    LearningSession[]
+
+  @@unique([courseId, sortOrder])
+  @@index([chapterId])
+}
+
+model Classroom {
+  id          String          @id @default(cuid())
+  courseId    String
+  teacherId   String
+  name        String
+  description String?
+  joinCode    String          @unique
+  status      ClassroomStatus @default(ACTIVE)
+  joinEnabled Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdBy   User         @relation("ClassroomCreator", fields: [teacherId], references: [id], onDelete: Restrict)
+  enrollments Enrollment[]
+  assignments Assignment[]
+
+  @@index([courseId, status])
+  @@index([teacherId])
+}
+
+model Enrollment {
+  id          String           @id @default(cuid())
+  classroomId String
+  userId      String
+  status      EnrollmentStatus @default(ACTIVE)
+  joinedAt    DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  classroom Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([classroomId, userId])
+  @@index([userId, status])
+}
+
+model Assignment {
+  id             String           @id @default(cuid())
+  courseId       String
+  classroomId    String
+  chapterId      String?
+  learningGoalId String?
+  createdById    String
+  title          String
+  instructions   String
+  description    String?
+  learnerLevel   String
+  status         AssignmentStatus @default(DRAFT)
+  dueAt          DateTime?
+  openAt         DateTime?
+  maxAttempts    Int              @default(1)
+  version        Int              @default(1)
+  publishedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  course       Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  classroom    Classroom           @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  chapter      Chapter?            @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+  learningGoal LearningGoal?       @relation(fields: [learningGoalId], references: [id], onDelete: SetNull)
+  createdBy    User                @relation("AssignmentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  students     AssignmentStudent[]
+  sessions     LearningSession[]
+
+  @@index([classroomId, status, dueAt])
+  @@index([courseId, chapterId])
+  @@index([createdById])
+}
+
+model AssignmentStudent {
+  id           String             @id @default(cuid())
+  assignmentId String
+  studentId    String
+  progress     AssignmentProgress @default(NOT_STARTED)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+  @@index([studentId, progress, updatedAt])
+}
+
+model Material {
+  id             String         @id @default(cuid())
+  courseId       String
+  chapterId      String?
+  uploadedById   String
+  title          String
+  originalName   String
+  objectKey      String         @unique
+  mimeType       String
+  kind           MaterialKind
+  byteSize       Int
+  sha256         String?
+  status         MaterialStatus @default(PENDING_UPLOAD)
+  failureCode    String?
+  failureMessage String?
+  retryCount     Int            @default(0)
+  processedAt    DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  course     Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chapter    Chapter?        @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+  uploadedBy User            @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  chunks     MaterialChunk[]
+
+  @@index([courseId, status, createdAt])
+  @@index([chapterId])
+  @@index([uploadedById])
+}
+
+model MaterialChunk {
+  id         String   @id @default(cuid())
+  materialId String
+  courseId   String
+  chapterId  String?
+  chunkIndex Int
+  content    String
+  tokenCount Int
+  charCount  Int
+  keywords   String[]
+  searchText String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  course   Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chapter  Chapter? @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+
+  @@unique([materialId, chunkIndex])
+  @@index([courseId, materialId])
+}
+
+model LearningSession {
+  id              String        @id @default(cuid())
+  userId          String
+  courseId        String?
+  chapterId       String?
+  learningGoalId  String?
+  assignmentId    String?
+  source          SessionSource @default(SELF_DIRECTED)
+  course          String?
+  chapter         String?
+  topic           String
+  objective       String
+  learnerLevel    String
+  referenceText   String?
+  phase           LearningPhase @default(DIAGNOSIS)
+  socraticTurns   Int           @default(0)
+  maxTurns        Int           @default(6)
+  learnerState    Json?
+  contextSummary  String?
+  parentSessionId String?
+  sourceGapId     String?
+  version         Int           @default(0)
+  startedAt       DateTime      @default(now())
+  completedAt     DateTime?
+  abandonedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  student       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseRecord  Course?           @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  chapterRecord Chapter?          @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+  learningGoal  LearningGoal?     @relation(fields: [learningGoalId], references: [id], onDelete: SetNull)
+  assignment    Assignment?       @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  messages      Message[]
+  report        LearningReport?
+  parentSession LearningSession?  @relation("SessionRetry", fields: [parentSessionId], references: [id], onDelete: Cascade)
+  retrySessions LearningSession[] @relation("SessionRetry")
+  sourceGap     LearningGap?      @relation("GapRetrySource", fields: [sourceGapId], references: [id], onDelete: SetNull)
+  aiUsage       AIUsage[]
+
+  @@index([userId, createdAt])
+  @@index([courseId, updatedAt])
+  @@index([assignmentId, phase])
   @@index([parentSessionId])
-  @@index([phase])
-  @@unique([parentSessionId, retryRequestId])
+  @@index([sourceGapId])
 }
 
 model Message {
   id              String        @id @default(cuid())
   sessionId       String
-  session         LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   role            MessageRole
   phase           LearningPhase
   content         String
   questionType    QuestionType?
-  clientRequestId String?
+  clientRequestId String?       @unique
+  metadata        Json?
   createdAt       DateTime      @default(now())
 
+  session LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
   @@index([sessionId, createdAt])
-  @@unique([sessionId, clientRequestId])
+  @@index([sessionId, phase])
 }
 
 model LearningReport {
-  id              String          @id @default(cuid())
-  sessionId       String          @unique
-  session         LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  summary         String
-  conceptScore    Int
-  logicScore      Int
-  clarityScore    Int
-  exampleScore    Int
-  transferScore   Int
-  overallScore    Int
-  dimensionsJson  String
-  masteredJson    String
-  gapsJson        String
-  nextStepsJson   String
-  disclaimer      String
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id           String   @id @default(cuid())
+  sessionId    String   @unique
+  summary      String
+  overallScore Int
+  overallLevel String
+  disclaimer   String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  session    LearningSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  dimensions ReportDimension[]
+  strengths  LearningStrength[]
+  gaps       LearningGap[]
+  nextSteps  NextLearningStep[]
+
+  @@index([overallScore, createdAt])
+}
+
+model ReportDimension {
+  id       String             @id @default(cuid())
+  reportId String
+  key      ReportDimensionKey
+  score    Int
+  evidence String
+  feedback String
+
+  report LearningReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, key])
+  @@index([key, score])
+}
+
+model LearningStrength {
+  id       String @id @default(cuid())
+  reportId String
+  title    String
+  evidence String
+  position Int
+
+  report LearningReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, position])
+}
+
+model LearningGap {
+  id         String    @id @default(cuid())
+  reportId   String
+  title      String
+  evidence   String
+  repairTask String
+  priority   Int
+  status     GapStatus @default(OPEN)
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  report        LearningReport    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  retrySessions LearningSession[] @relation("GapRetrySource")
+
+  @@index([reportId, status, priority])
+}
+
+model NextLearningStep {
+  id          String  @id @default(cuid())
+  reportId    String
+  description String
+  position    Int
+  completed   Boolean @default(false)
+
+  report LearningReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, position])
+}
+
+model AIUsage {
+  id               String        @id @default(cuid())
+  userId           String?
+  sessionId        String?
+  provider         String
+  model            String
+  operation        String
+  requestId        String
+  status           AIUsageStatus
+  promptTokens     Int?
+  completionTokens Int?
+  cacheHitTokens   Int?
+  latencyMs        Int
+  errorCode        String?
+  retryCount       Int           @default(0)
+  createdAt        DateTime      @default(now())
+
+  user    User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  session LearningSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([sessionId, createdAt])
+  @@index([provider, model, createdAt])
+  @@index([status, errorCode, createdAt])
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String?
+  action     AuditAction
+  targetType String
+  targetId   String?
+  requestId  String
+  ipHash     String?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
 }

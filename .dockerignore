@@ -1,0 +1,12 @@
+.git
+.next
+node_modules
+.env*
+!.env.example
+!.env.production.example
+.data
+.embedded-postgres
+backups
+test-results
+playwright-report
+*.db

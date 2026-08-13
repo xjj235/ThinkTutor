@@ -1,0 +1,4 @@
+import { getTeacherClassAnalytics } from "@/lib/analytics-service";
+import { requirePageUser } from "@/lib/page-auth";
+import { PageShell, StatCard } from "@/components/page-shell";
+export default async function ClassAnalyticsPage({params}:{params:Promise<{id:string}>}){const user=await requirePageUser(["TEACHER"]);const {id}=await params;const data=await getTeacherClassAnalytics(user,id);return <PageShell title={`${data.name} · 学习分析`} description="仅展示任务完成和形成性报告汇总，不推断人格、智力或标准化能力。"><section className="stat-grid"><StatCard label="学生" value={data.enrollments.length}/><StatCard label="任务" value={data.assignments.length}/></section><div className="data-list">{data.assignments.map(item=><div className="data-row" key={item.id}><span><strong>{item.title}</strong><small>完成 {item.completedCount} / {item.assignedCount}</small></span><span className="badge">平均 {item.averageScore??"暂无"}</span></div>)}</div></PageShell>}

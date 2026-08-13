@@ -1,0 +1,6 @@
+"use client";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { AsyncFeedback, idleFeedback, type AsyncFeedbackState } from "./async-feedback";
+import { feedbackForError, readApiResponse } from "@/lib/client-api";
+export function StartAssignmentButton({assignmentId}:{assignmentId:string}){const router=useRouter();const[pending,setPending]=useState(false);const[feedback,setFeedback]=useState<AsyncFeedbackState>(idleFeedback);async function start(){setPending(true);setFeedback({kind:"loading",message:"正在生成初始诊断…"});try{const response=await fetch("/api/sessions",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({assignmentId,topic:"由教师任务提供",objective:"由教师任务提供",learnerLevel:"由教师任务提供"})});const result=await readApiResponse<{session:{id:string}}>(response,"启动失败，请重试。");router.push(`/session/${result.session.id}`);}catch(error){setFeedback(feedbackForError(error,"启动失败，请重试。"))}finally{setPending(false)}}return <div><button className="button" disabled={pending} onClick={()=>void start()}>{pending?"正在生成诊断…":"开始这项学习"}</button><AsyncFeedback state={feedback} onRetry={!pending&&feedback.kind==="error"&&feedback.retryable?()=>void start():undefined}/></div>}

@@ -1,0 +1,2 @@
+import { PageShell } from "@/components/page-shell";
+export default function AboutPage() { return <PageShell title="关于问思学伴" description="一款围绕提问、表达、修正与迁移构建的自主学习工具。"><div className="card-grid"><article className="card"><h2>不是答案机器</h2><p>教练以一个主要问题推进思考，不替学生完成答案。</p></article><article className="card"><h2>证据可追溯</h2><p>五维反馈仅依据本次对话中真实展示的能力。</p></article><article className="card"><h2>形成闭环</h2><p>从诊断到报告，再从最高优先级漏洞开始一轮针对性学习。</p></article></div></PageShell>; }

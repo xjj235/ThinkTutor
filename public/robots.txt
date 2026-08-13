@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /admin
+Disallow: /teacher
+Disallow: /dashboard
+Disallow: /session
+Disallow: /report

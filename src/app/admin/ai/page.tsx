@@ -1,0 +1,4 @@
+import { listAIUsage } from "@/lib/admin-service";
+import { requirePageUser } from "@/lib/page-auth";
+import { PageShell } from "@/components/page-shell";
+export default async function AdminAIPage(){await requirePageUser(["ADMIN"]);const rows=await listAIUsage(100);return <PageShell title="AI 使用" description="日志不包含 API Key、完整提示词或学生敏感原文。"><div className="table-wrap"><table><thead><tr><th>时间</th><th>模型</th><th>操作</th><th>状态</th><th>Token</th><th>耗时</th><th>错误</th></tr></thead><tbody>{rows.map(row=><tr key={row.id}><td>{new Intl.DateTimeFormat("zh-CN",{dateStyle:"short",timeStyle:"medium"}).format(row.createdAt)}</td><td>{row.model}</td><td>{row.operation}</td><td>{row.status}</td><td>{(row.promptTokens??0)+(row.completionTokens??0)}</td><td>{row.latencyMs} ms</td><td>{row.errorCode??"—"}</td></tr>)}</tbody></table></div></PageShell>}

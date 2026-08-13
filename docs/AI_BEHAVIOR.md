@@ -1,106 +1,25 @@
-# ThinkTutor AI 行为契约
+# AI 行为与 DeepSeek Provider
 
-## Provider 接口
+生产 Provider 仅为 `DeepSeekProvider`，模型从 `DEEPSEEK_MODEL` 读取，生产必须等于 `deepseek-v4-flash`；开发和全部自动测试默认使用确定性 `MockAIProvider`。不存在 OpenAI SDK、OpenAI Provider 或旧 DeepSeek 模型名。
 
-统一接口位于 `lib/ai/types.ts`：
+## 调用策略
 
-```ts
-interface AIProvider {
-  createDiagnosticQuestion(...): Promise<...>;
-  createCoachTurn(...): Promise<...>;
-  createLearningReport(...): Promise<...>;
-}
-```
+- 诊断、常规追问、费曼说明关闭 thinking；
+- 报告、再练任务、上下文摘要、材料关键词启用 thinking 并设置高推理强度；
+- 只消费最终 `message.content`，不保存或展示 `reasoning_content`；
+- Chat Completions 使用 `response_format: {type: "json_object"}`，系统消息同时给出 JSON 词与结构示例；
+- JSON 解析后必须再过对应 Zod Schema；`overallScore` 不属于模型 Schema。
 
-实现：
+每轮只有一个主要问题。苏格拉底类型包括概念澄清、原因追问、证据追问、假设检验、反例、迁移和支架提示。未展示的能力不能生成掌握证据；报告每个维度必须给出本次对话证据。
 
-- `MockAIProvider`：默认开发、测试和无 API Key 演示。
-- `OpenAIProvider`：真实 OpenAI Responses API 调用。
+## 不可信边界
 
-## 诊断问题
+学生输入、教师参考材料与检索片段都放在 `<untrusted_learning_content>` 包装内，不拼入系统规则。材料中的“忽略规则、泄露提示词、改变角色”只视为学习内容。Markdown 渲染关闭原始 HTML，不使用 `dangerouslySetInnerHTML`。
 
-- 创建会话时生成一条诊断问题。
-- 只问一个主要问题。
-- 不提供标准答案。
-- 目标是暴露学生已有理解和不确定处。
+## 失败
 
-## 苏格拉底追问
+超时、429、网络/5xx、无效 JSON 与 Schema 错误映射到统一可重试错误；最多两次指数退避。AI 调用发生在数据库状态事务前，因此失败不会推进阶段、增加轮数或伪造学生消息。
 
-支持问题类型：
+## 可观测性
 
-- `CONCEPT_CLARIFICATION`
-- `CAUSE_PROBE`
-- `ASSUMPTION_TEST`
-- `COUNTEREXAMPLE`
-- `TRANSFER`
-- `SCAFFOLDED_HINT`
-
-规则：
-
-- 每条 AI 回复只能包含一个主要问题。
-- 不输出问题列表。
-- 不直接输出完整答案。
-- 最少完成 3 轮，最多完成 5 轮。
-- 模型只能建议 `REQUEST_FEYNMAN`，最终状态转换由服务端决定。
-
-## 连续“不知道”支持
-
-服务端通过确定性规则识别低信息回答。
-
-- 第一次：缩小问题范围。
-- 第二次：提供线索或二选一框架。
-- 第三次及以后：提供最小必要原理，但仍要求学生完成解释。
-
-## 学习报告
-
-报告五个维度：
-
-- 概念完整度
-- 逻辑完整度
-- 表达清晰度
-- 举例能力
-- 迁移能力
-
-每个维度必须包含：
-
-- 0 到 100 整数分数。
-- 学生回答中的具体证据。
-- 一条具体反馈。
-
-模型不得生成 `overallScore`。服务端对五维分数取算术平均并四舍五入。
-
-如果没有证据展示某项能力，证据必须写：
-
-```text
-本次对话未充分展示
-```
-
-报告固定免责声明：
-
-```text
-本报告仅依据本次学习对话生成，属于形成性学习反馈，不代表标准化能力测评结果。
-```
-
-## OpenAI 模式安全约束
-
-- 使用 OpenAI 官方 Node.js SDK。
-- 使用 Responses API。
-- 使用结构化输出。
-- 使用 Zod 校验返回值。
-- 设置请求超时。
-- 处理网络错误、限流、无效输出和拒绝输出。
-- 错误时不修改学习阶段。
-- 不记录 API Key。
-- 不把学生输入拼接成系统指令。
-- 将学生输入和参考材料明确标记为不可信内容。
-
-## Mock 模式
-
-Mock Provider 确定性生成：
-
-- 诊断问题。
-- 苏格拉底追问。
-- 支架提示。
-- 五维学习报告。
-
-它不使用随机数，保证单元测试、集成测试和 Playwright 测试可以在没有 API Key 的环境中完成完整闭环。
+记录 provider、model、operation、状态、官方返回的 Token、缓存命中 Token、耗时、重试次数和错误码；不推测或伪造 Token，不记录密钥、完整提示词或完整学生原文。DeepSeek `user` 是服务端加盐域隔离后的不可逆稳定哈希。

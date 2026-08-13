@@ -1,61 +1,28 @@
-# ThinkTutor 架构说明
+# ThinkTutor 生产架构
 
-## 总览
+## 运行拓扑
 
-ThinkTutor 是一个单体 Next.js App Router 应用。页面、API Routes、Prisma 数据访问和 AI Provider 位于同一仓库，避免为 MVP 引入独立后端。
+Internet → DNS → ECS Nginx :443 → Next.js web :3000。Web 与独立材料 Worker 通过 VPC 访问 RDS PostgreSQL、Tair Redis、私有 OSS，并从服务端调用 DeepSeek。
 
-```mermaid
-flowchart LR
-  Browser["浏览器页面"] --> Api["Next.js API Routes"]
-  Api --> Service["Session Service"]
-  Service --> State["纯状态机"]
-  Service --> Prisma["Prisma"]
-  Prisma --> SQLite["SQLite"]
-  Service --> Provider["AIProvider"]
-  Provider --> Mock["MockAIProvider"]
-  Provider --> OpenAI["OpenAIProvider"]
-```
+## 边界
 
-## 数据流
+- Route Handler：Zod 输入、同源检查、认证、RBAC/资源授权、统一响应；
+- Domain Service：事务、一致性、幂等、状态机调用；
+- AI Provider：`mock | deepseek`，结构化 JSON 后执行 Zod 二次验证；
+- PostgreSQL：唯一主数据源；Redis 只承担限流、短锁和队列；
+- Storage Provider：本地开发签名 URL或私有 OSS 短时签名 URL；
+- Worker：魔数校验、PDF/DOCX/TXT/MD 提取、语义段落切块、幂等写入。
 
-1. 学生在 `/task/new` 创建任务。
-2. `POST /api/sessions` 校验输入，调用 AI Provider 生成诊断问题，写入 `LearningSession` 和初始 `Message`。
-3. `/session/[sessionId]` 从 `GET /api/sessions/:id` 恢复完整会话状态。
-4. 学生提交回答时，服务端状态机判断阶段和轮数，AI Provider 只生成下一步内容或建议。
-5. 进入 `FEYNMAN` 后，学生提交讲解，服务端生成报告、计算 overallScore，并将 session 标记为 `COMPLETED`。
-6. `/report/[sessionId]` 展示报告，并可通过 retry 创建带 `parentSessionId` 的新会话。
+## 学习状态
 
-## 状态机
+`DIAGNOSIS → SOCRATIC → FEYNMAN → REPORTING → COMPLETED`，主动终止进入 `ABANDONED`。纯函数位于 `src/lib/state-machine.ts`，React 不决定转换。AI 先生成，服务端验证后才进入可序列化事务；AI 失败时阶段、轮数和消息均不变化。
 
-状态只由服务端推进：
+主动进入费曼要求至少 3 轮、概念/因果/证据覆盖、至少三类问题和可验证 LearnerState；达到 `maxTurns` 强制进入。报告五维数据规范化保存，`overallScore` 由服务端算术平均。
 
-```mermaid
-stateDiagram-v2
-  DIAGNOSIS --> SOCRATIC: submit diagnosis answer
-  SOCRATIC --> SOCRATIC: submit answer, round < 3
-  SOCRATIC --> FEYNMAN: round >= 3 and model suggests REQUEST_FEYNMAN
-  SOCRATIC --> FEYNMAN: round == 5
-  FEYNMAN --> COMPLETED: submit Feynman explanation
-```
+## 一致性
 
-模型不能直接改变阶段。它只能在 `CoachTurn.suggestion` 中给出 `CONTINUE` 或 `REQUEST_FEYNMAN`，最终由 `lib/state-machine.ts` 验证。
+消息 `clientRequestId` 全局唯一；会话 `version` 乐观并发控制；写事务使用 PostgreSQL `ReadCommitted` 并以条件更新检测冲突；Redis 会话级短锁降低重复 AI 调用。报告、消息、重试与课程层级使用明确 Cascade/SetNull/Restrict 删除规则。
 
-## 事务策略
+## 检索
 
-- AI 调用在写入前完成；AI 失败时不写用户消息、不推进阶段、不增加轮数。
-- 成功拿到 AI 输出后，用户消息、session 更新、AI 消息或报告写入尽量在 Prisma transaction 中完成。
-- `clientRequestId` 保存到 `Message`，通过 `(sessionId, clientRequestId)` 唯一约束防止重复写入。
-
-## 数据模型
-
-- `LearningSession` 保存任务字段、阶段、苏格拉底轮数、连续低信息回答次数、费曼讲解和父会话。
-- `Message` 保存所有用户与 AI 消息、阶段、问题类型和幂等请求 ID。
-- `LearningReport` 保存五维分数、服务端计算的 `overallScore`、报告 JSON 和免责声明。
-
-## 安全边界
-
-- `OpenAIProvider` 位于 server-only AI 模块。
-- API Key 只从服务端环境变量读取。
-- 学生输入和参考材料作为不可信 JSON payload 传入模型。
-- 模型输出必须经过 Zod 校验后才能写入数据库。
-- UI 使用 React 默认转义文本，不使用 `dangerouslySetInnerHTML`。
+AI 上下文由当前任务、对话摘要、最近消息和同课程/章节材料片段构成。检索接口可替换，当前词法实现使用 PostgreSQL 数据与稳定评分；可选 `pg_trgm` SQL 位于 `deploy/sql/optional-pg-trgm.sql`。

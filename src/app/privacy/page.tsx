@@ -1,0 +1,2 @@
+import { PageShell } from "@/components/page-shell";
+export default function PrivacyPage() { return <PageShell title="隐私政策" description="此页面为上线前法律审核草案，不构成已完成的法律合规结论。"><article className="card"><h2>处理的数据</h2><p>账号资料、学习任务、学习对话、形成性报告及必要的系统运行日志。</p><h2>用途与保留</h2><p>数据仅用于提供学习服务、安全审计和可靠性改进；正式保留周期与删除流程须由项目负责人和法律顾问审核后确定。</p><h2>第三方服务</h2><p>生产环境可能使用阿里云基础设施与 DeepSeek 模型服务。上线前必须补充准确的处理者、地域和跨境说明。</p></article></PageShell>; }

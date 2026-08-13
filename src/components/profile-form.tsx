@@ -1,0 +1,6 @@
+"use client";
+import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AsyncFeedback, idleFeedback, type AsyncFeedbackState } from "./async-feedback";
+import { feedbackForError, readApiResponse } from "@/lib/client-api";
+export function ProfileForm({name,email}:{name:string;email:string}){const router=useRouter();const[pending,setPending]=useState(false);const[feedback,setFeedback]=useState<AsyncFeedbackState>(idleFeedback);async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setPending(true);setFeedback({kind:"loading",message:"正在保存资料…"});const form=new FormData(event.currentTarget);try{const response=await fetch("/api/me",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({name:String(form.get("name")??"")})});await readApiResponse(response,"更新失败，请重试。");setFeedback({kind:"success",message:"资料已更新。"});router.refresh();}catch(error){setFeedback(feedbackForError(error,"更新失败，请重试。"))}finally{setPending(false)}}return <form className="stack-form card" onSubmit={submit} aria-busy={pending}><label>邮箱<input value={email} disabled/></label><label>显示姓名<input name="name" defaultValue={name} required minLength={2} maxLength={80}/></label><AsyncFeedback state={feedback}/><button className="button" disabled={pending}>{pending?"保存中…":"保存资料"}</button></form>}

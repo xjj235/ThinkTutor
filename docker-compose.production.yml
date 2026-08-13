@@ -1,0 +1,39 @@
+services:
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: .
+      target: worker
+    image: thinktutor-worker:${THINKTUTOR_IMAGE_TAG:-latest}
+    env_file: .env.migration
+    command: ["pnpm", "prisma:migrate"]
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    build:
+      context: .
+      target: runner
+    image: thinktutor-web:${THINKTUTOR_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env.production
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+  worker:
+    build:
+      context: .
+      target: worker
+    image: thinktutor-worker:${THINKTUTOR_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env.production
+    security_opt:
+      - no-new-privileges:true
