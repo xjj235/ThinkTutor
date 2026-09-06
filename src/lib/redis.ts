@@ -7,6 +7,7 @@ import { AppError } from "./errors";
 
 let redis: Redis | null | undefined;
 const memoryCounters = new Map<string, { count: number; expiresAt: number }>();
+const memoryLocks = new Map<string, { token: string; expiresAt: number }>();
 
 export function getRedis(): Redis | null {
   if (redis !== undefined) return redis;
@@ -36,7 +37,17 @@ export async function consumeRateLimit(key: string, limit: number, windowSeconds
 
 export async function acquireLock(key: string, ttlMs: number): Promise<(() => Promise<void>) | null> {
   const client = getRedis();
-  if (!client) return async () => undefined;
+  if (!client) {
+    const now = Date.now();
+    const current = memoryLocks.get(key);
+    if (current && current.expiresAt > now) return null;
+    const token = randomUUID();
+    memoryLocks.set(key, { token, expiresAt: now + ttlMs });
+    return async () => {
+      const currentLock = memoryLocks.get(key);
+      if (currentLock?.token === token) memoryLocks.delete(key);
+    };
+  }
   if (client.status === "wait") await client.connect();
   const token = randomUUID();
   const acquired = await client.set(key, token, "PX", ttlMs, "NX");

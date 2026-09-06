@@ -39,12 +39,13 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    ".next/dev/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "backups",
-    ".embedded-postgres"
+    ".embedded-postgres",
+    ".next/dev",
+    ".next/e2e"
   ]
 }

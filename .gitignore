@@ -28,6 +28,10 @@ prisma/*.db-journal
 coverage/
 test-results/
 playwright-report/
+.impeccable/review/
+
+# workstation-specific launcher
+scripts/ThinkTutorLocalPreviewLauncher.cs
 
 # misc
 .DS_Store

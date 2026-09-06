@@ -43,7 +43,7 @@ describe("report scoring", () => {
           feedback: "feedback",
         },
       },
-      strengths: ["a"],
+      strengths: [{ title: "a", evidence: "student evidence" }],
       gaps: [
         {
           title: "b",

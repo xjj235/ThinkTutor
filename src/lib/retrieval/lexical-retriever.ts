@@ -30,7 +30,14 @@ export class LexicalCourseRetriever implements RetrievalProvider {
       take: Math.min(50, input.limit * 8),
     });
     return chunks
-      .map((chunk) => ({ id: chunk.id, materialId: chunk.materialId, content: chunk.content, score: score(chunk.content, chunk.keywords, queryTerms) }))
+      .map((chunk) => ({
+        id: chunk.id,
+        materialId: chunk.materialId,
+        content: chunk.content,
+        score: score(chunk.content, chunk.keywords, queryTerms),
+        resourceType: "MATERIAL_CHUNK" as const,
+        visibility: "STUDENT" as const,
+      }))
       .sort((left, right) => right.score - left.score)
       .slice(0, input.limit);
   }

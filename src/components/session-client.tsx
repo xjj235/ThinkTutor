@@ -22,6 +22,7 @@ import {
 } from "@/lib/contracts";
 import { PhaseProgress } from "./phase-progress";
 import { SafeMarkdown } from "./safe-markdown";
+import { ArrowLeft, ArrowUpRight, Lightbulb, SendHorizontal, Play, RotateCcw } from "lucide-react";
 
 function makeRequestId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -57,6 +58,23 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
   const hintRequestId = useRef<string | null>(null);
   const feynmanRequestId = useRef<string | null>(null);
   const enterFeynmanRequestId = useRef<string | null>(null);
+  const recordRef = useRef<HTMLDivElement>(null);
+  const eventRequestId = useRef<string | null>(null);
+  async function submitSessionEvent(action: "GOAL_CONFIRMED" | "SESSION_RESUMED") {
+    if (pending) return;
+    setPending(true); setError("");
+    const clientRequestId = eventRequestId.current ?? makeRequestId("event");
+    eventRequestId.current = clientRequestId;
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}/events`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, clientRequestId }) });
+      const result = await response.json() as ApiResponse<SessionPayload>;
+      if (isApiFailure(result)) { setError(result.error.message); return; }
+      setPayload(result.data); eventRequestId.current = null;
+    } catch { setError("操作未完成，请重试。"); } finally { setPending(false); }
+  }
+  useEffect(() => {
+    if (recordRef.current) recordRef.current.scrollTop = recordRef.current.scrollHeight;
+  }, [payload?.messages.length]);
 
   const loadSession = useCallback(async () => {
     setLoading(true);
@@ -106,7 +124,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
     }
 
     setPending(true);
-    setPendingMessage("正在生成下一步问题...");
+    setPendingMessage("正在分析学习证据...");
     setError("");
     setRetryAction(null);
     const clientRequestId =
@@ -192,7 +210,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
     }
 
     setPending(true);
-    setPendingMessage("正在生成五维学习报告...");
+    setPendingMessage("正在评估本次阐释...");
     setError("");
     setRetryAction(null);
     const clientRequestId =
@@ -216,9 +234,11 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
         return;
       }
       feynmanRequestId.current = null;
-      router.push(`/report/${sessionId}`);
+      setPayload(result.data.payload);
+      setExplanation("");
+      if (result.data.payload.report) router.push(`/report/${sessionId}`);
     } catch {
-      setError("费曼讲解提交失败，请重试。");
+      setError("费曼阐释提交失败，请重试。");
       setRetryAction("feynman");
     } finally {
       setPending(false);
@@ -232,7 +252,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
     }
 
     setPending(true);
-    setPendingMessage("正在进入费曼讲解...");
+    setPendingMessage("正在进入费曼阐释...");
     setError("");
     setRetryAction(null);
     const clientRequestId =
@@ -258,7 +278,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
       setPayload(result.data);
       enterFeynmanRequestId.current = null;
     } catch {
-      setError("进入费曼讲解失败，请重试。");
+      setError("进入费曼阐释失败，请重试。");
       setRetryAction("enterFeynman");
     } finally {
       setPending(false);
@@ -313,24 +333,24 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
   }
 
   const { session, messages } = payload;
-  const canAnswer = session.phase === "DIAGNOSIS" || session.phase === "SOCRATIC";
-  const canHint = canAnswer;
-  const canFeynman = session.phase === "FEYNMAN";
-  const canEnterFeynman =
-    session.phase === "SOCRATIC" && session.socraticTurns >= 3;
+  const goalPending = session.knowledgeProgress?.pedagogicalStage === "GOAL_PRESENTATION";
+  const resumeRequired = session.knowledgeProgress?.resumeRequired;
+  const canAnswer = !goalPending && !resumeRequired && (session.phase === "DIAGNOSIS" || session.phase === "SOCRATIC");
+  const canHint = canAnswer && (payload.availableActions?.canRequestHint ?? false);
+  const canFeynman = session.phase === "FEYNMAN" && !resumeRequired;
+  const canEnterFeynman = payload.availableActions?.canEnterFeynman ?? false;
 
   return (
     <main
       id="main-content"
-      className="learning-workspace mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[320px_1fr]"
+      className="learning-workspace"
       data-parent-session-id={session.parentSessionId ?? ""}
     >
-      <aside className="learning-context space-y-5 rounded-md border border-[#dce7e6] bg-[#f7fbfa] p-4 lg:sticky lg:top-24 lg:self-start">
-        <Link href="/" className="text-sm font-medium text-[#115e59]">
-          返回首页
+      <header className="learning-context">
+        <Link href="/dashboard" className="text-sm font-medium text-[#115e59]">
+          <ArrowLeft size={15} aria-hidden="true" />学习总览
         </Link>
-        <div>
-          <p className="text-sm text-[#5d6b70]">当前任务</p>
+        <div className="learning-title">
           <h1 className="mt-1 text-2xl font-semibold text-[#172126]">
             {session.topic}
           </h1>
@@ -339,28 +359,39 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
           </p>
         </div>
         <div className="learning-details">
-          <dl className="grid gap-3 text-sm">
+          <details className="learning-metadata"><summary>任务信息</summary><dl className="grid gap-3 text-sm">
             <Info label="学习者水平" value={session.learnerLevel} />
-            <Info label="课程" value={session.course ?? "未填写"} />
-            <Info label="章节" value={session.chapter ?? "未填写"} />
+            <Info label="课程" value={session.course ?? "自主研习"} />
+            <Info label="章节" value={session.chapter ?? "未关联章节"} />
             <Info label="关联原会话" value={session.parentSessionId ? "已关联" : "无"} />
-          </dl>
-          <PhaseProgress phase={session.phase} socraticTurns={session.socraticTurns} maxTurns={session.maxTurns} />
+          </dl></details>
+          <PhaseProgress phase={session.phase} socraticTurns={session.socraticTurns} maxTurns={session.maxTurns} knowledgeProgress={session.knowledgeProgress} />
         </div>
-      </aside>
+      </header>
 
       <section className="learning-main space-y-5">
+        {goalPending ? <section className="space-y-4 border-b pb-5" aria-labelledby="goal-heading">
+          <h2 id="goal-heading" className="text-xl font-semibold">研习目标确认</h2>
+          <p className="leading-7">{session.objective}</p>
+          <p className="text-sm text-[#435257]">预计用时 15–20 分钟</p>
+          <button className="button" disabled={pending} onClick={() => void submitSessionEvent("GOAL_CONFIRMED")}><Play size={16} aria-hidden="true" />确认目标并开始</button>
+        </section> : null}
+        {!goalPending && session.knowledgeProgress && ["DIAGNOSIS", "SOCRATIC", "FEYNMAN"].includes(session.phase) && !session.knowledgeProgress.resumeVerification ? <div className="flex flex-wrap items-center justify-between gap-3">
+          {resumeRequired ? <p>研习已间隔较长时间，需先核验关键理解。</p> : <span className="text-sm text-[#435257]">当前研习进度已保存</span>}
+          <button className="button button-secondary" disabled={pending} onClick={() => void submitSessionEvent("SESSION_RESUMED")}><RotateCcw size={15} aria-hidden="true" />恢复核验</button>
+        </div> : null}
+        {session.knowledgeProgress?.resumeVerification ? <p role="status">恢复核验进行中</p> : null}
         <div className="learning-record rounded-md border border-[#dce7e6] bg-white">
           <div className="learning-record-heading border-b border-[#dce7e6] px-4 py-3">
-            <h2 className="font-semibold text-[#172126]">学习对话</h2>
+            <h2 className="font-semibold text-[#172126]">研习记录</h2>
             <p className="mt-1 text-sm text-[#5d6b70]">
-              {phaseLabels[session.phase]}阶段，系统每次只推进一个问题。
+              {phaseLabels[session.phase]}
             </p>
           </div>
-          <div className="learning-entries space-y-4 px-4 py-4">
+          <div ref={recordRef} className="learning-entries space-y-4 px-4 py-4" role="log" aria-label="研习记录" aria-relevant="additions">
             {messages.length === 0 ? (
               <p className="rounded-md border border-dashed border-[#b9d8d4] p-4 text-sm text-[#5d6b70]">
-                暂无消息。
+                暂无研习记录。
               </p>
             ) : (
               messages.map((message) => (
@@ -403,7 +434,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
               htmlFor="answer"
               className="block text-sm font-medium text-[#213236]"
             >
-              你的回答
+              独立作答
             </label>
             <textarea
               id="answer"
@@ -419,7 +450,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
               required
               disabled={pending}
               className="mt-2 w-full resize-y rounded-md border border-[#c9d9d7] bg-white px-3 py-2"
-              placeholder="先写出你的理解，不需要一次答完。"
+              placeholder="陈述观点、推理依据与尚待澄清的疑问。"
             />
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-xs text-[#5d6b70]">
@@ -432,27 +463,27 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
                   disabled={!canHint || pending}
                   className="rounded-md border border-[#b9d8d4] px-4 py-2 font-medium text-[#115e59] disabled:cursor-not-allowed disabled:text-[#8aa09d]"
                 >
-                  申请提示
+                  <Lightbulb size={15} aria-hidden="true" />{canHint ? "申请提示" : "暂无可用提示"}
                 </button>
                 <button
                   type="submit"
                   disabled={answer.trim().length < MIN_ANSWER_LENGTH || pending}
                   className="rounded-md bg-[#0f766e] px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:bg-[#94b8b4]"
                 >
-                  提交回答
+                  提交回答<SendHorizontal size={15} aria-hidden="true" />
                 </button>
               </div>
             </div>
             {canEnterFeynman ? (
               <div className="mt-4 rounded-md border border-[#b9d8d4] bg-white p-3 text-sm text-[#435257]">
-                <p>你已完成至少三轮追问，可以继续回答，也可以主动检验自己的独立讲解。</p>
+                <p>已达到自主阐释的轮次要求。</p>
                 <button
                   type="button"
                   onClick={enterFeynman}
                   disabled={pending}
                   className="mt-3 rounded-md border border-[#0f766e] px-4 py-2 font-medium text-[#115e59] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  进入费曼讲解
+                  进入费曼阐释
                 </button>
               </div>
             ) : null}
@@ -469,18 +500,18 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
               htmlFor="feynman"
               className="block text-sm font-medium text-[#213236]"
             >
-              费曼讲解
+              {session.knowledgeProgress?.pedagogicalStage === "REFLECTION" ? "反思修订" : "费曼阐释"}
             </label>
             <div
               id="feynman-requirements"
               className="mt-2 rounded-md border border-[#cfe3e0] bg-white p-3 text-sm leading-6 text-[#435257]"
             >
-              <p className="font-medium text-[#213236]">提交前请确保讲解包含：</p>
+              <p className="font-medium text-[#213236]">阐释要素</p>
               <ul className="mt-1 list-disc space-y-1 pl-5">
                 <li>核心概念及其边界</li>
                 <li>条件、原因和结果之间的联系</li>
                 <li>至少一个具体例子</li>
-                <li>换到新场景时需要检查的条件</li>
+                <li>新情境的适用条件</li>
               </ul>
             </div>
             <textarea
@@ -498,7 +529,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
               disabled={pending}
               aria-describedby="feynman-requirements"
               className="mt-3 w-full resize-y rounded-md border border-[#b9d8d4] bg-white px-3 py-2"
-              placeholder="用自己的话讲给初学者听，包含概念、因果、例子和迁移场景。"
+              placeholder="形成完整阐释：概念边界、因果机制、例证与迁移条件。"
             />
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-xs text-[#5d6b70]">
@@ -512,7 +543,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
                 }
                 className="rounded-md bg-[#0f766e] px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:bg-[#94b8b4]"
               >
-                生成学习报告
+                {session.knowledgeProgress ? session.knowledgeProgress.pedagogicalStage === "REFLECTION" ? "提交修订并生成报告" : "提交讲解" : "生成学习报告"}<ArrowUpRight size={15} aria-hidden="true" />
               </button>
             </div>
           </form>
@@ -555,6 +586,7 @@ function MessageItem({ message }: { message: MessageDTO }) {
 
   return (
     <article
+      data-role={message.role}
       className={[
         "learning-entry rounded-md border p-4",
         assistant
@@ -576,6 +608,20 @@ function MessageItem({ message }: { message: MessageDTO }) {
         ) : null}
       </div>
       <SafeMarkdown>{message.content}</SafeMarkdown>
+      {message.webSources.length ? (
+        <div className="mt-3 border-t border-[#dce7e6] pt-3 text-xs text-[#5d6b70]">
+          <p className="font-semibold text-[#213236]">实时网页来源</p>
+          <ul className="mt-1 space-y-1">
+            {message.webSources.map((source) => (
+              <li key={source.url}>
+                <a className="text-[#006d75] underline underline-offset-2" href={source.url} target="_blank" rel="noreferrer">
+                  {source.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </article>
   );
 }

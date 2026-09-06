@@ -18,6 +18,15 @@ const exportSchema = z.object({
   }),
 });
 
+function normalizeLegacyStrengths(value: unknown) {
+  const current = strengthsSchema.safeParse(value);
+  if (current.success) return current.data;
+  return z.array(z.string().trim().min(1).max(180)).max(5).parse(value).map((title) => ({
+    title,
+    evidence: "旧版报告未独立保存优势证据，请结合原始对话复核。",
+  }));
+}
+
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name);
   return index >= 0 ? process.argv[index + 1] : undefined;
@@ -94,7 +103,7 @@ async function main(): Promise<void> {
       }
       for (const row of payload.data.LearningReport) {
         const dimensions = reportDimensionsSchema.parse(jsonValue(row.dimensions));
-        const strengths = strengthsSchema.parse(jsonValue(row.strengths));
+        const strengths = normalizeLegacyStrengths(jsonValue(row.strengths));
         const gaps = reportGapsSchema.parse(jsonValue(row.gaps));
         const nextSteps = nextStepsSchema.parse(jsonValue(row.nextSteps));
         await tx.learningReport.create({
@@ -107,7 +116,7 @@ async function main(): Promise<void> {
             disclaimer: stringValue(row, "disclaimer"),
             createdAt: dateValue(row, "createdAt"),
             dimensions: { create: Object.entries(dimensions).map(([key, value]) => ({ key: ({ conceptCompleteness: "CONCEPT_COMPLETENESS", logicCompleteness: "LOGIC_COMPLETENESS", expressionClarity: "EXPRESSION_CLARITY", exampleAbility: "EXAMPLE_ABILITY", transferAbility: "TRANSFER_ABILITY" } as const)[key as keyof typeof dimensions], ...value })) },
-            strengths: { create: strengths.map((title, position) => ({ title, evidence: "旧版报告未独立保存优势证据，请结合原始对话复核。", position })) },
+            strengths: { create: strengths.map((strength, position) => ({ ...strength, position })) },
             gaps: { create: gaps.map((gap) => ({ ...gap })) },
             nextSteps: { create: nextSteps.map((description, position) => ({ description, position })) },
           },

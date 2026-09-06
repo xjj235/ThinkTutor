@@ -30,10 +30,10 @@ test("teacher publishes an assignment, student completes it, and teacher sees th
   await data<Entity>(await studentContext.post("/api/auth/register", { data: { name: "任务学生", email: studentEmail, password } }));
   await data<Entity>(await studentContext.post(`/api/classes/${classroom.id}/join`, { data: { joinCode: classroom.joinCode } }));
 
-  const assignment = await data<Entity>(await request.post("/api/assignments", { data: { classroomId: classroom.id, courseId: course.id, chapterId: chapter.id, learningGoalId: goal.id, title: "证据链费曼讲解", instructions: "用自己的话解释一条主张如何由证据与推理支持。", learnerLevel: "入门", maxAttempts: 1 } }));
+  const assignment = await data<Entity>(await request.post("/api/assignments", { data: { classroomId: classroom.id, courseId: course.id, chapterId: chapter.id, learningGoalId: goal.id, title: "证据链费曼阐释", instructions: "用自己的话解释一条主张如何由证据与推理支持。", learnerLevel: "入门", maxAttempts: 1 } }));
   await data<Entity>(await request.post(`/api/assignments/${assignment.id}/publish`, { data: {} }));
 
-  const started = await data<{session:{id:string}}>(await studentContext.post("/api/sessions", { data: { assignmentId: assignment.id, topic: "由教师任务提供", objective: "由教师任务提供", learnerLevel: "由教师任务提供" } }));
+  const started = await data<{session:{id:string}}>(await studentContext.post("/api/sessions", { data: { assignmentId: assignment.id, topic: "由教师任务提供", objective: "由教师任务提供", learnerLevel: "由教师任务提供", clientRequestId: `assignment-${crypto.randomUUID()}` } }));
   const sessionId = started.session.id;
   const marker = crypto.randomUUID();
   const answers = [

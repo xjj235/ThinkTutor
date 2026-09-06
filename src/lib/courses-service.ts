@@ -200,6 +200,18 @@ export async function leaveClassroom(user: AuthUser, classroomId: string, reques
 export async function createAssignment(user: AuthUser, input: z.infer<typeof assignmentInputSchema>) {
   const classroom = await requireOwnedClassroom(user, input.classroomId);
   if (classroom.courseId !== input.courseId) throw new AppError("VALIDATION_ERROR", "班级与课程不匹配。", 400);
+  if (input.chapterId) {
+    const chapter = await prisma.chapter.findFirst({ where: { id: input.chapterId, courseId: input.courseId }, select: { id: true } });
+    if (!chapter) throw new AppError("VALIDATION_ERROR", "所选章节不属于该课程。", 400);
+  }
+  if (input.learningGoalId) {
+    const goal = await prisma.learningGoal.findFirst({
+      where: { id: input.learningGoalId, courseId: input.courseId },
+      select: { id: true, chapterId: true },
+    });
+    if (!goal) throw new AppError("VALIDATION_ERROR", "所选学习目标不属于该课程。", 400);
+    if (input.chapterId && goal.chapterId !== input.chapterId) throw new AppError("VALIDATION_ERROR", "所选学习目标不属于该章节。", 400);
+  }
   return prisma.assignment.create({ data: { ...input, createdById: user.id, status: "DRAFT" } });
 }
 
@@ -241,7 +253,9 @@ export async function getAssignment(user: AuthUser, assignmentId: string) {
     instructions: assignment.instructions,
     learnerLevel: assignment.learnerLevel,
     status: assignment.status,
+    openAt: assignment.openAt,
     dueAt: assignment.dueAt,
+    maxAttempts: assignment.maxAttempts,
     course: { id: assignment.course.id, title: assignment.course.title },
     classroom: { id: assignment.classroom.id, name: assignment.classroom.name },
     chapter: assignment.chapter ? { id: assignment.chapter.id, title: assignment.chapter.title } : null,

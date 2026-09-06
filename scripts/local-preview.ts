@@ -7,7 +7,7 @@ import { dirname, resolve } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 
 const workspace = resolve(".");
-const databaseDir = resolve(".local-preview/postgres");
+const databaseDir = resolve(process.env.PREVIEW_DATA_DIR ?? ".local-preview/postgres");
 const postgresPort = Number(process.env.PREVIEW_POSTGRES_PORT ?? "55433");
 const webPort = Number(process.env.PREVIEW_WEB_PORT ?? "3100");
 const networkMode = process.env.PREVIEW_NETWORK === "lan" ? "lan" : "local";
@@ -75,6 +75,7 @@ const previewEnv: NodeJS.ProcessEnv = {
   DEV_SEED_PASSWORD: previewPassword,
   LOCAL_PREVIEW: "true",
   LOCAL_PREVIEW_PASSWORD: previewPassword,
+  REDIS_URL: "",
   RATE_LIMIT_AI_PER_DAY: "10000",
   RATE_LIMIT_AI_PER_MINUTE: "1000",
   RATE_LIMIT_LOGIN_PER_15M: "1000",
@@ -265,8 +266,25 @@ async function main(): Promise<void> {
   if (!stopping && exitCode !== 0) throw new Error(`Next.js preview exited with code ${exitCode}.`);
 }
 
+function formatStartupError(error: unknown): string {
+  if (error instanceof Error) return error.stack ?? error.message;
+  if (typeof error === "string") return error;
+  if (error === undefined) return "本地预览启动失败，但底层依赖没有返回具体错误。请关闭旧的预览窗口后重试；如果仍失败，使用 pnpm preview 查看上方日志。";
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+let exitCode = 0;
 try {
   await main();
+} catch (error: unknown) {
+  exitCode = 1;
+  process.stderr.write(`${formatStartupError(error)}\n`);
 } finally {
   await stop();
 }
+
+if (exitCode !== 0) process.exit(exitCode);

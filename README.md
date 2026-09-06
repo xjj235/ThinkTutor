@@ -103,10 +103,11 @@ AI_PROVIDER=deepseek
 DEEPSEEK_API_KEY=your-server-side-key
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_WEB_SEARCH_FALLBACK=true
 DEEPSEEK_TIMEOUT_MS=45000
 ```
 
-代码不会读取 `NEXT_PUBLIC_DEEPSEEK_API_KEY`，也不会从浏览器直接调用模型。生产 `DEPLOYMENT_ENV=production` 会强制 `deepseek-v4-flash`、DeepSeek Provider、Redis 和 OSS 配置。真实收费 Smoke Test 默认关闭，参见 [DeepSeek 接入](docs/DEEPSEEK_INTEGRATION.md)。
+代码不会读取 `NEXT_PUBLIC_DEEPSEEK_API_KEY`，也不会从浏览器直接调用模型。生产 `DEPLOYMENT_ENV=production` 会强制 `deepseek-v4-flash`、DeepSeek Provider、Redis 和 OSS 配置。学习对话会优先检索课程知识库；`DEEPSEEK_WEB_SEARCH_FALLBACK=true` 时，服务端会调用 DeepSeek Responses API 的 `web_search` 工具辅助诊断和追问，并在对话消息下展示网页来源；课程知识库命中时会与网页结果对比校准后输出。真实收费 Smoke Test 默认关闭，参见 [DeepSeek 接入](docs/DEEPSEEK_INTEGRATION.md)。
 
 ## 数据库与管理员
 

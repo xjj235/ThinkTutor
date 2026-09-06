@@ -1,62 +1,47 @@
-import {
-  LearningPhase,
-  phaseLabels,
-} from "@/lib/contracts";
+"use client";
 
-const phases: LearningPhase[] = [
-  "DIAGNOSIS",
-  "SOCRATIC",
-  "FEYNMAN",
-  "COMPLETED",
-];
+import { useEffect, useRef } from "react";
+import { Check } from "lucide-react";
+import { LearningPhase, phaseLabels, type LearningSessionDTO } from "@/lib/contracts";
 
-export function PhaseProgress({
-  phase,
-  socraticTurns,
-  maxTurns,
-}: {
+const phases: LearningPhase[] = ["DIAGNOSIS", "SOCRATIC", "FEYNMAN", "COMPLETED"];
+const knowledgeStages = ["GOAL_PRESENTATION", "DIAGNOSIS", "KNOWLEDGE_CONSTRUCTION", "CASE_TRANSFER", "FEYNMAN_OUTPUT", "REFLECTION", "REPORT"];
+const knowledgeLabels = ["学习目标", "认知诊断", "知识建构", "迁移验证", "费曼阐释", "反思修订", "学习报告"];
+
+export function PhaseProgress({ phase, socraticTurns, maxTurns, knowledgeProgress }: {
   phase: LearningPhase;
   socraticTurns: number;
   maxTurns: number;
+  knowledgeProgress?: LearningSessionDTO["knowledgeProgress"];
 }) {
-  const activeIndex = phase === "REPORTING" || phase === "COMPLETED" ? 3 : phases.indexOf(phase);
+  const stageList = useRef<HTMLOListElement>(null);
+  const stages = knowledgeProgress ? knowledgeStages : phases;
+  const labels = knowledgeProgress ? knowledgeLabels : phases.map((item) => phaseLabels[item]);
+  const activeIndex = knowledgeProgress
+    ? knowledgeStages.indexOf(knowledgeProgress.pedagogicalStage)
+    : phase === "REPORTING" || phase === "COMPLETED" ? 3 : phases.indexOf(phase);
 
-  return (
-    <section aria-label="学习阶段" className="phase-progress space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-[#213236]">当前阶段</h2>
-        <span className="rounded-full border border-[#b9d8d4] bg-[#eef8f6] px-3 py-1 text-sm font-medium text-[#115e59]">
-          {phaseLabels[phase]}
-        </span>
-      </div>
-      <ol className="grid grid-cols-2 gap-2">
-        {phases.map((item, index) => {
-          const completed = index < activeIndex;
-          const active = index === activeIndex;
-          return (
-            <li
-              key={item}
-              className={[
-                "rounded-md border px-3 py-2 text-sm",
-                active
-                  ? "border-[#0f766e] bg-[#eef8f6] text-[#0f3f3b]"
-                  : completed
-                    ? "border-[#b9d8d4] bg-white text-[#2f5f5a]"
-                    : "border-[#dce7e6] bg-white text-[#68787c]",
-              ].join(" ")}
-              aria-current={active ? "step" : undefined}
-            >
-              <span className="block text-xs">
-                {completed ? "已完成" : active ? "进行中" : "待开始"}
-              </span>
-              <span className="font-medium">{phaseLabels[item]}</span>
-            </li>
-          );
-        })}
-      </ol>
-      <div className="text-sm text-[#5d6b70]">
-        苏格拉底追问进度：{Math.min(socraticTurns, maxTurns)} / {maxTurns}
-      </div>
-    </section>
-  );
+  useEffect(() => {
+    const list = stageList.current;
+    if (!list) return;
+    const revealCurrentStage = () => {
+      const current = list.querySelector<HTMLElement>('[aria-current="step"]');
+      if (current) list.scrollLeft = Math.max(0, current.offsetLeft - (list.clientWidth - current.offsetWidth) / 2);
+    };
+    revealCurrentStage();
+    const observer = new ResizeObserver(revealCurrentStage);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [activeIndex]);
+
+  return <section aria-label="学习阶段" className="phase-progress">
+    <div className="phase-heading"><h2>学习阶段</h2><p>苏格拉底追问 <strong>{Math.min(socraticTurns, maxTurns)}</strong> / {maxTurns}</p></div>
+    <ol ref={stageList} tabIndex={0} aria-label="研习阶段进度">
+      {stages.map((stage, index) => <li key={stage} data-state={index < activeIndex ? "past" : index === activeIndex ? "active" : "upcoming"} aria-current={index === activeIndex ? "step" : undefined}>
+        <span className="phase-marker" aria-hidden="true">{index < activeIndex ? <Check size={14} /> : index + 1}</span>
+        <span className="phase-label">{labels[index]}<small>{index < activeIndex ? "已历经" : index === activeIndex ? "当前阶段" : "待进入"}</small></span>
+      </li>)}
+    </ol>
+    {knowledgeProgress?.experienceLimitReached ? <p className="phase-notice">本次研习已达轮次上限，待验证内容已保留。</p> : null}
+  </section>;
 }

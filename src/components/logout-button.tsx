@@ -2,12 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { LogOut } from "lucide-react";
 
 export function LogoutButton() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  return <span className="logout-control"><button type="button" disabled={pending} className="nav-link" onClick={async () => {
+  return <span className="logout-control"><button type="button" disabled={pending} className="icon-button" aria-label={pending ? "退出中" : "退出"} title={pending ? "退出中" : "退出登录"} onClick={async () => {
     setPending(true);
     setError("");
     try {
@@ -20,5 +21,5 @@ export function LogoutButton() {
     } finally {
       setPending(false);
     }
-  }}>{pending ? "退出中" : "退出"}</button>{error ? <small role="alert">{error}</small> : null}</span>;
+  }}><LogOut size={18} aria-hidden="true" /></button>{error ? <small role="alert">{error}</small> : null}</span>;
 }

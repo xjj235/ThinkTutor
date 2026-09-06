@@ -1,0 +1,26 @@
+{
+  "reviewStatus": "PENDING_TEACHER_REVIEW",
+  "scope": "Engineering routing regression from supplied candidate signals; not a live-model assessment benchmark.",
+  "samples": [
+    {"id":"GOLD_SR_001","studentAnswer":"系统性风险就是投资组合无法分散的风险。","errors":["ERR_E01_SYSTEMIC_SYSTEMATIC_CONFUSION"],"gaps":[],"expectedTarget":"C_SR_002","expectedFlag":null},
+    {"id":"GOLD_SR_002","studentAnswer":"只要一家银行倒闭就一定是系统性风险。","errors":["ERR_E02_EVENT_EQUALS_SYSTEMIC"],"gaps":[],"expectedTarget":"C_SR_001","expectedFlag":null},
+    {"id":"GOLD_SR_003","studentAnswer":"没有直接借贷就不会发生传染。","errors":["ERR_E03_DIRECT_LINK_ONLY"],"gaps":[],"expectedTarget":"M_SR_002","expectedFlag":null},
+    {"id":"GOLD_SR_004","studentAnswer":"我知道共同持仓，但不清楚抛售如何继续影响价格。","errors":["ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING"],"gaps":[],"expectedTarget":"M_SR_002","expectedFlag":null},
+    {"id":"GOLD_SR_005","studentAnswer":"机构越大就一定越重要。","errors":["ERR_E05_SIZE_ONLY"],"gaps":[],"expectedTarget":"C_SR_003","expectedFlag":null},
+    {"id":"GOLD_SR_006","studentAnswer":"每一家机构都安全，整个体系就安全。","errors":["ERR_E06_MICRO_SAFE_EQUALS_SYSTEM_SAFE"],"gaps":[],"expectedTarget":"C_SR_004","expectedFlag":null},
+    {"id":"GOLD_SR_007","studentAnswer":"我能背出定义，但无法分析新的情境。","errors":["ERR_E07_DEFINITION_ONLY"],"gaps":[],"expectedTarget":"M_SR_007","expectedFlag":null},
+    {"id":"GOLD_SR_008","studentAnswer":"价格下降是更多人抛售的唯一原因，抛售不会影响价格。","errors":["ERR_CAUSAL_REVERSAL"],"gaps":[],"expectedTarget":"M_SR_003","expectedFlag":null},
+    {"id":"GOLD_SR_009","studentAnswer":"这个就是大家互相那个影响。","errors":["ERR_EXPRESSION_AMBIGUITY"],"gaps":[],"expectedTarget":"C_SR_001","expectedFlag":"FLAG_NEED_VERIFY"},
+    {"id":"GOLD_SR_010","studentAnswer":"共同持仓造成什么后果还没有说明。","errors":[],"gaps":["GAP_COMMON_EXPOSURE"],"expectedTarget":"M_SR_002","expectedFlag":null},
+    {"id":"GOLD_SR_011","studentAnswer":"抛售之后的价格反馈没有解释。","errors":[],"gaps":["GAP_FIRE_SALE_FEEDBACK"],"expectedTarget":"M_SR_003","expectedFlag":null},
+    {"id":"GOLD_SR_012","studentAnswer":"债权债务关系如何传导损失还需要验证。","errors":[],"gaps":["GAP_CAUSAL_CHAIN"],"expectedTarget":"M_SR_001","expectedFlag":null},
+    {"id":"GOLD_SR_013","studentAnswer":"尚未展示新情境中的应用。","errors":[],"gaps":["GAP_TRANSFER"],"expectedTarget":"M_SR_007","expectedFlag":null},
+    {"id":"GOLD_SR_014","studentAnswer":"没有说明金融体系哪些功能受损。","errors":[],"gaps":["GAP_SYSTEM_FUNCTION"],"expectedTarget":"C_SR_001","expectedFlag":null},
+    {"id":"GOLD_SR_015","studentAnswer":"三个英文风险名称的含义需要区分。","errors":[],"gaps":["C_SR_002"],"expectedTarget":"C_SR_002","expectedFlag":null},
+    {"id":"GOLD_SR_016","studentAnswer":"集中提款怎样造成流动性压力尚未展示。","errors":[],"gaps":["M_SR_004"],"expectedTarget":"M_SR_004","expectedFlag":null},
+    {"id":"GOLD_SR_017","studentAnswer":"关键机构不能仅从规模上分析。","errors":[],"gaps":["C_SR_003"],"expectedTarget":"C_SR_003","expectedFlag":null},
+    {"id":"GOLD_SR_018","studentAnswer":"微观审慎和宏观审慎的差异需要再解释。","errors":[],"gaps":["C_SR_004"],"expectedTarget":"C_SR_004","expectedFlag":null},
+    {"id":"GOLD_SR_019","studentAnswer":"用词不明确，同时还未展示共同暴露分析。","errors":["ERR_EXPRESSION_AMBIGUITY"],"gaps":["M_SR_002"],"expectedTarget":"M_SR_002","expectedFlag":"FLAG_NEED_VERIFY"},
+    {"id":"GOLD_SR_020","studentAnswer":"因果顺序混淆，需要先验证实体经济的反馈链。","errors":["ERR_CAUSAL_REVERSAL"],"gaps":["M_SR_007"],"expectedTarget":"M_SR_007","expectedFlag":null}
+  ]
+}

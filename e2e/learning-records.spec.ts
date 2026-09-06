@@ -50,14 +50,14 @@ test("student history and profile provide filtering, pagination, persistent URLs
   await expect(page.getByText(`已解决漏洞 ${marker}`)).toBeVisible();
   await page.getByLabel("搜索").fill("肯定不存在的漏洞");
   await page.getByRole("button", { name: "筛选" }).click();
-  await expect(page.getByRole("heading", { name: "没有匹配漏洞" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "没有匹配要点" })).toBeVisible();
 
   const emptyStudent = await prisma.user.create({ data: { email: `records-empty-${marker}@example.test`, name: "空档案学生", passwordHash: await hash(password), role: "STUDENT" } });
   await page.request.post("/api/auth/logout", { data: {} });
   await login(page, emptyStudent.email);
   await page.goto("/history");
-  await expect(page.getByRole("heading", { name: "暂无历史" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "尚无研习档案" })).toBeVisible();
   await page.goto("/profile/learning");
-  await expect(page.getByRole("heading", { name: "暂无待修复漏洞" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "暂无待巩固要点" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

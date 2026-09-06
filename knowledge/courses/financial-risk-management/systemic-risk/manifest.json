@@ -1,0 +1,2182 @@
+{
+  "course": {
+    "code": "COURSE_FRM",
+    "title": "金融风险管理",
+    "version": "1.1",
+    "status": "published"
+  },
+  "chapter": {
+    "code": "CH_FINANCIAL_SYSTEM_RISK",
+    "title": "金融体系风险",
+    "version": "1.1",
+    "status": "published"
+  },
+  "knowledgePoint": {
+    "code": "KP_SYSTEMIC_RISK",
+    "title": "系统性风险",
+    "description": "本科层面的概念理解、传播机制、维度分析、系统重要性、案例迁移与金融-实体经济反馈。",
+    "version": "1.1",
+    "status": "published"
+  },
+  "sources": [
+    {
+      "id": "DOC_SR_01",
+      "sourceType": "internal_design",
+      "title": "系统性风险：整体规划与教学蓝图",
+      "version": "1.1",
+      "location": "01_系统性风险_整体规划与教学蓝图_修订版.docx",
+      "checksum": "30c52d0cb6522a305ee24fc6f463d633c7a2b55b9a292a1823a3546434ee5f07",
+      "status": "draft"
+    },
+    {
+      "id": "DOC_SR_02",
+      "sourceType": "internal_design",
+      "title": "系统性风险：学习流程设计",
+      "version": "1.1",
+      "location": "02_系统性风险_学习流程设计_修订版.docx",
+      "checksum": "3348960e336f9edef56b0ba924a72c7fb8ffbdf510cbb66796778951a188dc51",
+      "status": "draft"
+    },
+    {
+      "id": "DOC_SR_03",
+      "sourceType": "internal_design",
+      "title": "系统性风险：教学理论整理",
+      "version": "1.1",
+      "location": "03_系统性风险_教学理论整理_修订版.docx",
+      "checksum": "f279e324604c1f28c50d0b100b9ae98262eecdada52e5f8bf7453aec950ba37c",
+      "status": "draft"
+    },
+    {
+      "id": "DOC_SR_04",
+      "sourceType": "internal_design",
+      "title": "系统性风险：知识诊断设计",
+      "version": "1.1",
+      "location": "04_系统性风险_知识诊断设计_修订版.docx",
+      "checksum": "305afbc9afe6e6fc6818fb655f621c4a5d5a810168fe7d69a4ae3070671a92cd",
+      "status": "draft"
+    },
+    {
+      "id": "DOC_SR_05",
+      "sourceType": "internal_design",
+      "title": "系统性风险：苏格拉底 Question Graph",
+      "version": "1.1",
+      "location": "05_系统性风险_苏格拉底QuestionGraph_修订版.docx",
+      "checksum": "8dd0e27d873f5ca8706e80b3897d3018ed2dce81d45a46402ec953d4b7a9b3eb",
+      "status": "draft"
+    },
+    {
+      "id": "DOC_SR_06",
+      "sourceType": "internal_design",
+      "title": "系统性风险：案例库设计",
+      "version": "1.1",
+      "location": "06_系统性风险_案例设计_修订版.docx",
+      "checksum": "6637f6b9808250f643d44950ea962af050ef41ea163ec6e24db1f2712d989b42",
+      "status": "draft"
+    },
+    {
+      "id": "DOC_SR_07",
+      "sourceType": "internal_design",
+      "title": "系统性风险：评价反馈与学习报告规则",
+      "version": "1.1",
+      "location": "07_系统性风险_评价反馈与学习报告规则_修订版.docx",
+      "checksum": "07a12405f322225db7c8268ebdc284fedc8a4f0e22399ddb51fa68bbd257351c",
+      "status": "draft"
+    },
+    {
+      "id": "DOC_SR_08",
+      "sourceType": "internal_design",
+      "title": "系统性风险：AI 学习教练 Prompt",
+      "version": "1.1",
+      "location": "08_系统性风险_AI学习教练Prompt_修订版.docx",
+      "checksum": "665c4c6d718652d7fcbd88a698abe2c1fb55a8ae4a513f08f47daf15154fec4b",
+      "status": "draft"
+    }
+  ],
+  "knowledgeUnits": [
+    {
+      "id": "C_SR_001",
+      "code": "SYSTEMIC_RISK_DEFINITION",
+      "title": "系统性风险定义",
+      "type": "concept",
+      "summary": "金融体系全部或部分功能受损、金融服务严重中断及可能的实体经济后果。",
+      "content": "系统性风险关注金融体系层面，而不是单个机构损失本身。高水平解释应把冲击、传播、放大、功能受损和实体经济影响连成逻辑链。",
+      "difficulty": 1,
+      "learningRequirement": "能指出金融体系层面与功能受损，并说明单体事件不是充分条件。",
+      "prerequisites": [],
+      "relations": [
+        {
+          "type": "related_to",
+          "target": "M_SR_001"
+        },
+        {
+          "type": "related_to",
+          "target": "M_SR_007"
+        }
+      ],
+      "misconceptions": [
+        "ERR_E02_EVENT_EQUALS_SYSTEMIC"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/C_SR_001",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "C_SR_002",
+      "code": "SYSTEMIC_SYSTEMATIC_IDIOSYNCRATIC",
+      "title": "Systemic / Systematic / Idiosyncratic 区分",
+      "type": "comparison",
+      "summary": "依据研究对象与风险来源区分系统性风险、系统风险和个体风险。",
+      "content": "Systemic Risk 关注金融体系功能稳定，Systematic Risk 关注投资组合中无法分散的市场共同波动，Idiosyncratic Risk 关注个别主体自身风险。",
+      "difficulty": 2,
+      "learningRequirement": "不把 Systemic 与 Systematic 混淆，并能用新情境说明三者边界。",
+      "prerequisites": [],
+      "relations": [
+        {
+          "type": "prerequisite",
+          "target": "C_SR_001"
+        }
+      ],
+      "misconceptions": [
+        "ERR_E01_SYSTEMIC_SYSTEMATIC_CONFUSION"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/C_SR_002",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "M_SR_001",
+      "code": "DIRECT_CONTAGION",
+      "title": "直接关联",
+      "type": "mechanism",
+      "summary": "机构间直接债权债务或业务关联可形成风险传递。",
+      "content": "同业拆借、担保、衍生品、支付清算等直接关系可能让一方受损传递到交易对手，但这只是传播渠道之一。",
+      "difficulty": 2,
+      "learningRequirement": "能说明直接关联可传播损失，同时知道它不是唯一渠道。",
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "relations": [
+        {
+          "type": "contrasts_with",
+          "target": "M_SR_002"
+        }
+      ],
+      "misconceptions": [
+        "ERR_E03_DIRECT_LINK_ONLY"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/M_SR_001",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "M_SR_002",
+      "code": "COMMON_EXPOSURE",
+      "title": "共同暴露",
+      "type": "mechanism",
+      "summary": "机构即使无直接借贷，也可能因持有相同或高度相关资产而同时受损。",
+      "content": "共同暴露强调资产负债表相似性。共同持有房地产贷款、同类债券或相关证券时，同一价格冲击会造成多个主体同步减值。",
+      "difficulty": 2,
+      "learningRequirement": "能识别无直接联系仍同时受损，并连接到去杠杆或 Fire Sale。",
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "relations": [
+        {
+          "type": "causes",
+          "target": "M_SR_003"
+        },
+        {
+          "type": "contrasts_with",
+          "target": "M_SR_001"
+        }
+      ],
+      "misconceptions": [
+        "ERR_E03_DIRECT_LINK_ONLY",
+        "ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/M_SR_002",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "M_SR_003",
+      "code": "FIRE_SALE",
+      "title": "Fire Sale",
+      "type": "mechanism",
+      "summary": "机构集中出售资产可压低价格并形成进一步损失与反馈。",
+      "content": "单个机构卖出资产可能是自保，但多家机构同步卖出会压低市场价格，触发账面损失、追加保证金、风控减仓和更多卖出。",
+      "difficulty": 3,
+      "learningRequirement": "能解释个体理性行为叠加后的系统放大。",
+      "prerequisites": [
+        "M_SR_002"
+      ],
+      "relations": [
+        {
+          "type": "amplifies",
+          "target": "M_SR_002"
+        },
+        {
+          "type": "related_to",
+          "target": "M_SR_004"
+        }
+      ],
+      "misconceptions": [
+        "ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING",
+        "ERR_E06_MICRO_SAFE_EQUALS_SYSTEM_SAFE"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/M_SR_003",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "M_SR_004",
+      "code": "LIQUIDITY_RUN",
+      "title": "流动性与挤兑",
+      "type": "mechanism",
+      "summary": "集中提款、融资收缩等流动性压力可引发被迫资产处置并进一步放大风险。",
+      "content": "挤兑不只是一家银行的现金压力，还可能通过资产出售、同业风险偏好下降和公众行为扩散为系统压力。",
+      "difficulty": 3,
+      "learningRequirement": "能区分最初流动性压力与后续放大，并连接资产出售和信心传染。",
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "relations": [
+        {
+          "type": "related_to",
+          "target": "M_SR_005"
+        },
+        {
+          "type": "causes",
+          "target": "M_SR_003"
+        }
+      ],
+      "misconceptions": [
+        "ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/M_SR_004",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "M_SR_005",
+      "code": "INFORMATION_CONFIDENCE_CONTAGION",
+      "title": "信息与信心传染",
+      "type": "mechanism",
+      "summary": "对其他机构的担忧可通过预期、信心和行为反应扩散。",
+      "content": "市场无法准确区分个别机构问题和同类机构问题时，预期恶化会导致赎回、融资成本上升或风险溢价扩大。",
+      "difficulty": 3,
+      "learningRequirement": "能识别无直接损失传播时仍可能由预期和信心扩散。",
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "relations": [
+        {
+          "type": "related_to",
+          "target": "M_SR_004"
+        }
+      ],
+      "misconceptions": [
+        "ERR_E03_DIRECT_LINK_ONLY"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/M_SR_005",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "M_SR_006",
+      "code": "FINANCIAL_INFRASTRUCTURE",
+      "title": "金融基础设施渠道",
+      "type": "mechanism",
+      "summary": "支付、清算等金融基础设施受损可能影响金融体系功能。",
+      "content": "判断系统性风险时，金融体系功能比机构自身损失规模更关键。支付清算中断可能影响多主体交易完成和流动性行为。",
+      "difficulty": 3,
+      "learningRequirement": "知道金融体系不仅包含银行资产负债表，并能识别功能性传播。",
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "relations": [
+        {
+          "type": "causes",
+          "target": "M_SR_007"
+        }
+      ],
+      "misconceptions": [
+        "ERR_E02_EVENT_EQUALS_SYSTEMIC",
+        "ERR_E07_DEFINITION_ONLY"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/M_SR_006",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "D_SR_001",
+      "code": "CROSS_SECTIONAL_DIMENSION",
+      "title": "横截面维度",
+      "type": "dimension",
+      "summary": "关注同一时期机构间风险分布、关联与系统重要性。",
+      "content": "横截面维度用于分析同一时点上机构之间如何因关联、共同暴露、关键功能和可替代性形成系统脆弱性。",
+      "difficulty": 3,
+      "learningRequirement": "能说明机构之间或截面上的系统脆弱性，并与系统重要性关联。",
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "relations": [
+        {
+          "type": "related_to",
+          "target": "C_SR_003"
+        }
+      ],
+      "misconceptions": [
+        "ERR_EXPRESSION_AMBIGUITY"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/D_SR_001",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "D_SR_002",
+      "code": "TIME_DIMENSION",
+      "title": "时间维度",
+      "type": "dimension",
+      "summary": "关注风险随金融周期积累、顺周期行为及跨期放大。",
+      "content": "时间维度用于解释房地产、信用扩张、杠杆和资产价格如何在周期中积累风险，并在触发事件后集中释放。",
+      "difficulty": 3,
+      "learningRequirement": "能结合金融周期解释风险积累与释放，而不是只做静态机构比较。",
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "relations": [
+        {
+          "type": "related_to",
+          "target": "C_SR_004"
+        }
+      ],
+      "misconceptions": [
+        "ERR_E07_DEFINITION_ONLY"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/D_SR_002",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "C_SR_003",
+      "code": "SYSTEMIC_IMPORTANCE",
+      "title": "系统重要性",
+      "type": "concept",
+      "summary": "判断不只依赖规模，还涉及关联性、可替代性、复杂性等因素。",
+      "content": "大而不能倒不是唯一判断标准。较小但高度关联、承担关键服务或难以替代的机构也可能具有系统重要性。",
+      "difficulty": 2,
+      "learningRequirement": "知道“大”不是唯一标准，并能在反例中比较多项因素。",
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "relations": [
+        {
+          "type": "related_to",
+          "target": "D_SR_001"
+        }
+      ],
+      "misconceptions": [
+        "ERR_E05_SIZE_ONLY"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/C_SR_003",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "M_SR_007",
+      "code": "FINANCIAL_REAL_ECONOMY_FEEDBACK",
+      "title": "金融-实体经济反馈",
+      "type": "feedback_loop",
+      "summary": "金融体系风险可经信贷收缩、融资约束、投资与就业下降等渠道影响实体经济，并形成反向信用恶化。",
+      "content": "金融机构承压会影响企业和居民融资，实体经济恶化又会提高不良资产率，形成金融与实体经济之间的反馈循环。",
+      "difficulty": 3,
+      "learningRequirement": "能形成金融-实体经济反馈循环。",
+      "prerequisites": [
+        "C_SR_001",
+        "M_SR_003"
+      ],
+      "relations": [],
+      "misconceptions": [
+        "ERR_E07_DEFINITION_ONLY"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/M_SR_007",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    },
+    {
+      "id": "C_SR_004",
+      "code": "MICRO_MACRO_PRUDENTIAL",
+      "title": "微观审慎与宏观审慎",
+      "type": "regulation",
+      "summary": "个体机构安全与系统安全并非完全等价，监管视角需从单体延伸至系统。",
+      "content": "每家机构单独自保可能在同步行为下放大系统风险，因此宏观审慎关注个体行为叠加后的系统结果。",
+      "difficulty": 3,
+      "learningRequirement": "能用个体理性、系统风险放大解释宏观审慎必要性。",
+      "prerequisites": [
+        "C_SR_001",
+        "M_SR_003"
+      ],
+      "relations": [
+        {
+          "type": "related_to",
+          "target": "D_SR_002"
+        }
+      ],
+      "misconceptions": [
+        "ERR_E06_MICRO_SAFE_EQUALS_SYSTEM_SAFE"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "DOC_SR_01",
+          "sourceLocator": "三、Knowledge Units/C_SR_004",
+          "confidence": 0.95
+        }
+      ],
+      "visibility": "STUDENT",
+      "version": "1.1",
+      "status": "published"
+    }
+  ],
+  "misconceptions": [
+    {
+      "id": "ERR_E01_SYSTEMIC_SYSTEMATIC_CONFUSION",
+      "category": "CONCEPT_ERROR",
+      "description": "Systemic Risk / Systematic Risk 混淆。",
+      "severity": "high",
+      "targetUnits": [
+        "C_SR_002"
+      ],
+      "recommendedQuestionType": "CONCEPT_CLARIFICATION",
+      "triggers": [
+        "不可分散风险",
+        "市场风险就是系统性风险",
+        "systematic"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "ERR_E02_EVENT_EQUALS_SYSTEMIC",
+      "category": "BOUNDARY_ERROR",
+      "description": "把任何金融机构倒闭或亏损直接认定为系统性风险。",
+      "severity": "high",
+      "targetUnits": [
+        "C_SR_001"
+      ],
+      "recommendedQuestionType": "COUNTEREXAMPLE",
+      "triggers": [
+        "一家银行倒闭就是系统性风险",
+        "亏损严重就是系统性",
+        "单家机构失败"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "ERR_E03_DIRECT_LINK_ONLY",
+      "category": "MECHANISM_MISSING",
+      "description": "认为只有银行间直接借贷才会传播风险。",
+      "severity": "high",
+      "targetUnits": [
+        "M_SR_002",
+        "M_SR_005"
+      ],
+      "recommendedQuestionType": "ASSUMPTION_TEST",
+      "triggers": [
+        "没有借贷就不会影响",
+        "没有直接联系不会传染",
+        "没有直接债权债务"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING",
+      "category": "MECHANISM_MISSING",
+      "description": "忽视共同暴露与 Fire Sale，不能说明资产价格反馈和放大链条。",
+      "severity": "high",
+      "targetUnits": [
+        "M_SR_002",
+        "M_SR_003",
+        "M_SR_004"
+      ],
+      "recommendedQuestionType": "CAUSE_PROBE",
+      "triggers": [
+        "不会放大",
+        "卖掉资产就结束",
+        "只是一开始亏损"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "ERR_E05_SIZE_ONLY",
+      "category": "OVERGENERALIZATION",
+      "description": "认为只有大型机构才可能产生系统性风险，或只以规模判断系统重要性。",
+      "severity": "medium",
+      "targetUnits": [
+        "C_SR_003",
+        "D_SR_001"
+      ],
+      "recommendedQuestionType": "COUNTEREXAMPLE",
+      "triggers": [
+        "只看规模",
+        "越大越系统重要",
+        "大机构才重要"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "ERR_E06_MICRO_SAFE_EQUALS_SYSTEM_SAFE",
+      "category": "CONDITION_MISSING",
+      "description": "认为每家机构单独安全就意味着整个系统必然安全。",
+      "severity": "high",
+      "targetUnits": [
+        "C_SR_004",
+        "M_SR_003"
+      ],
+      "recommendedQuestionType": "COUNTEREXAMPLE",
+      "triggers": [
+        "每家都安全系统就安全",
+        "个体自保就不会有系统风险"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "ERR_E07_DEFINITION_ONLY",
+      "category": "TRANSFER_FAILURE",
+      "description": "只能复述定义，无法完成案例判断。",
+      "severity": "medium",
+      "targetUnits": [
+        "M_SR_007",
+        "D_SR_002",
+        "M_SR_006"
+      ],
+      "recommendedQuestionType": "TRANSFER",
+      "triggers": [
+        "只会定义",
+        "不会分析案例",
+        "不知道怎么用"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "ERR_CAUSAL_REVERSAL",
+      "category": "CAUSAL_REVERSAL",
+      "description": "把传播方向或因果链条前后颠倒。",
+      "severity": "medium",
+      "targetUnits": [
+        "M_SR_003",
+        "M_SR_007"
+      ],
+      "recommendedQuestionType": "CAUSE_PROBE",
+      "triggers": [
+        "因果反了",
+        "先后顺序混乱"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "ERR_EXPRESSION_AMBIGUITY",
+      "category": "EXPRESSION_AMBIGUITY",
+      "description": "表述过于模糊，无法可靠判断真实认知状态。",
+      "severity": "low",
+      "targetUnits": [
+        "C_SR_001"
+      ],
+      "recommendedQuestionType": "CONCEPT_CLARIFICATION",
+      "triggers": [
+        "很多方面",
+        "有影响",
+        "会出问题"
+      ],
+      "status": "published"
+    }
+  ],
+  "diagnosticQuestions": [
+    {
+      "id": "DQ_SR_001_A",
+      "equivalentGroup": "DQG_SR_001",
+      "targetConcepts": [
+        "C_SR_001"
+      ],
+      "difficulty": 1,
+      "questionText": "请先不要查资料。用你自己的话解释一下，你认为什么是系统性风险？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_001_B",
+      "equivalentGroup": "DQG_SR_001",
+      "targetConcepts": [
+        "C_SR_001"
+      ],
+      "difficulty": 1,
+      "questionText": "如果要向没有学过金融风险管理的同学解释“系统性风险”，你会抓住哪几个关键词？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_001_C",
+      "equivalentGroup": "DQG_SR_001",
+      "targetConcepts": [
+        "C_SR_001"
+      ],
+      "difficulty": 2,
+      "questionText": "什么情况下，一个金融风险事件才值得从“整个金融体系功能是否受损”的角度讨论？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_002_A",
+      "equivalentGroup": "DQG_SR_002",
+      "targetConcepts": [
+        "C_SR_001"
+      ],
+      "difficulty": 1,
+      "questionText": "某家小型银行经营不善最终退出市场，但其他银行、市场和支付活动均正常，你会依据什么条件判断这是否属于系统性风险？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_002_B",
+      "equivalentGroup": "DQG_SR_002",
+      "targetConcepts": [
+        "C_SR_001"
+      ],
+      "difficulty": 1,
+      "questionText": "一家金融机构发生巨额亏损，但风险没有向外扩散。仅凭“亏损很严重”能否判断为系统性风险？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_002_C",
+      "equivalentGroup": "DQG_SR_002",
+      "targetConcepts": [
+        "C_SR_001"
+      ],
+      "difficulty": 2,
+      "questionText": "若一家机构失败后，其关键金融服务很快被其他机构替代且未引起连锁反应，你会如何判断其“系统性”？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_003_A",
+      "equivalentGroup": "DQG_SR_003",
+      "targetConcepts": [
+        "C_SR_002"
+      ],
+      "difficulty": 1,
+      "questionText": "“股市整体波动带来的风险无法通过充分分散投资完全消除。”这里的风险与 Systemic Risk 是同一个概念吗？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_003_B",
+      "equivalentGroup": "DQG_SR_003",
+      "targetConcepts": [
+        "C_SR_002"
+      ],
+      "difficulty": 1,
+      "questionText": "投资组合课上说的“不可分散的市场风险”和金融监管中说的“系统性风险”，研究对象有什么不同？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_003_C",
+      "equivalentGroup": "DQG_SR_003",
+      "targetConcepts": [
+        "C_SR_002"
+      ],
+      "difficulty": 2,
+      "questionText": "Systemic Risk、Systematic Risk 和 Idiosyncratic Risk 各自关注的风险对象有什么区别？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_004_A",
+      "equivalentGroup": "DQG_SR_004",
+      "targetConcepts": [
+        "M_SR_002"
+      ],
+      "difficulty": 1,
+      "questionText": "两家银行之间没有直接借贷，其中一家出现危机，还可能影响另一家吗？请给出一种可能渠道。",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_004_B",
+      "equivalentGroup": "DQG_SR_004",
+      "targetConcepts": [
+        "M_SR_002"
+      ],
+      "difficulty": 1,
+      "questionText": "两家机构从未互相拆借，但都大量持有同一类房地产资产，房价大跌可能通过什么渠道使它们同时承压？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_004_C",
+      "equivalentGroup": "DQG_SR_004",
+      "targetConcepts": [
+        "M_SR_002"
+      ],
+      "difficulty": 2,
+      "questionText": "如果没有直接债权债务，风险还可以通过哪些非直接关联渠道扩散？至少说明一种。",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_005_A",
+      "equivalentGroup": "DQG_SR_005",
+      "targetConcepts": [
+        "C_SR_003"
+      ],
+      "difficulty": 1,
+      "questionText": "一家大型金融机构发生严重危机，监管部门为什么通常会特别关注？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_005_B",
+      "equivalentGroup": "DQG_SR_005",
+      "targetConcepts": [
+        "C_SR_003"
+      ],
+      "difficulty": 1,
+      "questionText": "除了机构规模，判断系统重要性还需要考虑哪些特征？",
+      "status": "published"
+    },
+    {
+      "id": "DQ_SR_005_C",
+      "equivalentGroup": "DQG_SR_005",
+      "targetConcepts": [
+        "C_SR_003"
+      ],
+      "difficulty": 2,
+      "questionText": "两家机构规模相近，其中一家关联更广、关键服务更难替代，你会如何依据这些差异比较其系统重要性？",
+      "status": "published"
+    }
+  ],
+  "socraticQuestions": [
+    {
+      "id": "SQ_SR_001_A",
+      "questionType": "CONCEPT_CLARIFICATION",
+      "targetUnitId": "C_SR_001",
+      "questionText": "你说“系统性风险会影响整个金融系统”。这里的“系统”具体包括什么？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E02_EVENT_EQUALS_SYSTEMIC"
+      ],
+      "prerequisites": [],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_001_B",
+      "questionType": "CONCEPT_CLARIFICATION",
+      "targetUnitId": "C_SR_001",
+      "questionText": "如果只观察一家机构的亏损，为什么还不足以判断是否具有“系统性”？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E02_EVENT_EQUALS_SYSTEMIC"
+      ],
+      "prerequisites": [],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_001_C",
+      "questionType": "CONCEPT_CLARIFICATION",
+      "targetUnitId": "C_SR_001",
+      "questionText": "“金融体系功能受损”在判断系统性风险时起什么作用？",
+      "difficulty": 3,
+      "triggerErrorTags": [
+        "ERR_E02_EVENT_EQUALS_SYSTEMIC"
+      ],
+      "prerequisites": [],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_002_A",
+      "questionType": "CONCEPT_CLARIFICATION",
+      "targetUnitId": "C_SR_002",
+      "questionText": "你所说的“不能通过投资组合分散”是在讨论投资者资产组合，还是整个金融体系的功能稳定？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E01_SYSTEMIC_SYSTEMATIC_CONFUSION"
+      ],
+      "prerequisites": [],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_002_B",
+      "questionType": "CONCEPT_CLARIFICATION",
+      "targetUnitId": "C_SR_002",
+      "questionText": "Systematic Risk 与 Systemic Risk 的研究对象分别是什么？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E01_SYSTEMIC_SYSTEMATIC_CONFUSION"
+      ],
+      "prerequisites": [],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_002_C",
+      "questionType": "CONCEPT_CLARIFICATION",
+      "targetUnitId": "C_SR_002",
+      "questionText": "你会依据什么区别，将“市场共同波动”和“金融体系连锁失灵”分别归入不同的风险类别？",
+      "difficulty": 3,
+      "triggerErrorTags": [
+        "ERR_E01_SYSTEMIC_SYSTEMATIC_CONFUSION"
+      ],
+      "prerequisites": [],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_003_A",
+      "questionType": "CAUSE_PROBE",
+      "targetUnitId": "M_SR_001",
+      "questionText": "为什么一家金融机构的问题可能影响其他金融机构？",
+      "difficulty": 2,
+      "triggerErrorTags": [],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": [
+        "MECHANISM_MISSING"
+      ]
+    },
+    {
+      "id": "SQ_SR_003_B",
+      "questionType": "CAUSE_PROBE",
+      "targetUnitId": "M_SR_001",
+      "questionText": "如果两家机构之间存在直接债权债务，一方受损可能通过什么路径影响另一方？",
+      "difficulty": 2,
+      "triggerErrorTags": [],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": [
+        "MECHANISM_MISSING"
+      ]
+    },
+    {
+      "id": "SQ_SR_003_C",
+      "questionType": "CAUSE_PROBE",
+      "targetUnitId": "M_SR_001",
+      "questionText": "直接金融关联为什么会把单体损失变成跨机构问题？",
+      "difficulty": 3,
+      "triggerErrorTags": [],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": [
+        "MECHANISM_MISSING"
+      ]
+    },
+    {
+      "id": "SQ_SR_004_A",
+      "questionType": "ASSUMPTION_TEST",
+      "targetUnitId": "M_SR_002",
+      "questionText": "如果银行 A 与 B 没有直接借贷，但都大量持有同类房地产资产，房价突然下跌可能通过什么机制使 B 受影响？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E03_DIRECT_LINK_ONLY"
+      ],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_004_B",
+      "questionType": "ASSUMPTION_TEST",
+      "targetUnitId": "M_SR_002",
+      "questionText": "没有任何直接债权债务时，两家机构为什么仍可能同步受损？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E03_DIRECT_LINK_ONLY"
+      ],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_004_C",
+      "questionType": "ASSUMPTION_TEST",
+      "targetUnitId": "M_SR_002",
+      "questionText": "把“共同持有同类风险资产”加入情境后，你原来的判断需要怎样修改？",
+      "difficulty": 3,
+      "triggerErrorTags": [
+        "ERR_E03_DIRECT_LINK_ONLY"
+      ],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_005_A",
+      "questionType": "CAUSE_PROBE",
+      "targetUnitId": "M_SR_003",
+      "questionText": "如果多家机构同时卖出同一类资产，资产价格和其他持有者会怎样？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING"
+      ],
+      "prerequisites": [
+        "M_SR_002"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_005_B",
+      "questionType": "CAUSE_PROBE",
+      "targetUnitId": "M_SR_003",
+      "questionText": "为什么一家机构卖出风险资产可能保护自己，但所有机构同时卖出会放大系统风险？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING"
+      ],
+      "prerequisites": [
+        "M_SR_002"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_005_C",
+      "questionType": "CAUSE_PROBE",
+      "targetUnitId": "M_SR_003",
+      "questionText": "从卖出资产开始，价格、损失和再次卖出之间怎样形成 Fire Sale 反馈链？",
+      "difficulty": 3,
+      "triggerErrorTags": [
+        "ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING"
+      ],
+      "prerequisites": [
+        "M_SR_002"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_006_A",
+      "questionType": "CAUSE_PROBE",
+      "targetUnitId": "M_SR_004",
+      "questionText": "如果一家银行发生挤兑，为什么其他银行也可能被影响？",
+      "difficulty": 2,
+      "triggerErrorTags": [],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": [
+        "MECHANISM_MISSING"
+      ]
+    },
+    {
+      "id": "SQ_SR_006_B",
+      "questionType": "CAUSE_PROBE",
+      "targetUnitId": "M_SR_004",
+      "questionText": "储户对一家银行的担忧怎样可能变成对多家银行的提款行为？",
+      "difficulty": 2,
+      "triggerErrorTags": [],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": [
+        "MECHANISM_MISSING"
+      ]
+    },
+    {
+      "id": "SQ_SR_006_C",
+      "questionType": "CAUSE_PROBE",
+      "targetUnitId": "M_SR_004",
+      "questionText": "流动性压力、资产出售和信心变化之间可能怎样相互强化？",
+      "difficulty": 3,
+      "triggerErrorTags": [],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": [
+        "MECHANISM_MISSING"
+      ]
+    },
+    {
+      "id": "SQ_SR_007_A",
+      "questionType": "TRANSFER",
+      "targetUnitId": "M_SR_007",
+      "questionText": "金融体系出现问题后，为什么普通企业也可能受到影响？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E07_DEFINITION_ONLY"
+      ],
+      "prerequisites": [
+        "M_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_007_B",
+      "questionType": "TRANSFER",
+      "targetUnitId": "M_SR_007",
+      "questionText": "如果银行普遍收紧授信，企业投资和就业可能发生什么变化？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E07_DEFINITION_ONLY"
+      ],
+      "prerequisites": [
+        "M_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_007_C",
+      "questionType": "TRANSFER",
+      "targetUnitId": "M_SR_007",
+      "questionText": "金融机构受损、信贷收缩、实体经济变化和信用恶化之间怎样形成反馈？",
+      "difficulty": 3,
+      "triggerErrorTags": [
+        "ERR_E07_DEFINITION_ONLY"
+      ],
+      "prerequisites": [
+        "M_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_008_A",
+      "questionType": "COUNTEREXAMPLE",
+      "targetUnitId": "C_SR_003",
+      "questionText": "除了机构规模，判断系统重要性还需要考虑哪些关键条件？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E05_SIZE_ONLY"
+      ],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_008_B",
+      "questionType": "COUNTEREXAMPLE",
+      "targetUnitId": "C_SR_003",
+      "questionText": "如果一家大机构的服务可以被快速替代，而一家较小机构连接很多关键市场，你会怎样比较它们的系统重要性？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E05_SIZE_ONLY"
+      ],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_008_C",
+      "questionType": "COUNTEREXAMPLE",
+      "targetUnitId": "C_SR_003",
+      "questionText": "为什么系统重要性不能只看规模？至少再给出两个判断维度。",
+      "difficulty": 3,
+      "triggerErrorTags": [
+        "ERR_E05_SIZE_ONLY"
+      ],
+      "prerequisites": [
+        "C_SR_001"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_009_A",
+      "questionType": "COUNTEREXAMPLE",
+      "targetUnitId": "C_SR_004",
+      "questionText": "如果每家银行都在市场下跌时理性卖出风险资产，为什么“每家都自保”可能反而让系统更不安全？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E06_MICRO_SAFE_EQUALS_SYSTEM_SAFE"
+      ],
+      "prerequisites": [
+        "M_SR_003"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_009_B",
+      "questionType": "COUNTEREXAMPLE",
+      "targetUnitId": "C_SR_004",
+      "questionText": "个体机构风险控制做得好，为什么不能自动推出整个金融体系安全？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E06_MICRO_SAFE_EQUALS_SYSTEM_SAFE"
+      ],
+      "prerequisites": [
+        "M_SR_003"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_009_C",
+      "questionType": "COUNTEREXAMPLE",
+      "targetUnitId": "C_SR_004",
+      "questionText": "Fire Sale 情境如何体现微观审慎与宏观审慎视角的差异？",
+      "difficulty": 3,
+      "triggerErrorTags": [
+        "ERR_E06_MICRO_SAFE_EQUALS_SYSTEM_SAFE"
+      ],
+      "prerequisites": [
+        "M_SR_003"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_010_A",
+      "questionType": "TRANSFER",
+      "targetUnitId": "M_SR_007",
+      "questionText": "在你自选的一个新金融情境中，冲击可能如何经过传播和放大而产生系统性后果？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E07_DEFINITION_ONLY"
+      ],
+      "prerequisites": [
+        "C_SR_001",
+        "M_SR_002"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_010_B",
+      "questionType": "TRANSFER",
+      "targetUnitId": "M_SR_007",
+      "questionText": "你能用一个没有直接借贷的新情境，解释可能产生系统性风险的完整机制链吗？",
+      "difficulty": 2,
+      "triggerErrorTags": [
+        "ERR_E07_DEFINITION_ONLY"
+      ],
+      "prerequisites": [
+        "C_SR_001",
+        "M_SR_002"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    },
+    {
+      "id": "SQ_SR_010_C",
+      "questionType": "TRANSFER",
+      "targetUnitId": "M_SR_007",
+      "questionText": "改变哪个关键条件，可能让一个原本非系统性的风险事件演变为系统性风险？",
+      "difficulty": 3,
+      "triggerErrorTags": [
+        "ERR_E07_DEFINITION_ONLY"
+      ],
+      "prerequisites": [
+        "C_SR_001",
+        "M_SR_002"
+      ],
+      "status": "published",
+      "triggerErrorCategories": []
+    }
+  ],
+  "questionEdges": [
+    {
+      "fromQuestionId": "SQ_SR_001_A",
+      "conditionType": "correct",
+      "conditionValue": "target_mastered",
+      "toQuestionId": "SQ_SR_002_A"
+    },
+    {
+      "fromQuestionId": "SQ_SR_002_A",
+      "conditionType": "correct",
+      "conditionValue": "target_mastered",
+      "toQuestionId": "SQ_SR_003_A"
+    },
+    {
+      "fromQuestionId": "SQ_SR_003_A",
+      "conditionType": "correct",
+      "conditionValue": "target_mastered",
+      "toQuestionId": "SQ_SR_004_A"
+    },
+    {
+      "fromQuestionId": "SQ_SR_004_A",
+      "conditionType": "correct",
+      "conditionValue": "target_mastered",
+      "toQuestionId": "SQ_SR_005_A"
+    },
+    {
+      "fromQuestionId": "SQ_SR_005_A",
+      "conditionType": "correct",
+      "conditionValue": "target_mastered",
+      "toQuestionId": "SQ_SR_006_A"
+    },
+    {
+      "fromQuestionId": "SQ_SR_006_A",
+      "conditionType": "correct",
+      "conditionValue": "target_mastered",
+      "toQuestionId": "SQ_SR_007_A"
+    },
+    {
+      "fromQuestionId": "SQ_SR_007_A",
+      "conditionType": "correct",
+      "conditionValue": "target_mastered",
+      "toQuestionId": "SQ_SR_008_A"
+    },
+    {
+      "fromQuestionId": "SQ_SR_008_A",
+      "conditionType": "correct",
+      "conditionValue": "target_mastered",
+      "toQuestionId": "SQ_SR_009_A"
+    },
+    {
+      "fromQuestionId": "SQ_SR_009_A",
+      "conditionType": "correct",
+      "conditionValue": "target_mastered",
+      "toQuestionId": "SQ_SR_010_A"
+    }
+  ],
+  "hints": [
+    {
+      "id": "HINT_SR_001_A_1",
+      "questionId": "SQ_SR_001_A",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_001_A_2",
+      "questionId": "SQ_SR_001_A",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_001_B_1",
+      "questionId": "SQ_SR_001_B",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_001_B_2",
+      "questionId": "SQ_SR_001_B",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_001_C_1",
+      "questionId": "SQ_SR_001_C",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_001_C_2",
+      "questionId": "SQ_SR_001_C",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_002_A_1",
+      "questionId": "SQ_SR_002_A",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_002_A_2",
+      "questionId": "SQ_SR_002_A",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_002_B_1",
+      "questionId": "SQ_SR_002_B",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_002_B_2",
+      "questionId": "SQ_SR_002_B",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_002_C_1",
+      "questionId": "SQ_SR_002_C",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_002_C_2",
+      "questionId": "SQ_SR_002_C",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_003_A_1",
+      "questionId": "SQ_SR_003_A",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_003_A_2",
+      "questionId": "SQ_SR_003_A",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_003_B_1",
+      "questionId": "SQ_SR_003_B",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_003_B_2",
+      "questionId": "SQ_SR_003_B",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_003_C_1",
+      "questionId": "SQ_SR_003_C",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_003_C_2",
+      "questionId": "SQ_SR_003_C",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_004_A_1",
+      "questionId": "SQ_SR_004_A",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_004_A_2",
+      "questionId": "SQ_SR_004_A",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_004_B_1",
+      "questionId": "SQ_SR_004_B",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_004_B_2",
+      "questionId": "SQ_SR_004_B",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_004_C_1",
+      "questionId": "SQ_SR_004_C",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_004_C_2",
+      "questionId": "SQ_SR_004_C",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_005_A_1",
+      "questionId": "SQ_SR_005_A",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_005_A_2",
+      "questionId": "SQ_SR_005_A",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_005_B_1",
+      "questionId": "SQ_SR_005_B",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_005_B_2",
+      "questionId": "SQ_SR_005_B",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_005_C_1",
+      "questionId": "SQ_SR_005_C",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_005_C_2",
+      "questionId": "SQ_SR_005_C",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_006_A_1",
+      "questionId": "SQ_SR_006_A",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_006_A_2",
+      "questionId": "SQ_SR_006_A",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_006_B_1",
+      "questionId": "SQ_SR_006_B",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_006_B_2",
+      "questionId": "SQ_SR_006_B",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_006_C_1",
+      "questionId": "SQ_SR_006_C",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_006_C_2",
+      "questionId": "SQ_SR_006_C",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_007_A_1",
+      "questionId": "SQ_SR_007_A",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_007_A_2",
+      "questionId": "SQ_SR_007_A",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_007_B_1",
+      "questionId": "SQ_SR_007_B",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_007_B_2",
+      "questionId": "SQ_SR_007_B",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_007_C_1",
+      "questionId": "SQ_SR_007_C",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_007_C_2",
+      "questionId": "SQ_SR_007_C",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_008_A_1",
+      "questionId": "SQ_SR_008_A",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_008_A_2",
+      "questionId": "SQ_SR_008_A",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_008_B_1",
+      "questionId": "SQ_SR_008_B",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_008_B_2",
+      "questionId": "SQ_SR_008_B",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_008_C_1",
+      "questionId": "SQ_SR_008_C",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_008_C_2",
+      "questionId": "SQ_SR_008_C",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_009_A_1",
+      "questionId": "SQ_SR_009_A",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_009_A_2",
+      "questionId": "SQ_SR_009_A",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_009_B_1",
+      "questionId": "SQ_SR_009_B",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_009_B_2",
+      "questionId": "SQ_SR_009_B",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_009_C_1",
+      "questionId": "SQ_SR_009_C",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_009_C_2",
+      "questionId": "SQ_SR_009_C",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_010_A_1",
+      "questionId": "SQ_SR_010_A",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_010_A_2",
+      "questionId": "SQ_SR_010_A",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_010_B_1",
+      "questionId": "SQ_SR_010_B",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_010_B_2",
+      "questionId": "SQ_SR_010_B",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    },
+    {
+      "id": "HINT_SR_010_C_1",
+      "questionId": "SQ_SR_010_C",
+      "level": 1,
+      "hintText": "先只处理当前问题中的一个核心关系，不要同时展开多个机制。"
+    },
+    {
+      "id": "HINT_SR_010_C_2",
+      "questionId": "SQ_SR_010_C",
+      "level": 2,
+      "hintText": "按“条件—机制—结果”的顺序重新组织你的解释。"
+    }
+  ],
+  "cases": [
+    {
+      "id": "CASE_SR_001",
+      "title": "共同暴露与资产价格反馈",
+      "caseType": "comprehensive",
+      "difficulty": 2,
+      "studentText": "银行 A、B、C 之间不存在明显直接借贷关系，但三家银行均大量持有房地产贷款和房地产相关证券。房地产价格持续下跌后，违约率上升，三家银行资产质量同时恶化。为补充流动性和降低风险，部分机构开始出售相关资产，市场价格进一步下降。",
+      "originType": "teacher_material",
+      "sourceId": "DOC_SR_06",
+      "targetUnits": [
+        "M_SR_002",
+        "M_SR_003",
+        "M_SR_007"
+      ],
+      "teacherData": {
+        "expectedReasoning": "学生应根据案例识别初始冲击、传播渠道、放大机制、金融功能影响和系统性判断条件。",
+        "commonErrors": [
+          "ERR_E03_DIRECT_LINK_ONLY",
+          "ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING",
+          "ERR_E07_DEFINITION_ONLY"
+        ],
+        "minimumAnswer": "至少识别一个目标机制，并说明该机制如何从个体或局部事件影响到多个主体或金融功能。",
+        "excellentAnswer": "能够建立冲击、传播、放大、金融功能受损和实体经济反馈之间的完整因果链，并说明条件变化后的判断边界。",
+        "followUpGroupIds": [
+          "SQG_SR_004",
+          "SQG_SR_005",
+          "SQG_SR_007",
+          "SQG_SR_010"
+        ]
+      },
+      "visibility": "STUDENT",
+      "status": "published",
+      "variantGroupId": "CVG_SR_COMMON_EXPOSURE"
+    },
+    {
+      "id": "CASE_SR_002",
+      "title": "单家机构失败但未形成系统性事件",
+      "caseType": "counterexample",
+      "difficulty": 1,
+      "studentText": "某地方小型金融机构因内部经营管理问题严重亏损并退出市场。其客户规模较小，支付与结算业务可迅速迁移至其他机构，没有引发其他金融机构资产损失，也没有出现市场恐慌或信贷明显收缩。",
+      "originType": "teacher_material",
+      "sourceId": "DOC_SR_06",
+      "targetUnits": [
+        "C_SR_001"
+      ],
+      "teacherData": {
+        "expectedReasoning": "学生应根据案例识别初始冲击、传播渠道、放大机制、金融功能影响和系统性判断条件。",
+        "commonErrors": [
+          "ERR_E02_EVENT_EQUALS_SYSTEMIC"
+        ],
+        "minimumAnswer": "至少识别一个目标机制，并说明该机制如何从个体或局部事件影响到多个主体或金融功能。",
+        "excellentAnswer": "能够建立冲击、传播、放大、金融功能受损和实体经济反馈之间的完整因果链，并说明条件变化后的判断边界。",
+        "followUpGroupIds": [
+          "SQG_SR_001"
+        ]
+      },
+      "visibility": "STUDENT",
+      "status": "published",
+      "variantGroupId": "CVG_SR_002"
+    },
+    {
+      "id": "CASE_SR_003",
+      "title": "流动性与信心传染",
+      "caseType": "basic",
+      "difficulty": 2,
+      "studentText": "银行 A 公布重大资产损失后，大量储户短期集中提款。银行 A 为满足现金需求被迫出售长期资产，资产价格下跌并形成进一步损失。社交媒体出现“其他银行也可能存在同类问题”的讨论，银行 B、C 也出现异常提款，同业市场风险偏好显著下降。",
+      "originType": "teacher_material",
+      "sourceId": "DOC_SR_06",
+      "targetUnits": [
+        "M_SR_004",
+        "M_SR_005",
+        "M_SR_003"
+      ],
+      "teacherData": {
+        "expectedReasoning": "学生应根据案例识别初始冲击、传播渠道、放大机制、金融功能影响和系统性判断条件。",
+        "commonErrors": [
+          "ERR_E03_DIRECT_LINK_ONLY",
+          "ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING"
+        ],
+        "minimumAnswer": "至少识别一个目标机制，并说明该机制如何从个体或局部事件影响到多个主体或金融功能。",
+        "excellentAnswer": "能够建立冲击、传播、放大、金融功能受损和实体经济反馈之间的完整因果链，并说明条件变化后的判断边界。",
+        "followUpGroupIds": [
+          "SQG_SR_005",
+          "SQG_SR_006"
+        ]
+      },
+      "visibility": "STUDENT",
+      "status": "published",
+      "variantGroupId": "CVG_SR_003"
+    },
+    {
+      "id": "CASE_SR_004",
+      "title": "房地产金融周期迁移",
+      "caseType": "transfer",
+      "difficulty": 3,
+      "studentText": "某经济体房地产价格连续多年上涨，银行持续扩大房地产贷款，居民杠杆率和房地产企业债务同步上升。随后房价明显下行，房地产企业违约增加，银行不良资产上升。金融机构普遍收紧授信并出售相关资产，企业融资成本上升，投资与就业下降，经济增速进一步放缓。",
+      "originType": "teacher_material",
+      "sourceId": "DOC_SR_06",
+      "targetUnits": [
+        "D_SR_002",
+        "M_SR_002",
+        "M_SR_003",
+        "M_SR_007"
+      ],
+      "teacherData": {
+        "expectedReasoning": "学生应根据案例识别初始冲击、传播渠道、放大机制、金融功能影响和系统性判断条件。",
+        "commonErrors": [
+          "ERR_E07_DEFINITION_ONLY"
+        ],
+        "minimumAnswer": "至少识别一个目标机制，并说明该机制如何从个体或局部事件影响到多个主体或金融功能。",
+        "excellentAnswer": "能够建立冲击、传播、放大、金融功能受损和实体经济反馈之间的完整因果链，并说明条件变化后的判断边界。",
+        "followUpGroupIds": [
+          "SQG_SR_004",
+          "SQG_SR_005",
+          "SQG_SR_007",
+          "SQG_SR_010"
+        ]
+      },
+      "visibility": "STUDENT",
+      "status": "published",
+      "variantGroupId": "CVG_SR_004"
+    },
+    {
+      "id": "CASE_SR_005",
+      "title": "证券市场共同持仓迁移",
+      "caseType": "transfer",
+      "difficulty": 2,
+      "studentText": "多家证券和资管机构持有高度相似的债券组合。某类债券价格突然下跌后，部分机构为满足风险限额和流动性需要集中卖出，同类资产价格继续下降，其他持仓机构出现账面损失并进一步减仓。",
+      "originType": "teacher_material",
+      "sourceId": "DOC_SR_06",
+      "targetUnits": [
+        "M_SR_002",
+        "M_SR_003"
+      ],
+      "teacherData": {
+        "expectedReasoning": "学生应根据案例识别初始冲击、传播渠道、放大机制、金融功能影响和系统性判断条件。",
+        "commonErrors": [
+          "ERR_E03_DIRECT_LINK_ONLY",
+          "ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING",
+          "ERR_E02_EVENT_EQUALS_SYSTEMIC"
+        ],
+        "minimumAnswer": "至少识别一个目标机制，并说明该机制如何从个体或局部事件影响到多个主体或金融功能。",
+        "excellentAnswer": "能够建立冲击、传播、放大、金融功能受损和实体经济反馈之间的完整因果链，并说明条件变化后的判断边界。",
+        "followUpGroupIds": [
+          "SQG_SR_004",
+          "SQG_SR_005"
+        ]
+      },
+      "visibility": "STUDENT",
+      "status": "published",
+      "variantGroupId": "CVG_SR_COMMON_EXPOSURE"
+    },
+    {
+      "id": "CASE_SR_006",
+      "title": "关键支付服务中断迁移",
+      "caseType": "transfer",
+      "difficulty": 2,
+      "studentText": "一家承担大量支付清算服务的机构发生严重运营故障。机构自身资产损失并不大，但多家金融机构的支付与结算暂时受阻，部分交易无法按时完成，市场参与者开始提高流动性储备并减少交易。",
+      "originType": "teacher_material",
+      "sourceId": "DOC_SR_06",
+      "targetUnits": [
+        "M_SR_006",
+        "C_SR_001"
+      ],
+      "teacherData": {
+        "expectedReasoning": "学生应根据案例识别初始冲击、传播渠道、放大机制、金融功能影响和系统性判断条件。",
+        "commonErrors": [
+          "ERR_E02_EVENT_EQUALS_SYSTEMIC",
+          "ERR_E07_DEFINITION_ONLY"
+        ],
+        "minimumAnswer": "至少识别一个目标机制，并说明该机制如何从个体或局部事件影响到多个主体或金融功能。",
+        "excellentAnswer": "能够建立冲击、传播、放大、金融功能受损和实体经济反馈之间的完整因果链，并说明条件变化后的判断边界。",
+        "followUpGroupIds": [
+          "SQG_SR_001"
+        ]
+      },
+      "visibility": "STUDENT",
+      "status": "published",
+      "variantGroupId": "CVG_SR_006"
+    },
+    {
+      "id": "CASE_SR_007",
+      "title": "个体理性与系统放大反例",
+      "caseType": "counterexample",
+      "difficulty": 2,
+      "studentText": "市场下跌时，每家金融机构都根据自身风险管理规则减少高风险资产。对单家机构而言，这一行为有助于降低暴露；但大量机构在短时间采取同样行动，市场成交价格快速下跌并触发更多机构减仓。",
+      "originType": "teacher_material",
+      "sourceId": "DOC_SR_06",
+      "targetUnits": [
+        "C_SR_004",
+        "M_SR_003"
+      ],
+      "teacherData": {
+        "expectedReasoning": "学生应根据案例识别初始冲击、传播渠道、放大机制、金融功能影响和系统性判断条件。",
+        "commonErrors": [
+          "ERR_E06_MICRO_SAFE_EQUALS_SYSTEM_SAFE",
+          "ERR_E04_COMMON_EXPOSURE_FIRE_SALE_MISSING"
+        ],
+        "minimumAnswer": "至少识别一个目标机制，并说明该机制如何从个体或局部事件影响到多个主体或金融功能。",
+        "excellentAnswer": "能够建立冲击、传播、放大、金融功能受损和实体经济反馈之间的完整因果链，并说明条件变化后的判断边界。",
+        "followUpGroupIds": [
+          "SQG_SR_005",
+          "SQG_SR_009"
+        ]
+      },
+      "visibility": "STUDENT",
+      "status": "published",
+      "variantGroupId": "CVG_SR_007"
+    },
+    {
+      "id": "CASE_SR_008",
+      "title": "系统重要性比较迁移",
+      "caseType": "transfer",
+      "difficulty": 2,
+      "studentText": "机构 X 规模很大，但其主要业务容易被其他机构替代；机构 Y 规模较小，却与多个关键市场和机构高度关联，并承担一项短期难以替代的关键服务。",
+      "originType": "teacher_material",
+      "sourceId": "DOC_SR_06",
+      "targetUnits": [
+        "C_SR_003"
+      ],
+      "teacherData": {
+        "expectedReasoning": "学生应根据案例识别初始冲击、传播渠道、放大机制、金融功能影响和系统性判断条件。",
+        "commonErrors": [
+          "ERR_E05_SIZE_ONLY"
+        ],
+        "minimumAnswer": "至少识别一个目标机制，并说明该机制如何从个体或局部事件影响到多个主体或金融功能。",
+        "excellentAnswer": "能够建立冲击、传播、放大、金融功能受损和实体经济反馈之间的完整因果链，并说明条件变化后的判断边界。",
+        "followUpGroupIds": [
+          "SQG_SR_008"
+        ]
+      },
+      "visibility": "STUDENT",
+      "status": "published",
+      "variantGroupId": "CVG_SR_008"
+    }
+  ],
+  "rubric": {
+    "id": "RB_SR_001",
+    "version": "1.1",
+    "status": "published",
+    "dimensions": [
+      {
+        "code": "concept_completeness",
+        "title": "概念完整度",
+        "maxScore": 20,
+        "weight": 1,
+        "anchors": [
+          {
+            "scoreAnchor": 0,
+            "description": "核心概念错误，无法区分 Systemic / Systematic，或把单体事件直接等同于系统性风险。"
+          },
+          {
+            "scoreAnchor": 5,
+            "description": "能提到金融系统/体系，但边界仍明显不稳。"
+          },
+          {
+            "scoreAnchor": 10,
+            "description": "定义方向基本正确，能提到传播或功能受损，但内容不完整且需要提示。"
+          },
+          {
+            "scoreAnchor": 15,
+            "description": "概念基本完整，能稳定区分关键概念，存在少量遗漏。"
+          },
+          {
+            "scoreAnchor": 20,
+            "description": "独立、准确、完整，并能在条件变化和反例中保持一致。"
+          }
+        ]
+      },
+      {
+        "code": "logic_completeness",
+        "title": "逻辑完整度",
+        "maxScore": 20,
+        "weight": 1,
+        "anchors": [
+          {
+            "scoreAnchor": 0,
+            "description": "无有效因果链，回答互相矛盾或只有结论。"
+          },
+          {
+            "scoreAnchor": 5,
+            "description": "只能给出零散原因/后果，链条大面积断裂。"
+          },
+          {
+            "scoreAnchor": 10,
+            "description": "可形成部分冲击—传播—后果关系，但放大或反馈环节不稳。"
+          },
+          {
+            "scoreAnchor": 15,
+            "description": "因果链较完整，少量环节需追问后补充。"
+          },
+          {
+            "scoreAnchor": 20,
+            "description": "独立形成完整冲击—传播—放大—功能受损—实体经济链并能解释反馈。"
+          }
+        ]
+      },
+      {
+        "code": "expression_clarity",
+        "title": "表达清晰度",
+        "maxScore": 20,
+        "weight": 1,
+        "anchors": [
+          {
+            "scoreAnchor": 0,
+            "description": "表达无法判断真实含义，或大量照搬定义且前后矛盾。"
+          },
+          {
+            "scoreAnchor": 5,
+            "description": "能表达少量观点，但术语堆叠、层次混乱。"
+          },
+          {
+            "scoreAnchor": 10,
+            "description": "基本可理解，但需要教师或 AI 重述或追问才能明确。"
+          },
+          {
+            "scoreAnchor": 15,
+            "description": "表达清晰、结构较好，偶有术语或层次问题。"
+          },
+          {
+            "scoreAnchor": 20,
+            "description": "用自己的语言准确分层解释，能让非专业学习者理解且不牺牲准确性。"
+          }
+        ]
+      },
+      {
+        "code": "example_ability",
+        "title": "举例能力",
+        "maxScore": 20,
+        "weight": 1,
+        "anchors": [
+          {
+            "scoreAnchor": 0,
+            "description": "不能举例，或例子与系统性风险机制无关。"
+          },
+          {
+            "scoreAnchor": 5,
+            "description": "能给事件名称或场景，但无法解释为什么相关。"
+          },
+          {
+            "scoreAnchor": 10,
+            "description": "例子可体现一个机制，但链条不完整或需要提示。"
+          },
+          {
+            "scoreAnchor": 15,
+            "description": "例子与主要机制对应较好，少量环节需补充。"
+          },
+          {
+            "scoreAnchor": 20,
+            "description": "能自行构造或选择例子，并逐步映射冲击、传播、放大和后果。"
+          }
+        ]
+      },
+      {
+        "code": "transfer_ability",
+        "title": "迁移应用能力",
+        "maxScore": 20,
+        "weight": 1,
+        "anchors": [
+          {
+            "scoreAnchor": 0,
+            "description": "面对新情境无法判断，或完全套用错误模板。"
+          },
+          {
+            "scoreAnchor": 5,
+            "description": "只能复述训练过的原案例，条件变化后判断失效。"
+          },
+          {
+            "scoreAnchor": 10,
+            "description": "能处理与训练案例高度相似的情境，但新条件下需要明显提示。"
+          },
+          {
+            "scoreAnchor": 15,
+            "description": "能处理较新情境并修正多数判断，个别关键条件需追问。"
+          },
+          {
+            "scoreAnchor": 20,
+            "description": "能独立处理陌生案例，识别关键条件变化并重建因果链。"
+          }
+        ]
+      }
+    ]
+  },
+  "release": {
+    "id": "KR_SR_1_1",
+    "status": "draft",
+    "verifiedBy": null,
+    "verifiedAt": null,
+    "publishNote": "Pending teacher verification. Development use only."
+  },
+  "questionGroups": [
+    {
+      "id": "SQG_SR_001",
+      "targetId": "C_SR_001",
+      "memberIds": [
+        "SQ_SR_001_A",
+        "SQ_SR_001_B",
+        "SQ_SR_001_C"
+      ],
+      "selectionPolicy": "UNUSED_FIRST"
+    },
+    {
+      "id": "SQG_SR_002",
+      "targetId": "C_SR_002",
+      "memberIds": [
+        "SQ_SR_002_A",
+        "SQ_SR_002_B",
+        "SQ_SR_002_C"
+      ],
+      "selectionPolicy": "UNUSED_FIRST"
+    },
+    {
+      "id": "SQG_SR_003",
+      "targetId": "M_SR_001",
+      "memberIds": [
+        "SQ_SR_003_A",
+        "SQ_SR_003_B",
+        "SQ_SR_003_C"
+      ],
+      "selectionPolicy": "UNUSED_FIRST"
+    },
+    {
+      "id": "SQG_SR_004",
+      "targetId": "M_SR_002",
+      "memberIds": [
+        "SQ_SR_004_A",
+        "SQ_SR_004_B",
+        "SQ_SR_004_C"
+      ],
+      "selectionPolicy": "UNUSED_FIRST"
+    },
+    {
+      "id": "SQG_SR_005",
+      "targetId": "M_SR_003",
+      "memberIds": [
+        "SQ_SR_005_A",
+        "SQ_SR_005_B",
+        "SQ_SR_005_C"
+      ],
+      "selectionPolicy": "UNUSED_FIRST"
+    },
+    {
+      "id": "SQG_SR_006",
+      "targetId": "M_SR_004",
+      "memberIds": [
+        "SQ_SR_006_A",
+        "SQ_SR_006_B",
+        "SQ_SR_006_C"
+      ],
+      "selectionPolicy": "UNUSED_FIRST"
+    },
+    {
+      "id": "SQG_SR_007",
+      "targetId": "M_SR_007",
+      "memberIds": [
+        "SQ_SR_007_A",
+        "SQ_SR_007_B",
+        "SQ_SR_007_C"
+      ],
+      "selectionPolicy": "UNUSED_FIRST"
+    },
+    {
+      "id": "SQG_SR_008",
+      "targetId": "C_SR_003",
+      "memberIds": [
+        "SQ_SR_008_A",
+        "SQ_SR_008_B",
+        "SQ_SR_008_C"
+      ],
+      "selectionPolicy": "UNUSED_FIRST"
+    },
+    {
+      "id": "SQG_SR_009",
+      "targetId": "C_SR_004",
+      "memberIds": [
+        "SQ_SR_009_A",
+        "SQ_SR_009_B",
+        "SQ_SR_009_C"
+      ],
+      "selectionPolicy": "UNUSED_FIRST"
+    },
+    {
+      "id": "SQG_SR_010",
+      "targetId": "M_SR_007",
+      "memberIds": [
+        "SQ_SR_010_A",
+        "SQ_SR_010_B",
+        "SQ_SR_010_C"
+      ],
+      "selectionPolicy": "UNUSED_FIRST"
+    }
+  ]
+}

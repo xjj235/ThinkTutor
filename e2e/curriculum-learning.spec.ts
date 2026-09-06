@@ -30,14 +30,14 @@ test("a student selects an authorized course goal in HTML and forged curriculum 
   await page.getByRole("button", { name: "登录" }).click();
   await expect(page).toHaveURL(/\/dashboard/);
 
-  const forbidden = await page.request.post("/api/sessions", { data: { courseId: forbiddenCourse.id, topic: "越权主题", objective: "这个请求不应读取未授权课程材料。", learnerLevel: "入门" } });
+  const forbidden = await page.request.post("/api/sessions", { data: { courseId: forbiddenCourse.id, topic: "越权主题", objective: "这个请求不应读取未授权课程材料。", learnerLevel: "入门", clientRequestId: `forbidden-${suffix}` } });
   expect(forbidden.status()).toBe(403);
-  const mixedHierarchy = await page.request.post("/api/sessions", { data: { courseId: course.id, chapterId: forbiddenChapter.id, topic: "错误层级", objective: "这个请求不应混用其他课程的章节。", learnerLevel: "入门" } });
+  const mixedHierarchy = await page.request.post("/api/sessions", { data: { courseId: course.id, chapterId: forbiddenChapter.id, topic: "错误层级", objective: "这个请求不应混用其他课程的章节。", learnerLevel: "入门", clientRequestId: `mixed-${suffix}` } });
   expect(mixedHierarchy.status()).toBe(400);
 
   await page.goto("/learn/new");
   await expect(page).toHaveURL(/\/learn\/new/);
-  await expect(page.getByRole("heading", { name: "开始自主学习" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "创建研习任务" })).toBeVisible();
   await page.locator("#curriculum-course").selectOption(course.id);
   await page.locator("#curriculum-chapter").selectOption(chapter.id);
   await page.locator("#curriculum-goal").selectOption(goal.id);
@@ -48,6 +48,7 @@ test("a student selects an authorized course goal in HTML and forged curriculum 
   await page.getByLabel("学习者水平").selectOption("入门");
   await page.getByRole("button", { name: "创建并开始学习" }).click();
   await expect(page).toHaveURL(/\/session\//);
+  await page.getByText("任务信息", { exact: true }).click();
   await expect(page.getByText(course.title)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

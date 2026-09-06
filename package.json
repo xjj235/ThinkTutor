@@ -26,7 +26,16 @@
     "prisma:seed": "prisma db seed",
     "worker": "tsx src/worker/index.ts",
     "worker:material": "tsx scripts/process-material.ts",
-    "admin:create": "tsx scripts/create-admin.ts"
+    "admin:create": "tsx scripts/create-admin.ts",
+    "knowledge:validate": "tsx scripts/validate-knowledge.ts",
+    "knowledge:test": "tsx scripts/with-test-postgres.ts -- pnpm exec vitest run tests/unit/knowledge.test.ts tests/unit/knowledge-runtime.test.ts tests/unit/knowledge-v12.test.ts tests/unit/knowledge-v12-golden.test.ts",
+    "knowledge:golden": "tsx scripts/with-test-postgres.ts -- pnpm exec vitest run tests/unit/knowledge-golden.test.ts",
+    "knowledge:retrieval": "tsx scripts/with-test-postgres.ts -- pnpm exec vitest run tests/unit/knowledge.test.ts tests/unit/knowledge-runtime.test.ts",
+    "knowledge:workflow": "tsx scripts/with-test-postgres.ts -- pnpm exec vitest run tests/integration/session-flow.test.ts tests/integration/knowledge-v12-flow.test.ts",
+    "knowledge:golden:diagnosis": "vitest run tests/unit/knowledge-v12-golden.test.ts",
+    "knowledge:golden:routing": "vitest run tests/unit/knowledge-v12.test.ts -t \"prerequisites|hint|case|migration\"",
+    "knowledge:golden:assessment": "vitest run tests/unit/knowledge-v12.test.ts -t \"caps|evidence window\"",
+    "knowledge:live:smoke": "tsx scripts/with-test-postgres.ts -- pnpm exec vitest run --config vitest.live.config.mts -t v1.2"
   },
   "dependencies": {
     "@alicloud/credentials": "2.4.5",
@@ -38,6 +47,7 @@
     "dotenv": "17.4.2",
     "ioredis": "6.0.0",
     "katex": "0.18.2",
+    "lucide-react": "1.40.0",
     "mammoth": "1.12.0",
     "next": "16.2.12",
     "pdf-parse": "2.4.5",

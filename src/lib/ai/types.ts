@@ -7,8 +7,10 @@ import type {
   LearningReportDraft,
   MessageDTO,
   ReportGap,
+  WebSource,
 } from "../contracts";
 import type { FeynmanInstruction, LearningContextSummary, MaterialKeywords, RetryTask } from "./schemas";
+import type { KnowledgePolicy } from "./context-builder";
 
 export interface AIRequestMeta {
   userId?: string;
@@ -16,8 +18,15 @@ export interface AIRequestMeta {
   requestId?: string;
 }
 
-export interface DiagnosticInput extends AIRequestMeta { task: CreateSessionInput; }
+export interface DiagnosticInput extends AIRequestMeta {
+  task: CreateSessionInput;
+  retrievedContext?: string[];
+  knowledgePolicy?: KnowledgePolicy;
+}
+export type SourcedDiagnosticQuestion = DiagnosticQuestion & { webSources?: WebSource[]; knowledgePolicy?: KnowledgePolicy | "WEB_SEARCH_FALLBACK" };
+export type SourcedCoachTurn = CoachTurn & { webSources?: WebSource[]; knowledgePolicy?: KnowledgePolicy | "WEB_SEARCH_FALLBACK" };
 export interface CoachTurnInput extends AIRequestMeta {
+  selectedAction?: import("../knowledge/orchestrator").KnowledgeAction;
   task: CreateSessionInput;
   phase: LearningPhase;
   socraticTurns: number;
@@ -29,8 +38,10 @@ export interface CoachTurnInput extends AIRequestMeta {
   isHintRequest?: boolean;
   contextSummary?: string | null;
   retrievedContext?: string[];
+  knowledgePolicy?: KnowledgePolicy;
 }
 export interface ReportInput extends AIRequestMeta {
+  retrievedContext?: string[];
   task: CreateSessionInput;
   messages: Pick<MessageDTO, "role" | "phase" | "content" | "questionType">[];
   feynmanExplanation: string;
@@ -39,10 +50,18 @@ export interface FeynmanInstructionInput extends AIRequestMeta { task: CreateSes
 export interface RetryTaskInput extends AIRequestMeta { task: CreateSessionInput; gap: ReportGap; }
 export interface ContextSummaryInput extends AIRequestMeta { task: CreateSessionInput; messages: Pick<MessageDTO, "role" | "content">[]; }
 export interface MaterialKeywordsInput extends AIRequestMeta { title: string; content: string; }
+export interface TurnAssessmentInput extends AIRequestMeta {
+  message: { id: string; content: string };
+  lockedContext: { phase: string; stage: string; targetId: string | null; questionId: string | null; caseId: string | null; action: "ASSESS_EVIDENCE"; hintLevel: number; releaseId: string; questionText?: string; caseContext?: string };
+  evidenceDefinitions: Record<string, string>;
+  knowledgeUnits: Array<{ id: string; content: string }>;
+  aliases: Record<string, { accepted: string[]; forbidden: string[] }>;
+}
 
 export interface AIProvider {
-  createDiagnosticQuestion(input: DiagnosticInput): Promise<DiagnosticQuestion>;
-  createCoachTurn(input: CoachTurnInput): Promise<CoachTurn>;
+  assessLearningTurn(input: TurnAssessmentInput): Promise<import("../knowledge/v12-schema").TurnAssessment>;
+  createDiagnosticQuestion(input: DiagnosticInput): Promise<SourcedDiagnosticQuestion>;
+  createCoachTurn(input: CoachTurnInput): Promise<SourcedCoachTurn>;
   createFeynmanInstruction(input: FeynmanInstructionInput): Promise<FeynmanInstruction>;
   createLearningReport(input: ReportInput): Promise<LearningReportDraft>;
   createRetryTask(input: RetryTaskInput): Promise<RetryTask>;

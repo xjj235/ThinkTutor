@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import {
   ApiResponse,
   SessionPayload,
@@ -49,8 +49,10 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const clientRequestIdRef = useRef<string | null>(null);
 
   function updateField(field: keyof FormState, value: string) {
+    clientRequestIdRef.current = null;
     setForm((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({ ...current, [field]: "" }));
   }
@@ -80,16 +82,18 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
 
     setPending(true);
     try {
+      clientRequestIdRef.current ??= crypto.randomUUID();
       const response = await fetch("/api/sessions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(parsed.data),
+        body: JSON.stringify({ ...parsed.data, clientRequestId: clientRequestIdRef.current }),
       });
       const result = (await response.json()) as ApiResponse<SessionPayload>;
       if (isApiFailure(result)) {
         setError(result.error.message);
         return;
       }
+      clientRequestIdRef.current = null;
       router.push(`/session/${result.data.session.id}`);
     } catch {
       setError("网络请求失败，请重试。");
@@ -107,16 +111,17 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
       noValidate
     >
       <p className="text-sm text-[#5d6b70]">
-        标有 <span className="font-semibold text-[#b42318]">*</span> 的项目为必填项。
+        <span className="font-semibold text-[#b42318]">*</span> 必填信息
       </p>
       <fieldset className="curriculum-picker">
-        <legend>从课程学习目标开始（可选）</legend>
-        <p>这里只显示你已加入班级且教师已发布的课程。选择学习目标后，知识点和目标会自动填写；服务端会再次验证课程权限。</p>
+        <legend>课程关联</legend>
+        <p>所在班级已发布的课程与学习目标</p>
         {courses.length ? (
           <div className="grid gap-4 md:grid-cols-3">
             <div className="curriculum-field">
               <label htmlFor="curriculum-course">课程</label>
               <select id="curriculum-course" value={form.courseId} disabled={pending} onChange={(event) => {
+                clientRequestIdRef.current = null;
                 const course = courses.find((item) => item.id === event.target.value);
                 setForm((current) => ({ ...current, courseId: course?.id ?? "", chapterId: "", learningGoalId: "", course: course?.title ?? "", chapter: "", ...(current.learningGoalId ? { topic: "", objective: "" } : {}) }));
               }}>
@@ -127,6 +132,7 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
             <div className="curriculum-field">
               <label htmlFor="curriculum-chapter">章节</label>
               <select id="curriculum-chapter" value={form.chapterId} disabled={pending || !form.courseId} onChange={(event) => {
+                clientRequestIdRef.current = null;
                 const course = courses.find((item) => item.id === form.courseId);
                 const chapter = course?.chapters.find((item) => item.id === event.target.value);
                 setForm((current) => ({ ...current, chapterId: chapter?.id ?? "", learningGoalId: "", chapter: chapter?.title ?? "", ...(current.learningGoalId ? { topic: "", objective: "" } : {}) }));
@@ -138,6 +144,7 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
             <div className="curriculum-field">
               <label htmlFor="curriculum-goal">学习目标</label>
               <select id="curriculum-goal" value={form.learningGoalId} disabled={pending || !form.chapterId} onChange={(event) => {
+                clientRequestIdRef.current = null;
                 const chapter = courses.find((item) => item.id === form.courseId)?.chapters.find((item) => item.id === form.chapterId);
                 const goal = chapter?.goals.find((item) => item.id === event.target.value);
                 setForm((current) => ({ ...current, learningGoalId: goal?.id ?? "", topic: goal?.title ?? current.topic, objective: goal?.objective ?? current.objective }));
@@ -147,31 +154,8 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
               </select>
             </div>
           </div>
-        ) : <p className="curriculum-empty">你尚未加入包含已发布课程的班级。可以先填写下面的独立任务，或前往“班级”使用加入码加入教师课程。</p>}
+        ) : <p className="curriculum-empty">暂无已发布课程 · 自主研习</p>}
       </fieldset>
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field
-          id="course"
-          label="课程（可选）"
-          value={form.course}
-          error={fieldErrors.course}
-          onChange={(value) => updateField("course", value)}
-          maxLength={80}
-          disabled={pending}
-          readOnly={Boolean(form.courseId)}
-        />
-        <Field
-          id="chapter"
-          label="章节（可选）"
-          value={form.chapter}
-          error={fieldErrors.chapter}
-          onChange={(value) => updateField("chapter", value)}
-          maxLength={120}
-          disabled={pending}
-          readOnly={Boolean(form.chapterId)}
-        />
-      </div>
-
       <Field
         id="topic"
         label="知识点"
@@ -191,7 +175,7 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
         onChange={(value) => updateField("objective", value)}
         required
         maxLength={400}
-        rows={4}
+        rows={3}
         disabled={pending}
       />
 
@@ -215,15 +199,38 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
           className="w-full rounded-md border border-[#c9d9d7] bg-white px-3 py-2 text-[#172126]"
         >
           <option value="">请选择</option>
-          <option value="入门">入门</option>
-          <option value="有基础">有基础</option>
-          <option value="进阶">进阶</option>
+          <option value="入门">基础认知</option>
+          <option value="有基础">已有基础</option>
+          <option value="进阶">进阶研习</option>
         </select>
         {fieldErrors.learnerLevel ? (
           <p id="learnerLevel-error" className="text-sm text-[#b42318]">
             {fieldErrors.learnerLevel}
           </p>
         ) : null}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field
+          id="course"
+          label="课程（可选）"
+          value={form.course}
+          error={fieldErrors.course}
+          onChange={(value) => updateField("course", value)}
+          maxLength={80}
+          disabled={pending}
+          readOnly={Boolean(form.courseId)}
+        />
+        <Field
+          id="chapter"
+          label="章节（可选）"
+          value={form.chapter}
+          error={fieldErrors.chapter}
+          onChange={(value) => updateField("chapter", value)}
+          maxLength={120}
+          disabled={pending}
+          readOnly={Boolean(form.chapterId)}
+        />
       </div>
 
       <TextArea
@@ -233,7 +240,7 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
         error={fieldErrors.referenceText}
         onChange={(value) => updateField("referenceText", value)}
         maxLength={8000}
-        rows={6}
+        rows={4}
         disabled={pending}
       />
 

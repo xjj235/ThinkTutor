@@ -9,6 +9,8 @@ import {
   learningReportDraftSchema,
 } from "../contracts";
 import { isLowInformationAnswer } from "../state-machine";
+import { mockAssessLearningTurn } from "./mock-assessment-v12";
+import type { TurnAssessmentInput } from "./types";
 import type {
   AIProvider,
   CoachTurnInput,
@@ -38,6 +40,11 @@ const questionCycle: QuestionType[] = [
 function topicLabel(topic: string) {
   return topic.replace(/[\r\n?？]/g, " ").trim() || "这个知识点";
 }
+function quoteEvidence(text: string, matcher: (segment: string) => boolean): string {
+  const segment = text.split(/[\r\n。！？!?]+/u).map((item) => item.trim()).find(matcher) ?? text.trim();
+  return `学生在本次对话中写道：“${segment.slice(0, 180)}”。`;
+}
+
 
 function supportQuestion(input: CoachTurnInput): CoachTurn {
   const topic = topicLabel(input.task.topic);
@@ -73,6 +80,7 @@ function supportQuestion(input: CoachTurnInput): CoachTurn {
 }
 
 export class MockAIProvider implements AIProvider {
+  async assessLearningTurn(input: TurnAssessmentInput) { return mockAssessLearningTurn(input); }
   async createDiagnosticQuestion(
     input: DiagnosticInput,
   ): Promise<DiagnosticQuestion> {
@@ -144,18 +152,30 @@ export class MockAIProvider implements AIProvider {
     const exampleScore = hasExample ? 82 : 48;
     const transferScore = hasTransfer ? 80 : 46;
 
-    const strengths: string[] = [];
+    const strengths: LearningReportDraft["strengths"] = [];
     if (!lowInfo && allUserText.includes(topic)) {
-      strengths.push(`能围绕“${topic}”进行初步解释`);
+      strengths.push({
+        title: `能围绕“${topic}”进行初步解释`,
+        evidence: quoteEvidence(allUserText, (segment) => segment.includes(topic)),
+      });
     }
     if (meaningfulUserTurns >= 2) {
-      strengths.push("能持续回应追问并补充自己的理解");
+      strengths.push({
+        title: "能持续回应追问并补充自己的理解",
+        evidence: quoteEvidence(allUserText, (segment) => !isLowInformationAnswer(segment)),
+      });
     }
     if (hasExample) {
-      strengths.push("能使用例子辅助说明");
+      strengths.push({
+        title: "能使用例子辅助说明",
+        evidence: quoteEvidence(allUserText, (segment) => /例如|比如|案例|例子|for example/i.test(segment)),
+      });
     }
     if (hasTransfer) {
-      strengths.push("能尝试把知识迁移到新场景");
+      strengths.push({
+        title: "能尝试把知识迁移到新场景",
+        evidence: quoteEvidence(allUserText, (segment) => /迁移|应用|场景|如果|换到|推广/.test(segment)),
+      });
     }
 
     return learningReportDraftSchema.parse({

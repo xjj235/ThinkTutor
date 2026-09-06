@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 export default function nextConfig(phase: string): NextConfig {
+  const distDir = process.env.THINKTUTOR_DIST_DIR ?? ".next";
+  if (!/^\.next(?:\/[a-zA-Z0-9_-]+)?$/u.test(distDir)) throw new Error("THINKTUTOR_DIST_DIR must stay under .next");
   const developmentServer = phase === "phase-development-server";
   const scriptSources = developmentServer
     ? "'self' 'unsafe-inline' 'unsafe-eval'"
@@ -19,6 +21,7 @@ export default function nextConfig(phase: string): NextConfig {
   ].join("; ");
 
   return {
+    distDir,
     output: "standalone",
     async headers() {
       return [

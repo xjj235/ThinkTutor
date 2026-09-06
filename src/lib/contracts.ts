@@ -41,9 +41,9 @@ export type CoachNextAction = (typeof coachNextActionValues)[number];
 export type DimensionKey = (typeof dimensionKeys)[number];
 
 export const phaseLabels: Record<LearningPhase, string> = {
-  DIAGNOSIS: "知识诊断",
+  DIAGNOSIS: "认知诊断",
   SOCRATIC: "苏格拉底追问",
-  FEYNMAN: "费曼讲解",
+  FEYNMAN: "费曼阐释",
   REPORTING: "生成报告",
   COMPLETED: "学习报告",
   ABANDONED: "已结束",
@@ -69,8 +69,8 @@ export const dimensionLabels: Record<DimensionKey, string> = {
 
 export const MAX_MESSAGES_PER_SESSION = 40;
 export const MIN_SOCRATIC_TURNS = 3;
-export const MAX_SOCRATIC_TURNS = 8;
-export const DEFAULT_MAX_TURNS = 6;
+export const MAX_SOCRATIC_TURNS = 5;
+export const DEFAULT_MAX_TURNS = 5;
 export const MIN_ANSWER_LENGTH = 10;
 export const MIN_FEYNMAN_EXPLANATION_LENGTH = 30;
 
@@ -114,6 +114,12 @@ export const createSessionInputSchema = z
       .min(1, "请选择学习者水平。")
       .max(textLimits.learnerLevel),
     referenceText: optionalTrimmed(textLimits.referenceText, "参考材料"),
+  })
+  .strict();
+
+export const createSessionRequestSchema = createSessionInputSchema
+  .extend({
+    clientRequestId: z.string().trim().min(8).max(textLimits.clientRequestId),
   })
   .strict();
 
@@ -218,12 +224,30 @@ export const diagnosticQuestionSchema = coachTurnSchema.superRefine(
   },
 );
 
+function isSafeHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.username === "" && url.password === "";
+  } catch {
+    return false;
+  }
+}
+
+export const webSourceSchema = z
+  .object({
+    title: z.string().trim().min(1).max(180),
+    url: z.string().trim().min(1).max(2_000).refine(isSafeHttpsUrl, "来源 URL 必须是无凭据的 HTTPS 地址。"),
+  })
+  .strict();
+
 export const messageMetadataSchema = z
   .object({
     learnerState: learnerStateSchema.optional(),
     nextAction: coachNextActionSchema.optional(),
     transitionReason: z.string().max(300).optional(),
     retrySessionId: z.string().trim().min(1).max(64).optional(),
+    knowledgePolicy: z.enum(["COURSE_KNOWLEDGE_FIRST", "MODEL_FALLBACK", "WEB_SEARCH_FALLBACK"]).optional(),
+    webSources: z.array(webSourceSchema).max(5).optional(),
   })
   .strict();
 
@@ -245,7 +269,13 @@ export const reportDimensionsSchema = z
   })
   .strict();
 
-export const strengthsSchema = z.array(z.string().trim().min(1).max(180)).max(5);
+export const reportStrengthSchema = z
+  .object({
+    title: z.string().trim().min(1).max(180),
+    evidence: z.string().trim().min(1).max(600),
+  })
+  .strict();
+export const strengthsSchema = z.array(reportStrengthSchema).max(5);
 export const reportGapSchema = z
   .object({
     title: z.string().trim().min(1).max(180),
@@ -273,6 +303,7 @@ export const learningReportDraftSchema = z
   .strict();
 
 export type CreateSessionInput = z.infer<typeof createSessionInputSchema>;
+export type CreateSessionRequest = z.infer<typeof createSessionRequestSchema>;
 export type AnswerInput = z.infer<typeof answerInputSchema>;
 export type HintInput = z.infer<typeof hintInputSchema>;
 export type FeynmanInput = z.infer<typeof feynmanInputSchema>;
@@ -280,6 +311,7 @@ export type RetryInput = z.infer<typeof retryInputSchema>;
 export type EnterFeynmanInput = z.infer<typeof enterFeynmanInputSchema>;
 export type LearnerState = z.infer<typeof learnerStateSchema>;
 export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
+export type WebSource = NonNullable<MessageMetadata["webSources"]>[number];
 export type DiagnosticQuestion = z.infer<typeof diagnosticQuestionSchema>;
 export type CoachTurn = z.infer<typeof coachTurnSchema>;
 export type ReportDimension = z.infer<typeof reportDimensionSchema>;
@@ -297,10 +329,13 @@ export interface MessageDTO {
   content: string;
   questionType: QuestionType | null;
   clientRequestId: string | null;
+  webSources: WebSource[];
+  knowledgePolicy: MessageMetadata["knowledgePolicy"] | null;
   createdAt: string;
 }
 
 export interface LearningSessionDTO {
+  knowledgeProgress?: { pedagogicalStage: import("./knowledge/v12-schema").V12State["pedagogicalStage"]; diagnosticLevel: string | null; experienceLimitReached: boolean; resumeVerification?: boolean; resumeRequired?: boolean };
   id: string;
   course: string | null;
   chapter: string | null;
@@ -317,6 +352,9 @@ export interface LearningSessionDTO {
 }
 
 export interface LearningReportDTO {
+  evidenceAudit?: import("./knowledge/v12-schema").V12State | null;
+  evidenceLinks?: import("./knowledge/report-evidence").ReportEvidenceLinks | null;
+  sessionVersions?: import("./knowledge/runtime-schemas").SessionVersions | null;
   id: string;
   sessionId: string;
   summary: string;
@@ -331,6 +369,7 @@ export interface LearningReportDTO {
 }
 
 export interface SessionPayload {
+  availableActions?: { canRequestHint: boolean; canEnterFeynman: boolean };
   session: LearningSessionDTO;
   messages: MessageDTO[];
   report: LearningReportDTO | null;

@@ -3,6 +3,15 @@ export interface RetrievalQuery {
   chapterId?: string;
   query: string;
   limit: number;
+  phase?: import("../contracts").LearningPhase;
+  targetConcept?: string;
+  errorTags?: string[];
+  usedQuestionIds?: string[];
+  usedCaseIds?: string[];
+  hintLevel?: 0 | 1 | 2;
+  releaseId?: string;
+  selectedQuestionId?: string;
+  selectedCaseId?: string;
 }
 
 export interface RetrievedChunk {
@@ -10,6 +19,9 @@ export interface RetrievedChunk {
   materialId: string;
   content: string;
   score: number;
+  resourceType?: "MATERIAL_CHUNK" | "KNOWLEDGE_UNIT" | "MISCONCEPTION" | "DIAGNOSTIC_QUESTION" | "SOCRATIC_QUESTION" | "HINT" | "CASE" | "RUBRIC";
+  visibility?: "STUDENT" | "TEACHER" | "AI_INTERNAL" | "ADMIN";
+  knowledgeUnitId?: string;
 }
 
 export interface RetrievalProvider {

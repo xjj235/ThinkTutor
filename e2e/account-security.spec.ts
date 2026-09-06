@@ -29,7 +29,7 @@ test("a user manages password and account deletion entirely through HTML pages",
   await page.getByLabel("当前密码", { exact: true }).last().fill(newPassword);
   await page.getByRole("button", { name: "永久删除账号" }).click();
   await expect(page).toHaveURL(/accountDeleted=true/);
-  await expect(page.getByRole("heading", { name: /从“好像懂了”\s*到真正讲清楚/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "问思学伴" })).toBeVisible();
 
   await page.goto("/login");
   await page.getByLabel("邮箱").fill(email);

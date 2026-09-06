@@ -1,11 +1,17 @@
 import type { LearningSession, Message, Prisma } from "@prisma/client";
 import { z } from "zod";
+import { knowledgeRuntimeSchema, sessionVersionsSchema } from "./knowledge/runtime-schemas";
+import { reportEvidenceLinksSchema } from "./knowledge/report-evidence";
+import { v12StateSchema } from "./knowledge/v12-schema";
+import { canEnterFeynmanVoluntarily, canRequestHint } from "./state-machine";
 import {
   type LearningReportDTO,
   type LearningSessionDTO,
   type MessageDTO,
   reportGapsSchema,
+  messageMetadataSchema,
   type SessionPayload,
+  learnerStateSchema,
 } from "./contracts";
 
 export const reportRelations = {
@@ -37,7 +43,9 @@ export function normalizeReportGaps(value: unknown) {
 }
 
 export function serializeSession(session: LearningSession): LearningSessionDTO {
+  const runtime = session.knowledgeRuntime ? knowledgeRuntimeSchema.parse(session.knowledgeRuntime) : null;
   return {
+    ...(runtime?.v12 ? { knowledgeProgress: { pedagogicalStage: runtime.v12.pedagogicalStage, diagnosticLevel: runtime.v12.diagnosticLevel, experienceLimitReached: runtime.v12.experienceLimitReached, resumeVerification: Boolean(runtime.v12.resumeVerification), resumeRequired: !runtime.v12.resumeVerification && Object.keys(runtime.v12.assessments).length > 0 && Date.now() - session.updatedAt.getTime() >= 30 * 60_000 } } : {}),
     id: session.id,
     course: session.course,
     chapter: session.chapter,
@@ -55,6 +63,8 @@ export function serializeSession(session: LearningSession): LearningSessionDTO {
 }
 
 export function serializeMessage(message: Message): MessageDTO {
+  const metadata = message.metadata === null ? null : messageMetadataSchema.safeParse(message.metadata);
+  const parsedMetadata = metadata?.success ? metadata.data : null;
   return {
     id: message.id,
     role: message.role,
@@ -62,6 +72,8 @@ export function serializeMessage(message: Message): MessageDTO {
     content: message.content,
     questionType: message.questionType,
     clientRequestId: message.clientRequestId,
+    webSources: parsedMetadata?.webSources ?? [],
+    knowledgePolicy: parsedMetadata?.knowledgePolicy ?? null,
     createdAt: message.createdAt.toISOString(),
   };
 }
@@ -79,13 +91,16 @@ export function serializeReport(report: ReportRecord): LearningReportDTO {
     report.dimensions.map((dimension) => [dimensionKeyMap[dimension.key], { score: dimension.score, evidence: dimension.evidence, feedback: dimension.feedback }]),
   );
   return {
+    sessionVersions: report.sessionVersions ? sessionVersionsSchema.parse(report.sessionVersions) : null,
+    evidenceAudit: report.evidenceAudit ? v12StateSchema.parse(report.evidenceAudit) : null,
+    evidenceLinks: report.evidenceLinks ? reportEvidenceLinksSchema.parse(report.evidenceLinks) : null,
     id: report.id,
     sessionId: report.sessionId,
     summary: report.summary,
     overallScore: report.overallScore,
     overallLevel: report.overallLevel,
     dimensions: z.object({ conceptCompleteness: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), logicCompleteness: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), expressionClarity: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), exampleAbility: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), transferAbility: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }) }).parse(dimensions),
-    strengths: report.strengths.map((strength) => strength.title),
+    strengths: report.strengths.map(({ title, evidence }) => ({ title, evidence })),
     gaps: report.gaps.map(({ title, evidence, repairTask, priority }) => ({ title, evidence, repairTask, priority })),
     nextSteps: report.nextSteps.map((step) => step.description),
     disclaimer: report.disclaimer,
@@ -94,7 +109,15 @@ export function serializeReport(report: ReportRecord): LearningReportDTO {
 }
 
 export function serializePayload(session: SessionRecord): SessionPayload {
+  const runtime = session.knowledgeRuntime ? knowledgeRuntimeSchema.parse(session.knowledgeRuntime) : null;
+  const learner = learnerStateSchema.safeParse(session.learnerState);
+  const canHint = runtime?.v12?.pedagogicalStage !== "GOAL_PRESENTATION" && !runtime?.v12?.resumeVerification && canRequestHint(session) && (!runtime || Boolean(runtime.currentTargetId && (runtime.hintLevels[runtime.currentTargetId] ?? 0) < 2));
+  const canEnter = !runtime?.v12 && !runtime?.flags.includes("FLAG_NEED_VERIFY") && canEnterFeynmanVoluntarily(session, {
+    learnerState: learner.success ? learner.data : null,
+    answeredQuestionTypes: session.messages.filter((message) => message.role === "ASSISTANT" && message.phase === "SOCRATIC" && message.questionType).map((message) => message.questionType!),
+  });
   return {
+    availableActions: { canRequestHint: canHint, canEnterFeynman: canEnter },
     session: serializeSession(session),
     messages: session.messages.map(serializeMessage),
     report: session.report ? serializeReport(session.report) : null,

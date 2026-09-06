@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("mock mode completes the ThinkTutor learning loop", async ({ page }, testInfo) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /从“好像懂了”\s*到真正讲清楚/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "问思学伴" })).toBeVisible();
   await page.getByRole("link", { name: "创建学生账号" }).click();
   await page.getByLabel("姓名").fill("端到端学生");
   await page.getByLabel("邮箱").fill(`flow-${testInfo.project.name}-${Date.now()}@example.test`);
@@ -31,15 +31,20 @@ test("mock mode completes the ThinkTutor learning loop", async ({ page }, testIn
 
   await page.reload();
   await expect(
-    page.getByText("知识诊断阶段，系统每次只推进一个问题。"),
+    page.locator(".learning-record-heading").getByText("认知诊断"),
   ).toBeVisible();
+  const context = await page.locator(".learning-context").boundingBox();
+  const record = await page.locator(".learning-main").boundingBox();
+  expect(record!.y).toBeGreaterThanOrEqual(context!.y + context!.height);
+  const stages = await page.locator(".phase-progress li").evaluateAll((items) => items.map((item) => item.getBoundingClientRect().y));
+  expect(new Set(stages).size).toBe(1);
   await page
-    .getByLabel("你的回答")
+    .getByLabel("独立作答")
     .fill("我认为系统性风险是单个机构的问题扩散到整个市场。");
   await page.getByRole("button", { name: "提交回答" }).click();
-  await expect(page.getByText("苏格拉底追问阶段")).toBeVisible();
+  await expect(page.locator(".learning-record-heading").getByText("苏格拉底追问")).toBeVisible();
   await page.reload();
-  await expect(page.getByText("苏格拉底追问阶段")).toBeVisible();
+  await expect(page.locator(".learning-record-heading").getByText("苏格拉底追问")).toBeVisible();
   await expect(
     page.getByText("我认为系统性风险是单个机构的问题扩散到整个市场。"),
   ).toBeVisible();
@@ -51,7 +56,7 @@ test("mock mode completes the ThinkTutor learning loop", async ({ page }, testIn
   ];
 
   for (const answer of answers) {
-    await page.getByLabel("你的回答").fill(answer);
+    await page.getByLabel("独立作答").fill(answer);
     await Promise.all([
       page.waitForResponse(
         (response) =>
@@ -61,34 +66,42 @@ test("mock mode completes the ThinkTutor learning loop", async ({ page }, testIn
       ),
       page.getByRole("button", { name: "提交回答" }).click(),
     ]);
-    await expect(page.getByText(/正在生成下一步问题/)).toHaveCount(0);
+    await expect(page.getByText(/正在分析学习证据/)).toHaveCount(0);
   }
 
   await expect(
-    page.getByRole("button", { name: "进入费曼讲解" }),
+    page.getByRole("button", { name: "进入费曼阐释" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "进入费曼讲解" }).click();
-  await expect(page.getByLabel("费曼讲解")).toBeVisible();
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.screenshot({ path: testInfo.outputPath("learning-workspace.png"), fullPage: true });
+  await page.getByRole("button", { name: "进入费曼阐释" }).click();
+  await expect(page.getByLabel("费曼阐释")).toBeVisible();
+  await expect.poll(() => page.locator('.phase-progress [aria-current="step"]').evaluate((element) => {
+    const track = element.closest("ol")!.getBoundingClientRect();
+    const step = element.getBoundingClientRect();
+    return step.left >= track.left - 1 && step.right <= track.right + 1;
+  })).toBe(true);
   await page.reload();
-  await expect(page.getByLabel("费曼讲解")).toBeVisible();
+  await expect(page.getByLabel("费曼阐释")).toBeVisible();
   await page
-    .getByLabel("费曼讲解")
+    .getByLabel("费曼阐释")
     .fill(
       "系统性风险是局部冲击通过机构关联、杠杆和流动性扩散为整体金融风险。例如一家大机构被迫卖资产会导致价格下跌，所以其他机构也会亏损。如果换到供应链场景，也要检查节点之间是否高度依赖。",
     );
   await page.getByRole("button", { name: "生成学习报告" }).click();
 
   await expect(page).toHaveURL(/\/report\//);
-  await expect(page.getByRole("heading", { name: "系统性风险" })).toBeVisible();
-  await expect(page.getByText("五维诊断")).toBeVisible();
-  await expect(page.getByText("形成性学习反馈")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "系统性风险", exact: true })).toBeVisible();
+  await expect(page.getByText("五维能力评估")).toBeVisible();
+  await expect(page.getByText("形成性学习报告")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("learning-report.png"), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.reload();
-  await expect(page.getByText("五维诊断")).toBeVisible();
-  await expect(page.getByText("形成性学习反馈")).toBeVisible();
+  await expect(page.getByText("五维能力评估")).toBeVisible();
+  await expect(page.getByText("形成性学习报告")).toBeVisible();
 
   await page
-    .getByRole("button", { name: "针对最高优先级漏洞再练一轮" })
+    .getByRole("button", { name: "开启定向巩固" })
     .click();
   await expect(page).toHaveURL(/\/session\//);
   await expect(page.locator("main")).toHaveAttribute(
@@ -100,4 +113,7 @@ test("mock mode completes the ThinkTutor learning loop", async ({ page }, testIn
     "data-parent-session-id",
     originalSessionId,
   );
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "学习总览" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("workspace-records.png"), fullPage: true });
 });

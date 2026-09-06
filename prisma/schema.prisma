@@ -112,6 +112,7 @@ enum ReportDimensionKey {
 }
 
 enum AuditAction {
+  KNOWLEDGE_REVIEWED
   AUTH_LOGIN
   AUTH_LOGOUT
   AUTH_LOGIN_FAILED
@@ -407,8 +408,10 @@ model LearningSession {
   referenceText   String?
   phase           LearningPhase @default(DIAGNOSIS)
   socraticTurns   Int           @default(0)
-  maxTurns        Int           @default(6)
+  maxTurns        Int           @default(5)
+  clientRequestId String?
   learnerState    Json?
+  knowledgeRuntime Json?
   contextSummary  String?
   parentSessionId String?
   sourceGapId     String?
@@ -436,6 +439,7 @@ model LearningSession {
   @@index([assignmentId, phase])
   @@index([parentSessionId])
   @@index([sourceGapId])
+  @@unique([userId, clientRequestId])
 }
 
 model Message {
@@ -456,12 +460,15 @@ model Message {
 }
 
 model LearningReport {
+  evidenceAudit Json?
   id           String   @id @default(cuid())
   sessionId    String   @unique
   summary      String
   overallScore Int
   overallLevel String
   disclaimer   String
+  sessionVersions Json?
+  evidenceLinks Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -572,4 +579,20 @@ model AuditLog {
   @@index([actorId, createdAt])
   @@index([action, createdAt])
   @@index([targetType, targetId])
+}
+
+model KnowledgeRelease {
+  id            String   @id
+  ownerId       String
+  status        String   @default("DRAFT")
+  contentHash   String
+  manifest      Json
+  sourceReviews Json
+  goldenSet     Json
+  modelValidation Json?
+  verifiedBy    String?
+  verifiedAt    DateTime?
+  version       Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

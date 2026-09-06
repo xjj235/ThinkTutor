@@ -6,6 +6,7 @@ import {
   dimensionKeys,
   reportDisclaimer,
 } from "./contracts";
+import type { KnowledgeRuntime } from "./knowledge/runtime-schemas";
 
 export function computeOverallScore(scores: number[]) {
   if (scores.length !== 5) {
@@ -23,7 +24,19 @@ export function computeOverallScore(scores: number[]) {
   return Math.round(total / scores.length);
 }
 
-export function finalizeReportDraft(draft: LearningReportDraft) {
+export function finalizeReportDraft(draft: LearningReportDraft, runtime?: KnowledgeRuntime) {
+  if (runtime) {
+    draft = structuredClone(draft);
+    const needsVerification = runtime.flags.includes("FLAG_NEED_VERIFY");
+    for (const key of dimensionKeys) {
+      const dimension = draft.dimensions[key];
+      // The UI uses /100; each 5/20 rubric step maps to 25/100.
+      const cap = needsVerification && key !== "expressionClarity" ? 75 : 100;
+      dimension.score = Math.min(cap, Math.floor(dimension.score / 25) * 25);
+      if (cap < 100) dimension.feedback = `${dimension.feedback.slice(0, 340)} 本次存在提示依赖或待核验证据，暂不评为最高档。`;
+    }
+    draft.overallLevel = "五档形成性评价";
+  }
   const scores = dimensionKeys.map((key) => draft.dimensions[key].score);
   return {
     ...draft,

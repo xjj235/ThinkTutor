@@ -13,7 +13,7 @@ test("homepage and health endpoint are available", async ({ page, request }) => 
 
   await expect(page).toHaveTitle("问思学伴 ThinkTutor");
   await expect(
-    page.getByRole("heading", { name: /从“好像懂了”\s*到真正讲清楚/ }),
+    page.getByRole("heading", { name: "问思学伴" }),
   ).toBeVisible();
   await expect(page.getByText("本地成果预览已就绪")).toHaveCount(0);
   await expect(page.getByText("student@example.test")).toHaveCount(0);

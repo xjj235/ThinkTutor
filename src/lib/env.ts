@@ -16,7 +16,8 @@ const booleanString = z
 const serverEnvSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-    DEPLOYMENT_ENV: z.enum(["development", "production"]).default("development"),
+    DEPLOYMENT_ENV: z.enum(["development", "test", "production"]).default("development"),
+    ALLOW_DRAFT_KNOWLEDGE: booleanString,
     APP_URL: z.url().default("http://127.0.0.1:3000"),
     AUTH_SECRET: optionalString,
     STORAGE_SIGNING_SECRET: optionalString,
@@ -30,6 +31,7 @@ const serverEnvSchema = z
     DEEPSEEK_API_KEY: optionalString,
     DEEPSEEK_BASE_URL: z.url().default("https://api.deepseek.com"),
     DEEPSEEK_MODEL: z.string().trim().min(1).default("deepseek-v4-flash"),
+    DEEPSEEK_WEB_SEARCH_FALLBACK: booleanString,
     AI_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(30_000),
     DEEPSEEK_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(45_000),
     AI_MAX_RETRIES: z.coerce.number().int().min(0).max(2).default(2),
@@ -61,6 +63,9 @@ const serverEnvSchema = z
     DEEPSEEK_LIVE_TEST: booleanString,
   })
   .superRefine((env, context) => {
+    if (env.DEPLOYMENT_ENV === "production" && env.ALLOW_DRAFT_KNOWLEDGE) {
+      context.addIssue({ code: "custom", path: ["ALLOW_DRAFT_KNOWLEDGE"], message: "Production must not enable draft knowledge." });
+    }
     if (env.AI_PROVIDER === "deepseek" && !env.DEEPSEEK_API_KEY) {
       context.addIssue({ code: "custom", path: ["DEEPSEEK_API_KEY"], message: "DeepSeek mode requires DEEPSEEK_API_KEY." });
     }

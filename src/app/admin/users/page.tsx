@@ -5,6 +5,7 @@ import { AdminUserActions } from "@/components/admin-user-actions";
 import { FilterForm } from "@/components/filter-form";
 import { Pagination } from "@/components/pagination";
 import { cleanSearch, firstSearchValue, parsePage, type SearchParams } from "@/lib/list-query";
+import { userRoleLabels, userStatusLabels } from "@/lib/display-labels";
 
 const roles = ["STUDENT", "TEACHER", "ADMIN"] as const;
 const statuses = ["ACTIVE", "DISABLED", "DELETED"] as const;
@@ -24,8 +25,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
     <PageShell title="用户管理" description="搜索和筛选账号；角色、停用和删除操作会写入审计日志。">
       <FilterForm resetHref="/admin/users">
         <label>姓名或邮箱<input name="query" defaultValue={query} maxLength={120} /></label>
-        <label>角色<select name="role" defaultValue={role ?? ""}><option value="">全部角色</option>{roles.map((value) => <option key={value}>{value}</option>)}</select></label>
-        <label>状态<select name="status" defaultValue={status ?? ""}><option value="">全部状态</option>{statuses.map((value) => <option key={value}>{value}</option>)}</select></label>
+        <label>角色<select name="role" defaultValue={role ?? ""}><option value="">全部角色</option>{roles.map((value) => <option key={value} value={value}>{userRoleLabels[value]}</option>)}</select></label>
+        <label>状态<select name="status" defaultValue={status ?? ""}><option value="">全部状态</option>{statuses.map((value) => <option key={value} value={value}>{userStatusLabels[value]}</option>)}</select></label>
       </FilterForm>
       {data.items.length ? (
         <div className="data-list">{data.items.map((user) => (

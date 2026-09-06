@@ -16,6 +16,104 @@ export function GoalCreateForm({chapterId}:{chapterId:string}){const router=useR
 
 export function ClassroomCreateForm({courses}:{courses:Array<{id:string;title:string}>}){const router=useRouter();const[pending,setPending]=useState(false);const[message,setMessage]=useState("");return <form className="stack-form card" onSubmit={async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setPending(true);const f=new FormData(e.currentTarget);try{const data=await postJson("/api/classes",{courseId:String(f.get("courseId")),name:String(f.get("name")),description:String(f.get("description"))||undefined});router.push(`/teacher/classes/${data?.id}`);router.refresh()}catch(error){setMessage(`错误：${error instanceof Error?error.message:"创建失败"}`)}finally{setPending(false)}}}><h2>创建班级</h2><label>课程<select name="courseId" required><option value="">请选择</option>{courses.map(c=><option key={c.id} value={c.id}>{c.title}</option>)}</select></label><label>班级名称<input name="name" required minLength={2}/></label><label>说明<textarea name="description" rows={3}/></label><Status message={message}/><button className="button" disabled={pending}>创建班级</button></form>}
 
-export function AssignmentCreateForm({classrooms}:{classrooms:Array<{id:string;name:string;courseId:string;course:{title:string}}>} ){const router=useRouter();const[pending,setPending]=useState(false);const[message,setMessage]=useState("");return <form className="stack-form card" onSubmit={async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setPending(true);const f=new FormData(e.currentTarget);const classroomId=String(f.get("classroomId"));const room=classrooms.find(c=>c.id===classroomId);try{if(!room)throw new Error("请选择班级。");const data=await postJson("/api/assignments",{classroomId,courseId:room.courseId,title:String(f.get("title")),instructions:String(f.get("instructions")),description:String(f.get("description"))||undefined,learnerLevel:String(f.get("learnerLevel")),maxAttempts:Number(f.get("maxAttempts"))});router.push(`/teacher/assignments/${data?.id}`);router.refresh()}catch(error){setMessage(`错误：${error instanceof Error?error.message:"创建失败"}`)}finally{setPending(false)}}}><label>班级<select name="classroomId" required><option value="">请选择</option>{classrooms.map(c=><option key={c.id} value={c.id}>{c.name} · {c.course.title}</option>)}</select></label><label>任务名称<input name="title" required minLength={2}/></label><label>学习要求<textarea name="instructions" required minLength={10} rows={5}/></label><label>补充说明<textarea name="description" rows={3}/></label><label>学习者水平<input name="learnerLevel" defaultValue="入门" required/></label><label>最大尝试次数<input name="maxAttempts" type="number" min="1" max="20" defaultValue="1" required/></label><Status message={message}/><button className="button" disabled={pending}>创建草稿</button></form>}
+type AssignmentClassroom = {
+  id: string;
+  name: string;
+  courseId: string;
+  course: {
+    title: string;
+    chapters: Array<{
+      id: string;
+      title: string;
+      goals: Array<{ id: string; title: string; objective: string }>;
+    }>;
+  };
+};
+
+export function AssignmentCreateForm({ classrooms }: { classrooms: AssignmentClassroom[] }) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  const [classroomId, setClassroomId] = useState("");
+  const [chapterId, setChapterId] = useState("");
+  const selectedClassroom = classrooms.find((classroom) => classroom.id === classroomId);
+  const chapters = selectedClassroom?.course.chapters ?? [];
+  const goals = chapters
+    .filter((chapter) => !chapterId || chapter.id === chapterId)
+    .flatMap((chapter) => chapter.goals.map((goal) => ({ ...goal, chapterId: chapter.id })));
+
+  return (
+    <form
+      className="stack-form card"
+      onSubmit={async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setPending(true);
+        const form = new FormData(event.currentTarget);
+        const room = classrooms.find((classroom) => classroom.id === classroomId);
+        try {
+          if (!room) throw new Error("请选择班级。");
+          const data = await postJson("/api/assignments", {
+            classroomId,
+            courseId: room.courseId,
+            chapterId: String(form.get("chapterId")) || undefined,
+            learningGoalId: String(form.get("learningGoalId")) || undefined,
+            title: String(form.get("title")),
+            instructions: String(form.get("instructions")),
+            description: String(form.get("description")) || undefined,
+            learnerLevel: String(form.get("learnerLevel")),
+            openAt: String(form.get("openAt")) || undefined,
+            dueAt: String(form.get("dueAt")) || undefined,
+            maxAttempts: Number(form.get("maxAttempts")),
+          });
+          router.push(`/teacher/assignments/${data?.id}`);
+          router.refresh();
+        } catch (error) {
+          setMessage(`错误：${error instanceof Error ? error.message : "创建失败"}`);
+        } finally {
+          setPending(false);
+        }
+      }}
+    >
+      <label>
+        班级
+        <select name="classroomId" required value={classroomId} onChange={(event) => { setClassroomId(event.target.value); setChapterId(""); }}>
+          <option value="">请选择</option>
+          {classrooms.map((classroom) => (
+            <option key={classroom.id} value={classroom.id}>
+              {classroom.name} · {classroom.course.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        章节（可选）
+        <select name="chapterId" value={chapterId} disabled={!selectedClassroom} onChange={(event) => setChapterId(event.target.value)}>
+          <option value="">不限定章节</option>
+          {chapters.map((chapter) => (
+            <option key={chapter.id} value={chapter.id}>{chapter.title}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        学习目标（可选）
+        <select name="learningGoalId" disabled={!selectedClassroom}>
+          <option value="">按任务要求学习</option>
+          {goals.map((goal) => (
+            <option key={goal.id} value={goal.id}>{goal.title}</option>
+          ))}
+        </select>
+      </label>
+      <label>任务名称<input name="title" required minLength={2} maxLength={160} /></label>
+      <label>学习要求<textarea name="instructions" required minLength={10} maxLength={4000} rows={5} /></label>
+      <label>补充说明<textarea name="description" rows={3} maxLength={2000} /></label>
+      <label>学习者水平<input name="learnerLevel" defaultValue="入门" required maxLength={100} /></label>
+      <label>开放时间<input name="openAt" type="datetime-local" /></label>
+      <label>截止时间<input name="dueAt" type="datetime-local" /></label>
+      <label>最大尝试次数<input name="maxAttempts" type="number" min="1" max="20" defaultValue="1" required /></label>
+      <Status message={message} />
+      <button className="button" disabled={pending}>{pending ? "创建中…" : "创建草稿"}</button>
+    </form>
+  );
+}
 
 export function PublishAssignmentButton({assignmentId,disabled}:{assignmentId:string;disabled:boolean}){const router=useRouter();const[pending,setPending]=useState(false);const[message,setMessage]=useState("");return <div><button className="button" disabled={disabled||pending} onClick={async()=>{setPending(true);try{await postJson(`/api/assignments/${assignmentId}/publish`,{});router.refresh()}catch(error){setMessage(`错误：${error instanceof Error?error.message:"发布失败"}`)}finally{setPending(false)}}}>{pending?"发布中…":disabled?"已发布":"发布给班级"}</button><Status message={message}/></div>}

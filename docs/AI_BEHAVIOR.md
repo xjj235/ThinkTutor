@@ -9,6 +9,9 @@
 - 只消费最终 `message.content`，不保存或展示 `reasoning_content`；
 - Chat Completions 使用 `response_format: {type: "json_object"}`，系统消息同时给出 JSON 词与结构示例；
 - JSON 解析后必须再过对应 Zod Schema；`overallScore` 不属于模型 Schema。
+- 会话创建、回答和提示会先按课程、章节、主题、目标与学生最近回答检索已有课程知识库；命中片段写入 `retrievedContext`，并标记 `COURSE_KNOWLEDGE_FIRST`。
+- 当 `DEEPSEEK_WEB_SEARCH_FALLBACK=true` 时，诊断和追问都会改用 Responses API 并强制 `web_search` 工具；命中课程知识库时，模型必须对比知识库、教师材料和网页结果，一致处合并，差异处按学习目标、材料时效、来源权威性和学生当前任务校准后再提问；没有命中课程知识库时，网页作为主要外部依据。返回的网页来源保存到消息 metadata 并展示在 HTML 对话中。
+- 如果显式关闭 `DEEPSEEK_WEB_SEARCH_FALLBACK`，才允许 DeepSeek API 使用通用知识继续生成学习教练输出；此时不得声称内容来自课程知识库、教师材料或实时联网检索。
 
 每轮只有一个主要问题。苏格拉底类型包括概念澄清、原因追问、证据追问、假设检验、反例、迁移和支架提示。未展示的能力不能生成掌握证据；报告每个维度必须给出本次对话证据。
 

@@ -1,5 +1,6 @@
 import type { CoachNextAction, LearnerState, LearningPhase, QuestionType } from "./contracts";
 import { MAX_SOCRATIC_TURNS, MIN_SOCRATIC_TURNS } from "./contracts";
+import type { V12State } from "./knowledge/v12-schema";
 
 export interface SessionStateSnapshot {
   phase: LearningPhase;
@@ -21,7 +22,7 @@ export interface FeynmanReadinessEvidence {
 function assertValidSnapshot(session: SessionStateSnapshot): void {
   if (!Number.isInteger(session.socraticTurns) || session.socraticTurns < 0) throw new Error("socraticTurns must be a non-negative integer.");
   if (!Number.isInteger(session.maxTurns) || session.maxTurns < MIN_SOCRATIC_TURNS || session.maxTurns > MAX_SOCRATIC_TURNS) {
-    throw new Error("maxTurns must be between three and eight.");
+    throw new Error(`maxTurns must be between ${MIN_SOCRATIC_TURNS} and ${MAX_SOCRATIC_TURNS}.`);
   }
   if (session.socraticTurns > session.maxTurns) throw new Error("socraticTurns exceeds maxTurns.");
 }
@@ -103,4 +104,66 @@ export function abandonSession(session: SessionStateSnapshot): StateTransition {
   assertValidSnapshot(session);
   if (session.phase === "COMPLETED" || session.phase === "ABANDONED") throw new Error("Terminal sessions cannot be abandoned again.");
   return { phase: "ABANDONED", socraticTurns: session.socraticTurns, forceFeynman: false };
+}
+
+export function nextV12Transition(session: SessionStateSnapshot, evidence: {
+  stage: V12State["pedagogicalStage"]; diagnosisFinished: boolean; constructionReady: boolean; transferPassed: boolean; majorError: boolean; verificationRequired?: boolean;
+}): StateTransition & { stage: V12State["pedagogicalStage"]; experienceLimitReached: boolean; reasonCode: V12State["stageTransitions"][number]["reasonCode"] | null } {
+  assertValidSnapshot(session);
+  if (evidence.verificationRequired) {
+    if (!["DIAGNOSIS", "SOCRATIC", "FEYNMAN"].includes(session.phase)) throw new Error("Cannot verify a terminal session");
+    return { phase: session.phase, stage: evidence.stage, socraticTurns: session.socraticTurns, forceFeynman: false, experienceLimitReached: false, reasonCode: null };
+  }
+  let phase = session.phase;
+  let stage = evidence.stage;
+  let turns = session.socraticTurns;
+  let experienceLimitReached = false;
+  let reasonCode: V12State["stageTransitions"][number]["reasonCode"] | null = null;
+  if (phase === "DIAGNOSIS") {
+    if (stage !== "DIAGNOSIS") throw new Error("Invalid diagnostic stage");
+    if (evidence.diagnosisFinished) { phase = "SOCRATIC"; stage = evidence.constructionReady ? "CASE_TRANSFER" : "KNOWLEDGE_CONSTRUCTION"; reasonCode = "DIAGNOSIS_STABLE"; }
+  } else if (phase === "SOCRATIC") {
+    if (!["KNOWLEDGE_CONSTRUCTION", "CASE_TRANSFER"].includes(stage) || turns >= session.maxTurns) throw new Error("Invalid construction transition");
+    turns += 1;
+    if (stage === "CASE_TRANSFER" && evidence.transferPassed && turns >= MIN_SOCRATIC_TURNS) { phase = "FEYNMAN"; stage = "FEYNMAN_OUTPUT"; reasonCode = "CASE_PASSED"; }
+    else if (turns >= session.maxTurns) { phase = "FEYNMAN"; stage = "REFLECTION"; experienceLimitReached = true; reasonCode = "EXPERIENCE_LIMIT"; }
+    else { stage = evidence.constructionReady && (stage !== "CASE_TRANSFER" || evidence.transferPassed) ? "CASE_TRANSFER" : "KNOWLEDGE_CONSTRUCTION"; if (stage !== evidence.stage) reasonCode = stage === "CASE_TRANSFER" ? "CONSTRUCTION_CRITERIA_MET" : "CASE_REPAIR_REQUIRED"; }
+  } else if (phase === "FEYNMAN") {
+    if (stage === "FEYNMAN_OUTPUT") {
+      if (evidence.majorError && turns < session.maxTurns) { phase = "SOCRATIC"; stage = "KNOWLEDGE_CONSTRUCTION"; reasonCode = "FEYNMAN_MAJOR_BACKTRACK"; }
+      else { stage = "REFLECTION"; reasonCode = "FEYNMAN_COMPLETED"; }
+    } else if (stage === "REFLECTION") { phase = "REPORTING"; stage = "REPORT"; reasonCode = "REFLECTION_COMPLETED"; }
+    else throw new Error("Invalid explanation stage");
+  } else throw new Error("Cannot answer in terminal phase");
+  return { phase, stage, socraticTurns: turns, forceFeynman: false, experienceLimitReached, reasonCode };
+}
+
+export function recordStageTransition(state: V12State, toStage: V12State["pedagogicalStage"], reasonCode: V12State["stageTransitions"][number]["reasonCode"], now: string, evidenceRefs: V12State["stageTransitions"][number]["evidenceRefs"] = []): V12State {
+  return { ...state, pedagogicalStage: toStage, stageTransitions: [...state.stageTransitions, { fromStage: reasonCode === "GOAL_PRESENTED" ? null : state.pedagogicalStage, toStage, reasonCode, evidenceRefs, actor: "SYSTEM", createdAt: now }] };
+}
+
+export function presentV12Goal(state: V12State, now: string): V12State {
+  if (state.assessments && Object.keys(state.assessments).length) throw new Error("Cannot present a new goal after assessment");
+  return { ...recordStageTransition(state, "GOAL_PRESENTATION", "GOAL_PRESENTED", now), activityType: "GOAL_PRESENTATION", goalPresentedAt: now };
+}
+
+export function confirmV12Goal(session: SessionStateSnapshot, state: V12State, now: string): V12State {
+  assertValidSnapshot(session);
+  if (session.phase !== "DIAGNOSIS" || state.pedagogicalStage !== "GOAL_PRESENTATION" || !state.goalPresentedAt) throw new Error("No goal awaiting confirmation");
+  return { ...recordStageTransition(state, "DIAGNOSIS", "GOAL_CONFIRMED", now), activityType: "DIAGNOSTIC_QUESTION", goalConfirmedAt: now };
+}
+
+export function resumeV12State(session: SessionStateSnapshot, state: V12State, context: NonNullable<V12State["resumeVerification"]>, now: string): V12State {
+  assertValidSnapshot(session);
+  if (!["DIAGNOSIS", "SOCRATIC", "FEYNMAN"].includes(session.phase) || state.pedagogicalStage === "GOAL_PRESENTATION" || state.resumeVerification) throw new Error("Session cannot begin resume verification");
+  return { ...recordStageTransition(state, state.pedagogicalStage, "SESSION_RESUMED", now), resumeVerification: context, activityType: "VERIFY" };
+}
+
+export function finishV12Resume(session: SessionStateSnapshot, state: V12State, now: string, refs: V12State["stageTransitions"][number]["evidenceRefs"]): V12State {
+  assertValidSnapshot(session);
+  const saved = state.resumeVerification;
+  if (!saved) throw new Error("No resume verification");
+  if (state.lastResult === "NEED_VERIFY") return state;
+  // A failed short check preserves the original task; the new gap is retained for repair.
+  return { ...recordStageTransition(state, saved.stage, state.lastResult === "PASS" ? "RESUMED_REVERIFIED" : "RESUME_GAP_IDENTIFIED", now, refs), activityType: saved.activityType, resumeVerification: null };
 }

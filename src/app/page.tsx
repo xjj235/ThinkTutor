@@ -1,11 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { ArrowUpRight } from "lucide-react";
+import { getCurrentUser } from "@/lib/auth/session";
 
 const steps = [
-  { title: "知识诊断", text: "先说出已有理解，暴露真正需要补齐的地方。" },
-  { title: "苏格拉底追问", text: "一次处理一个关键问题，自己连接概念、原因与证据。" },
-  { title: "费曼讲解", text: "用自己的语言讲清概念、机制、例子和迁移条件。" },
-  { title: "形成性报告", text: "从真实表达提取证据，并针对最高优先级漏洞再练。" },
+  { title: "认知诊断", text: "辨识先备知识与概念边界。" },
+  { title: "启发式探究", text: "通过追问建立概念、因果与证据的联系。" },
+  { title: "费曼阐释", text: "以独立表达检验理解深度与迁移能力。" },
+  { title: "形成性评价", text: "依据学习证据定位薄弱环节，开展定向巩固。" },
 ];
 
 const dimensions = [
@@ -23,6 +26,8 @@ const roles = [
 ];
 
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ accountDeleted?: string }> }) {
+  const user = await getCurrentUser();
+  if (user) redirect(user.role === "TEACHER" ? "/teacher" : user.role === "ADMIN" ? "/admin" : "/dashboard");
   const localPreview = process.env.LOCAL_PREVIEW === "true";
   const previewPassword = process.env.LOCAL_PREVIEW_PASSWORD ?? "ThinkTutor-Preview-2026!";
   const accountDeleted = (await searchParams).accountDeleted === "true";
@@ -37,34 +42,31 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </section>
       ) : null}
 
-      <section className="home-hero" aria-labelledby="home-title">
+      <section className="home-hero public-hero" aria-labelledby="home-title">
+        <Image className="public-hero-image" src="/images/thinktutor-learning-map.png" alt="学习者在纸面上整理知识卡片之间的关系" fill priority sizes="100vw" />
         <div className="hero-copy">
-          <h1 id="home-title">从“好像懂了”<span>到真正讲清楚。</span></h1>
-          <p className="hero-lead">问思学伴不替你完成答案。它用追问和讲解，让理解经过表达、检验与迁移。</p>
-          <div className="hero-actions"><Link className="button" href="/register">创建学生账号</Link><Link className="text-link" href="/login">登录已有账号<span aria-hidden="true"> →</span></Link></div>
+          <h1 id="home-title">问思学伴</h1>
+          <p className="hero-lead">以问题深化认知，以表达检验理解。<br />让每一次研习，都有据可循。</p>
+          <div className="hero-actions"><Link className="button" href="/register">创建学生账号<ArrowUpRight size={16} aria-hidden="true" /></Link><Link className="text-link" href="/login">登录已有账号<ArrowUpRight size={15} aria-hidden="true" /></Link></div>
         </div>
-        <figure className="hero-visual">
-          <Image src="/images/thinktutor-learning-map.png" alt="学习者在纸面上整理知识卡片之间的关系" width={1536} height={1024} priority sizes="(max-width: 860px) 100vw, 50vw" />
-          <figcaption><strong>学习发生在回答之前。</strong><span>先暴露理解，再建立连接。</span></figcaption>
-        </figure>
       </section>
 
       <section className="method-section" aria-labelledby="method-title">
-        <div className="method-intro"><h2 id="method-title">一条清楚的学习路径</h2><p>每一步都由服务端验证。AI 可以建议，但不能跳过学生应完成的思考。</p></div>
+        <div className="method-intro"><h2 id="method-title">从认知诊断，到知识迁移</h2><p>自主建构、独立阐释与证据反馈，构成完整的学习闭环。</p></div>
         <ol className="method-track">{steps.map((step, index) => <li key={step.title}><span>{index + 1}</span><div><h3>{step.title}</h3><p>{step.text}</p></div></li>)}</ol>
       </section>
 
       <section className="evidence-section" aria-labelledby="evidence-title">
-        <div className="evidence-copy"><h2 id="evidence-title">不是黑盒分数，<br />而是可追溯的学习证据。</h2><p>报告只评价本次对话里实际展示的能力。综合分由服务端计算；没有展示，就明确写明没有展示。</p></div>
+        <div className="evidence-copy"><h2 id="evidence-title">理解的深度，<br />由学习证据呈现。</h2><p>五维评价依据本次研习中的实际表达，区分已展示的能力与尚待验证的理解。</p></div>
         <div className="dimension-list" aria-label="报告五维结构">{dimensions.map(([title, text]) => <div key={title}><strong>{title}</strong><span>{text}</span></div>)}</div>
       </section>
 
       <section className="roles-section" aria-labelledby="role-title">
-        <div className="section-heading"><h2 id="role-title">同一条学习证据链，服务三个角色</h2><p>学生负责表达，教师负责目标与材料，管理员负责安全和运行边界。</p></div>
+        <div className="section-heading"><h2 id="role-title">协同育人，各有侧重</h2><p>学生主动探究，教师引领目标，平台保障学习过程。</p></div>
         <div className="role-ledger">{roles.map((role) => <article key={role.label}><span>{role.label}</span><div><h3>{role.title}</h3><p>{role.text}</p></div><Link href="/login">{role.action}<span aria-hidden="true"> →</span></Link></article>)}</div>
       </section>
 
-      <section className="home-cta" aria-labelledby="cta-title"><div><h2 id="cta-title">从一次真实表达开始。</h2><p>选择一个知识点，说出你目前的理解。</p></div><Link className="button" href="/register">开始第一轮学习</Link></section>
+      <section className="home-cta" aria-labelledby="cta-title"><div><h2 id="cta-title">开启一次有深度的研习</h2><p>确立主题，呈现理解，循证进阶。</p></div><Link className="button" href="/register">开始第一轮学习<ArrowUpRight size={16} aria-hidden="true" /></Link></section>
 
       {localPreview ? (
         <section id="preview-access" className="preview-access" aria-label="本地预览工具"><details><summary><span><strong>本地演示账号</strong><small>仅供开发验收，生产环境不会显示</small></span><span aria-hidden="true">展开</span></summary><div className="preview-access-content"><p>三个角色使用同一密码 <code>{previewPassword}</code>。</p><div className="preview-role-links">{[["学生", "student@example.test"], ["教师", "teacher@example.test"], ["管理员", "admin@example.test"]].map(([role, email]) => <Link className="preview-role-link" key={role} href={`/login?email=${encodeURIComponent(email)}`}><span><strong>{role}</strong><small>{email}</small></span><span aria-hidden="true">登录 →</span></Link>)}</div></div></details></section>

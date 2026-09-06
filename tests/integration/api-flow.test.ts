@@ -97,7 +97,7 @@ async function parseSessionResponse(response: Response) {
 
 async function createSession() {
   const response = await createSessionRoute(
-    jsonRequest("/api/sessions", task),
+    jsonRequest("/api/sessions", { ...task, clientRequestId: `create-${crypto.randomUUID()}` }),
   );
   expect(response.status).toBe(201);
   return parseSessionResponse(response);
@@ -336,7 +336,7 @@ describe("ThinkTutor API flow", () => {
     expect(duplicate.data.messages).toHaveLength(first.data.messages.length);
   });
 
-  it("forces FEYNMAN after the configured sixth Socratic answer", async () => {
+  it("forces FEYNMAN after the configured fifth Socratic answer", async () => {
     vi.spyOn(MockAIProvider.prototype, "createCoachTurn").mockImplementation(
       async () => ({
         assistantMessage: "请继续说明这个判断依赖的关键条件是什么？",
@@ -356,7 +356,7 @@ describe("ThinkTutor API flow", () => {
 
     let currentPhase = "SOCRATIC";
     let currentRound = 0;
-    for (let round = 1; round <= 6; round += 1) {
+    for (let round = 1; round <= 5; round += 1) {
       const response = await postAnswer(
         sessionId,
         `这是第 ${round} 轮回答，我会继续解释风险传导的条件和结果。`,
@@ -368,7 +368,7 @@ describe("ThinkTutor API flow", () => {
     }
 
     expect(currentPhase).toBe("FEYNMAN");
-    expect(currentRound).toBe(6);
+    expect(currentRound).toBe(5);
   });
 
   it("deduplicates concurrent answer requests with the same clientRequestId", async () => {
@@ -398,7 +398,7 @@ describe("ThinkTutor API flow", () => {
 
   it("returns unified validation and provider errors without advancing state", async () => {
     const invalidResponse = await createSessionRoute(
-      jsonRequest("/api/sessions", { topic: "" }),
+      jsonRequest("/api/sessions", { topic: "", clientRequestId: "invalid-create-001" }),
     );
     expect(invalidResponse.status).toBe(400);
     expect(await invalidResponse.json()).toMatchObject({
@@ -461,7 +461,7 @@ describe("ThinkTutor API flow", () => {
 
     const invalidResponses = await Promise.all([
       createSessionRoute(
-        jsonRequest("/api/sessions", { ...task, unexpected: true }),
+        jsonRequest("/api/sessions", { ...task, clientRequestId: "unexpected-create-001", unexpected: true }),
       ),
       answerRoute(
         jsonRequest(`/api/sessions/${sessionId}/answers`, {
@@ -524,6 +524,7 @@ describe("ThinkTutor API flow", () => {
       topic: "不能访问的知识点",
       objective: "未加入课程的学生不应使用其材料上下文。",
       learnerLevel: "入门",
+      clientRequestId: "unauthorized-course-001",
     }));
     expect(unauthorized.status).toBe(403);
 
@@ -536,6 +537,7 @@ describe("ThinkTutor API flow", () => {
       topic: "混用章节",
       objective: "不能混用其他课程的章节标识。",
       learnerLevel: "入门",
+      clientRequestId: "mixed-hierarchy-001",
     }));
     expect(mixedHierarchy.status).toBe(400);
   });

@@ -37,7 +37,7 @@ test("role dashboards and server-side ownership rules are enforced", async ({ pa
 
   await login(page, teacherA.email);
   await expect(page).toHaveURL(/\/teacher/);
-  await expect(page.getByRole("heading", { name: "教师工作台" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "教学总览" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.goto("/teacher/courses/new");
   await page.getByLabel("课程名称").fill("教师甲的测试课程");
@@ -50,7 +50,7 @@ test("role dashboards and server-side ownership rules are enforced", async ({ pa
 
   const studentBContext = await playwrightRequest.newContext({ baseURL });
   await studentBContext.post("/api/auth/login", { data: { email: studentB.email, password } });
-  const createdForB = await studentBContext.post("/api/sessions", { data: { topic: "学生乙知识点", objective: "验证学生之间的会话隔离", learnerLevel: "入门" } });
+  const createdForB = await studentBContext.post("/api/sessions", { data: { topic: "学生乙知识点", objective: "验证学生之间的会话隔离", learnerLevel: "入门", clientRequestId: `student-b-${crypto.randomUUID()}` } });
   const bodyForB = await createdForB.json() as { data: { session: { id: string } } };
 
   await page.request.post("/api/auth/logout", { data: {} });
@@ -64,7 +64,7 @@ test("role dashboards and server-side ownership rules are enforced", async ({ pa
   expect(classText).not.toContain("教师私密草稿");
   expect(classText).toContain("学生可见任务");
   const privateReference = "不得返回浏览器的私有参考材料";
-  const minimizedSession = await page.request.post("/api/sessions", { data: { topic: "最小披露", objective: "验证浏览器响应不含私有字段", learnerLevel: "入门", referenceText: privateReference } });
+  const minimizedSession = await page.request.post("/api/sessions", { data: { topic: "最小披露", objective: "验证浏览器响应不含私有字段", learnerLevel: "入门", referenceText: privateReference, clientRequestId: `minimized-${crypto.randomUUID()}` } });
   expect(minimizedSession.status()).toBe(201);
   const minimizedText = await minimizedSession.text();
   expect(minimizedText).not.toContain(privateReference);
@@ -73,14 +73,14 @@ test("role dashboards and server-side ownership rules are enforced", async ({ pa
   expect((await page.request.get(`/api/sessions/${bodyForB.data.session.id}`)).status()).toBe(403);
   expect((await page.request.post("/api/courses", { data: { title: "越权课程" } })).status()).toBe(403);
   await prisma.user.update({ where: { id: studentA.id }, data: { status: "DISABLED" } });
-  expect((await page.request.post("/api/sessions", { data: { topic: "停用后请求", objective: "停用账号不能继续创建学习会话", learnerLevel: "入门" } })).status()).toBe(401);
+  expect((await page.request.post("/api/sessions", { data: { topic: "停用后请求", objective: "停用账号不能继续创建学习会话", learnerLevel: "入门", clientRequestId: `disabled-${crypto.randomUUID()}` } })).status()).toBe(401);
 
   await page.goto("/login");
   await page.getByLabel("邮箱").fill(admin.email);
   await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "登录" }).click();
   await expect(page).toHaveURL(/\/admin/);
-  await expect(page.getByRole("heading", { name: "系统管理" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "管理总览" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(await prisma.auditLog.count({ where: { actorId: admin.id, action: "AUTH_LOGIN" } })).toBe(1);
   expect(await prisma.auditLog.count({ where: { actorId: teacherA.id, action: "AUTH_LOGIN" } })).toBeGreaterThanOrEqual(1);

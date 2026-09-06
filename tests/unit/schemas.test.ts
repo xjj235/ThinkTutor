@@ -7,6 +7,7 @@ import {
   learnerStateSchema,
   messageMetadataSchema,
   strengthsSchema,
+  webSourceSchema,
   nextStepsSchema,
   reportDimensionsSchema,
   reportGapsSchema,
@@ -99,7 +100,7 @@ describe("zod schemas", () => {
         },
       },
       overallLevel: "发展中",
-      strengths: ["a"],
+      strengths: [{ title: "a", evidence: "student evidence" }],
       gaps: [
         {
           title: "b",
@@ -125,7 +126,8 @@ describe("zod schemas", () => {
     };
 
     expect(reportDimensionsSchema.safeParse(dimensions).success).toBe(true);
-    expect(strengthsSchema.safeParse(["概念"]).success).toBe(true);
+    expect(strengthsSchema.safeParse([{ title: "概念", evidence: "学生明确解释了该概念。" }]).success).toBe(true);
+    expect(strengthsSchema.safeParse([{ title: "概念" }]).success).toBe(false);
     expect(
       reportGapsSchema.safeParse([
         {
@@ -214,5 +216,12 @@ describe("zod schemas", () => {
     expect(
       learnerStateSchema.safeParse({ ...learnerState, masteryEstimate: 101 }).success,
     ).toBe(false);
+  });
+
+  it("accepts only credential-free HTTPS web sources", () => {
+    expect(webSourceSchema.safeParse({ title: "可信来源", url: "https://example.com/article" }).success).toBe(true);
+    for (const url of ["javascript:alert(1)", "data:text/html,unsafe", "file:///etc/passwd", "https://user:secret@example.com/article"]) {
+      expect(webSourceSchema.safeParse({ title: "危险来源", url }).success).toBe(false);
+    }
   });
 });

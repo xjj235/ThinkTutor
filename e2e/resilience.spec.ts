@@ -33,7 +33,7 @@ const answerRequestSchema = z.object({
 });
 
 async function createSession(request: APIRequestContext) {
-  const response = await request.post("/api/sessions", { data: task });
+  const response = await request.post("/api/sessions", { data: { ...task, clientRequestId: `e2e-create-${crypto.randomUUID()}` } });
   expect(response.status()).toBe(201);
   return sessionEnvelopeSchema.parse(await response.json()).data;
 }
@@ -96,7 +96,7 @@ test("a retryable answer error keeps persisted state and reuses the request id",
   });
 
   await page
-    .getByLabel("你的回答")
+    .getByLabel("独立作答")
     .fill("系统性风险会通过机构之间的联系扩散到整体市场。");
   await page.getByRole("button", { name: "提交回答" }).click();
   await expect(
@@ -111,7 +111,7 @@ test("a retryable answer error keeps persisted state and reuses the request id",
   expect(afterFailure.messages).toHaveLength(1);
 
   await page.getByRole("button", { name: "重试本次操作" }).click();
-  await expect(page.getByText("苏格拉底追问阶段")).toBeVisible();
+  await expect(page.locator(".learning-record-heading").getByText("苏格拉底追问")).toBeVisible();
   expect(observedRequestIds).toHaveLength(2);
   expect(observedRequestIds[1]).toBe(observedRequestIds[0]);
 
