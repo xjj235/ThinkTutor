@@ -18,7 +18,7 @@ export function buildV12Report(manifest: KnowledgeManifest, runtime: KnowledgeRu
     if (message.content.slice(o.ref.startOffset, o.ref.endOffset) !== o.ref.extractedText) throw new Error("Report evidence no longer matches message");
   }
   const supported = new Set(observations.filter((o) => o.independent && o.confidence >= 0.75).map((o) => o.evidenceId));
-  const groups: Record<typeof dimensionKeys[number], string[][]> = {
+  const groups: Record<typeof dimensionKeys[number], string[][]> = manifest.v12!.coachingPolicy?.scoreCriteria ?? {
     conceptCompleteness: [["financial_system_scope"], ["functional_impairment", "single_event_not_sufficient"], ["research_object_distinction", "systematic_market_factor"], ["condition_revision"]],
     logicCompleteness: [["shock"], ["propagation"], ["amplification"], ["system_consequence", "investment_employment_effect"]],
     expressionClarity: [["financial_system_scope", "shock"], ["propagation"], ["clear_expression"], ["condition_revision"]],
@@ -36,7 +36,9 @@ export function buildV12Report(manifest: KnowledgeManifest, runtime: KnowledgeRu
     // A zero score cites the actual submitted answer as evidence of non-demonstration.
     if (!evidenceLinks[key].length) evidenceLinks[key] = [windowMessages.at(-1)!.id];
     const quoted = relevant[0]?.ref.extractedText ?? windowMessages.at(-1)!.content;
-    dimensions[key] = { score: steps * 25, evidence: `学生原文：“${quoted.slice(0, 450)}”`, feedback: steps === 4 ? "最终回答覆盖本维度四级证据要求。" : "本次最终回答仍有未观察到的关键证据，需要继续验证。" };
+    const nextCriterion = groups[key].find((group) => !group.some((id) => supported.has(id)));
+    const detail = key === "transferAbility" && !s.transferPassed ? "尚需完成未见情境中的独立迁移核验。" : nextCriterion ? `下一档需补充：${nextCriterion.map((id) => manifest.v12!.evidenceDefinitions[id]).join("，或")}。` : "最终回答覆盖本维度四级证据要求。";
+    dimensions[key] = { score: steps * 25, evidence: `学生原文：“${quoted.slice(0, 450)}”`, feedback: `已覆盖 ${steps}/4 档证据要求。${detail}` };
   }
   for (const claim of Object.values(s.misconceptionStates)) {
     const definition = manifest.v12!.errors[claim.claimId];

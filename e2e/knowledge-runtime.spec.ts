@@ -1,5 +1,57 @@
 import { expect, test } from "@playwright/test";
 import manifest from "../knowledge/courses/financial-risk-management/systemic-risk/manifest.json" with { type: "json" };
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@prisma/client";
+import { hash } from "argon2";
+import { knowledgeRuntimeSchema } from "../src/lib/knowledge/runtime-schemas";
+
+test("curated knowledge follows a course goal and gives grounded feedback in HTML", async ({ page }, testInfo) => {
+  test.skip(process.env.ALLOW_DRAFT_KNOWLEDGE !== "true", "Curated draft requires an explicit development override.");
+  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL, max: 2 }) });
+  const suffix = crypto.randomUUID();
+  const password = "Secure-grounded-e2e-2026";
+  try {
+    const teacher = await prisma.user.create({ data: { email: `grounded-teacher-${suffix}@example.test`, name: "课程教师", role: "TEACHER", passwordHash: await hash(password) } });
+    const student = await prisma.user.create({ data: { email: `grounded-student-${suffix}@example.test`, name: "课程学生", role: "STUDENT", passwordHash: await hash(password) } });
+    const course = await prisma.course.create({ data: { ownerId: teacher.id, title: "金融系统与风险", status: "PUBLISHED" } });
+    const chapter = await prisma.chapter.create({ data: { courseId: course.id, title: "系统性风险", sortOrder: 1 } });
+    const goal = await prisma.learningGoal.create({ data: { courseId: course.id, chapterId: chapter.id, title: "解释风险传播路径", objective: "能够用条件、传播渠道和系统后果解释系统性风险。", sortOrder: 1 } });
+    const classroom = await prisma.classroom.create({ data: { courseId: course.id, teacherId: teacher.id, name: "知识库测试班", joinCode: suffix.slice(0, 8) } });
+    await prisma.enrollment.create({ data: { classroomId: classroom.id, userId: student.id } });
+    await page.goto("/login");
+    await page.getByLabel("邮箱").fill(student.email);
+    await page.getByLabel("密码").fill(password);
+    await page.getByRole("button", { name: "登录" }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
+    await page.goto("/learn/new");
+    await page.locator("#curriculum-course").selectOption(course.id);
+    await page.locator("#curriculum-chapter").selectOption(chapter.id);
+    await page.locator("#curriculum-goal").selectOption(goal.id);
+    await page.getByLabel("学习者水平").selectOption("入门");
+    await page.getByRole("button", { name: "创建并开始学习" }).click();
+    await expect(page).toHaveURL(/\/session\//);
+    await page.getByRole("button", { name: "确认目标并开始" }).click();
+    await expect(page.getByText(manifest.diagnosticQuestions[0].questionText, { exact: true })).toBeVisible();
+    const answer = "系统性风险关注金融体系，但我还没有说明它怎样影响其他机构。";
+    await page.getByLabel("独立作答").fill(answer);
+    await page.getByRole("button", { name: "提交回答" }).click();
+    await expect(page.getByText(/原文依据：/)).toBeVisible();
+    await expect(page.getByText(/下一步至少澄清一项：/)).toBeVisible();
+    const sessionId = page.url().split("/session/")[1];
+    const state = await page.request.get(`/api/sessions/${sessionId}`);
+    expect(state.ok()).toBe(true);
+    const saved = await prisma.learningSession.findUniqueOrThrow({ where: { id: sessionId } });
+    expect(knowledgeRuntimeSchema.parse(saved.knowledgeRuntime).versions.releaseId).toBe("KR_SR_1_2");
+    const quotes = page.getByText(/原文依据：/);
+    await page.reload();
+    await expect(quotes).toBeVisible();
+    await expect(page.getByText(/下一步至少澄清一项：/)).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("grounded-feedback.png"), fullPage: true });
+  } finally {
+    await prisma.$disconnect();
+  }
+});
 
 test("curated knowledge runs through browser and preserves the versioned report", async ({ page }, testInfo) => {
   test.skip(process.env.ALLOW_DRAFT_KNOWLEDGE !== "true", "Curated draft requires an explicit development override.");

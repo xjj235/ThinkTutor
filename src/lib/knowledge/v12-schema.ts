@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { coachingPolicySchema, coachingPromptSchema, coachingTraceSchema } from "./coaching-schema";
 
 const ids = z.array(z.string().min(1));
 export const evidenceRuleSchema = z.object({ requiredAll: ids, requiredAny: ids, prohibited: ids }).strict();
@@ -15,6 +16,7 @@ export const pedagogyRuleSchema = z.object({
   version: z.literal("1.2.1"), status: z.enum(["DRAFT", "PUBLISHED"]), verifiedBy: z.string().nullable(), verifiedAt: z.string().nullable(),
 }).strict();
 export const v12ResourcesSchema = z.object({
+  coachingPolicy: coachingPolicySchema.optional(),
   specVersion: z.literal("1.2.1"),
   sourceDocumentHashes: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/u)),
   evidenceDefinitions: z.record(z.string(), z.string().min(1)),
@@ -63,12 +65,16 @@ export const claimSchema = z.object({
   systemConfidence: z.number().min(0).max(1), evidenceRefs: z.array(evidenceRefSchema),
 }).strict();
 export const v12StateSchema = z.object({
+  coachingHistory: z.array(coachingTraceSchema).max(200).default([]),
+  coachingPrompt: coachingPromptSchema.nullable().default(null),
+  lastAssessmentMessageId: z.string().nullable().default(null),
+  answerFingerprints: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/u)).default({}),
   schemaVersion: z.literal("1.2"),
   pedagogicalStage: stageSchema,
   activityType: activitySchema,
   goalPresentedAt: z.string().nullable().default(null), goalConfirmedAt: z.string().nullable().default(null),
   stageTransitions: z.array(z.object({ fromStage: stageSchema.nullable(), toStage: stageSchema, reasonCode: z.enum(["GOAL_PRESENTED", "GOAL_CONFIRMED", "DIAGNOSIS_STABLE", "CONSTRUCTION_CRITERIA_MET", "CASE_PASSED", "CASE_REPAIR_REQUIRED", "FEYNMAN_MAJOR_BACKTRACK", "FEYNMAN_COMPLETED", "REFLECTION_COMPLETED", "EXPERIENCE_LIMIT", "SESSION_RESUMED", "RESUMED_REVERIFIED", "RESUME_GAP_IDENTIFIED"]), evidenceRefs: z.array(evidenceRefSchema), actor: z.enum(["SYSTEM", "TEACHER"]), createdAt: z.string() }).strict()).default([]),
-  resumeVerification: z.object({ stage: stageSchema, activityType: activitySchema, questionId: z.string().nullable(), targetId: z.string().nullable(), groupId: z.string().nullable(), caseId: z.string().nullable(), assistantMessage: z.string(), requestedAt: z.string() }).strict().nullable().default(null),
+  resumeVerification: z.object({ stage: stageSchema, activityType: activitySchema, questionId: z.string().nullable(), targetId: z.string().nullable(), groupId: z.string().nullable(), caseId: z.string().nullable(), assistantMessage: z.string(), requestedAt: z.string(), coachingPrompt: coachingPromptSchema.nullable().optional() }).strict().nullable().default(null),
   finalClaims: z.array(finalClaimSchema).default([]), appliedPedagogyRuleIds: ids.default([]),
   diagnosticLevel: z.enum(["L1", "L2", "L3", "L4"]).nullable(), diagnosticMessageIds: ids,
   currentGroupId: z.string().nullable(), currentCaseId: z.string().nullable(), currentCaseUnseen: z.boolean(),

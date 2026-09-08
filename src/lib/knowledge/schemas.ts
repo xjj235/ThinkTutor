@@ -208,6 +208,23 @@ export function validateKnowledgeManifests(rawManifests: unknown[]): KnowledgeVa
       const checkRule = (id: string, rule: import("./v12-schema").EvidenceRule) => {
         for (const e of [...rule.requiredAll, ...rule.requiredAny, ...rule.prohibited]) if (!v.evidenceDefinitions[e]) errors.push(`${id}: unknown evidence ${e}`);
       };
+      if (v.coachingPolicy) {
+        const policy = v.coachingPolicy;
+        if (new Set(policy.dimensionPriority).size !== 5) errors.push("Coaching dimension priorities must be unique");
+        for (const [dimension, config] of Object.entries(policy.dimensions)) {
+          checkRule(dimension, { requiredAll: config.evidenceIds, requiredAny: [], prohibited: [] });
+          for (const level of ["L1", "L2", "L3", "L4"] as const) if (!policy.forms.some((f) => f.dimension === dimension && f.levels.includes(level))) errors.push(`${dimension}: missing coaching form for ${level}`);
+        }
+        for (const form of policy.forms) {
+          register(form.id, "coachingForm");
+          if (!form.template.includes("{target}") || (form.template.match(/[?？]/gu) ?? []).length !== 1 || /\{(?!target\})/u.test(form.template)) errors.push(`${form.id}: invalid coaching question template`);
+        }
+        for (const frames of Object.values(policy.stageFrames)) for (const frame of frames) {
+          register(frame.id, "coachingFrame");
+          if (frame.template.split("{content}").length !== 2 || /\{(?!content\})/u.test(frame.template)) errors.push(`${frame.id}: must preserve exactly one locked content slot`);
+        }
+        for (const [dimension, tiers] of Object.entries(policy.scoreCriteria)) for (const tier of tiers) checkRule(dimension, { requiredAll: tier, requiredAny: [], prohibited: [] });
+      }
       for (const [id, rule] of Object.entries(v.unitRules)) { if (!targetIds.has(id)) errors.push(`${id}: unknown mastery target`); checkRule(id, rule); }
       for (const [id, rule] of Object.entries(v.relationRules)) { if (!relationIds.has(id)) errors.push(`${id}: unknown relation rule`); checkRule(id, rule); }
       if (v.pedagogyRules.length !== 18 || new Set(v.pedagogyRules.map((r) => r.id)).size !== 18) errors.push("Expected eighteen unique pedagogy rules");

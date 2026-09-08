@@ -167,7 +167,7 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
       </div>
 
       <section className="report-summary rounded-md border border-[#dce7e6] bg-[#f7fbfa] p-5">
-        <p className="text-sm text-[#5d6b70]">形成性学习报告</p>
+        <p className="report-category text-sm text-[#5d6b70]">形成性学习报告</p>
         <h1 className="mt-1 text-3xl font-semibold text-[#172126]">
           {session.topic}
         </h1>

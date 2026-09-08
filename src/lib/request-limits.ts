@@ -21,13 +21,13 @@ export async function limitRegistration(request: Request): Promise<void> {
   await consumeRateLimit(`rate:register:${requestClientKey(request)}`, env.RATE_LIMIT_REGISTER_PER_HOUR, 60 * 60);
 }
 
-export async function withAIRequestProtection<T>(userId: string, sessionKey: string, operation: () => Promise<T>): Promise<T> {
+export async function withAIRequestProtection<T>(userId: string, sessionKey: string, operation: () => Promise<T>, sequentialCallsPerAttempt: 1 | 2 = 1): Promise<T> {
   const env = getServerEnv();
   await Promise.all([
     consumeRateLimit(`rate:ai:minute:${userId}`, env.RATE_LIMIT_AI_PER_MINUTE, 60),
     consumeRateLimit(`rate:ai:day:${userId}`, env.RATE_LIMIT_AI_PER_DAY, 24 * 60 * 60),
   ]);
-  const release = await acquireLock(`lock:ai:${sessionKey}`, env.DEEPSEEK_TIMEOUT_MS * (env.AI_MAX_RETRIES + 1) + 10_000);
+  const release = await acquireLock(`lock:ai:${sessionKey}`, env.DEEPSEEK_TIMEOUT_MS * sequentialCallsPerAttempt * (env.AI_MAX_RETRIES + 1) + 10_000);
   if (!release) throw new AppError("CONFLICT", "该学习会话正在生成内容，请稍候。", 409, true);
   try { return await operation(); }
   finally { await release(); }

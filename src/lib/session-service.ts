@@ -31,6 +31,9 @@ import { presentV12Goal } from "./state-machine";
 import { initialKnowledgeRuntime, recordKnowledgeAction, recordKnowledgeAnswer, selectKnowledgeAction } from "./knowledge/orchestrator";
 import { linkReportEvidence } from "./knowledge/report-evidence";
 import { submitV12Turn } from "./knowledge/v12-session-service";
+import { selectCoaching } from "./knowledge/coaching-service";
+import { recordCoaching } from "./knowledge/coaching";
+import type { SourcedDiagnosticQuestion } from "./ai/types";
 import { reportRelations, serializePayload, serializeReport, sessionRelations } from "./serializers";
 import {
   canEnterFeynmanVoluntarily,
@@ -48,6 +51,10 @@ import {
 } from "./state-machine";
 
 const asJson = (value: object): Prisma.InputJsonValue => structuredClone(value) as Prisma.InputJsonValue;
+
+function initialCuratedDiagnostic(): SourcedDiagnosticQuestion {
+  return { assistantMessage: "等待确认研习目标。", questionType: "CONCEPT_CLARIFICATION", learnerState: { masteryEstimate: 0, confirmedPoints: [], gaps: [], misconceptions: [] }, nextAction: "ASK_QUESTION", transitionReason: "由知识库约束初始诊断范围。", knowledgePolicy: "COURSE_KNOWLEDGE_FIRST", webSources: [] };
+}
 
 function isUniqueConstraintError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
@@ -257,23 +264,18 @@ export async function createLearningSession(userId: string, input: CreateSession
     if ((resolved.task.referenceText?.length ?? 0) > getServerEnv().MAX_REFERENCE_TEXT_LENGTH) throw new AppError("VALIDATION_ERROR", "参考材料超过允许长度。", 400);
     const requestId = options?.clientRequestId ?? `ai_${crypto.randomUUID()}`;
     const protectionKey = resolved.assignmentId ? `assignment-start:${userId}:${resolved.assignmentId}` : `create:${requestId}`;
-    const manifest = await findKnowledgeManifest(resolved.task.topic);
-    const runtime = manifest ? initialKnowledgeRuntime(createVersionSnapshot(manifest)) : null;
+    const manifest = await findKnowledgeManifest(resolved.task.topic, resolved.task);
+    let runtime = manifest ? initialKnowledgeRuntime(createVersionSnapshot(manifest)) : null;
     const context = await buildLearningContext({
       courseId: resolved.task.courseId,
       chapterId: resolved.task.chapterId,
       topic: resolved.task.topic,
       objective: resolved.task.objective,
       phase: "DIAGNOSIS",
+      knowledgeRuntime: runtime,
       messages: [],
     });
-    const diagnostic = runtime?.v12 && manifest ? {
-      assistantMessage: manifest.diagnosticQuestions[0].questionText,
-      questionType: "CONCEPT_CLARIFICATION" as const,
-      learnerState: { masteryEstimate: 0, confirmedPoints: [], gaps: [], misconceptions: [] },
-      nextAction: "ASK_QUESTION" as const, transitionReason: "服务端锁定初始诊断题。",
-      knowledgePolicy: "COURSE_KNOWLEDGE_FIRST" as const, webSources: [],
-    } : await withAIRequestProtection(userId, protectionKey, () => getAIProvider().createDiagnosticQuestion({
+    const diagnostic = runtime?.v12 && manifest ? initialCuratedDiagnostic() : await withAIRequestProtection(userId, protectionKey, () => getAIProvider().createDiagnosticQuestion({
       task: resolved.task,
       userId,
       requestId,
@@ -293,6 +295,11 @@ export async function createLearningSession(userId: string, input: CreateSession
         runtime.v12 = presentV12Goal(runtime.v12, new Date().toISOString());
         runtime.currentQuestionId = null; runtime.currentTargetId = null; runtime.usedQuestionIds = [];
         diagnostic.assistantMessage = `研习目标：${resolved.task.objective}\n\n预计用时：15–20分钟。`;
+        const now = new Date().toISOString();
+        const coaching = await selectCoaching(manifest, runtime, { kind: "GOAL", content: diagnostic.assistantMessage, learnerLevel: resolved.task.learnerLevel, studentContent: resolved.task.objective }, { userId, requestId: `${requestId}:teaching` }, protectionKey);
+        const presented = recordCoaching(runtime, coaching.prepared, coaching.decision, { requestId: `${requestId}:teaching`, now });
+        runtime = knowledgeRuntimeSchema.parse(presented.runtime);
+        diagnostic.assistantMessage = presented.assistantMessage;
       }
     }
     const created = await prisma.$transaction(async (tx) => {
@@ -572,11 +579,11 @@ export async function createRetrySession(sessionId: string, input: { clientReque
   const gap = await prisma.learningGap.findFirst({ where: { reportId: session.report.id, status: "OPEN" }, orderBy: [{ priority: "desc" }, { createdAt: "asc" }, { id: "asc" }] });
   if (!gap) throw new AppError("CONFLICT", "没有待修复的学习漏洞。", 409);
   const task = buildTaskInput(session);
-  const retryTask = await withAIRequestProtection(session.userId, sessionId, () => getAIProvider().createRetryTask({ task, gap: { title: gap.title, evidence: gap.evidence, repairTask: gap.repairTask, priority: gap.priority }, userId: session.userId, sessionId, requestId: input.clientRequestId }));
+  const manifest = await findKnowledgeManifest(task.topic, task);
+  const retryTask = manifest?.v12 ? { topic: task.topic, objective: `围绕“${gap.title}”开展定向巩固：${gap.repairTask}` } : await withAIRequestProtection(session.userId, sessionId, () => getAIProvider().createRetryTask({ task, gap: { title: gap.title, evidence: gap.evidence, repairTask: gap.repairTask, priority: gap.priority }, userId: session.userId, sessionId, requestId: input.clientRequestId }));
   const childTask = createSessionInputSchema.parse({ ...task, topic: retryTask.topic, objective: retryTask.objective, assignmentId: undefined });
-  const diagnostic = await withAIRequestProtection(session.userId, `${sessionId}:retry`, () => getAIProvider().createDiagnosticQuestion({ task: childTask, userId: session.userId, requestId: `${input.clientRequestId}:diagnostic` }));
-  const manifest = await findKnowledgeManifest(childTask.topic);
-  const runtime = manifest ? initialKnowledgeRuntime(createVersionSnapshot(manifest)) : null;
+  const diagnostic = manifest?.v12 ? initialCuratedDiagnostic() : await withAIRequestProtection(session.userId, `${sessionId}:retry`, () => getAIProvider().createDiagnosticQuestion({ task: childTask, userId: session.userId, requestId: `${input.clientRequestId}:diagnostic` }));
+  let runtime = manifest ? initialKnowledgeRuntime(createVersionSnapshot(manifest)) : null;
   if (runtime && manifest) {
     const previous = session.knowledgeRuntime ? knowledgeRuntimeSchema.parse(session.knowledgeRuntime) : null;
     if (previous?.versions.releaseId === runtime.versions.releaseId && previous.versions.contentHash === runtime.versions.contentHash) {
@@ -584,8 +591,9 @@ export async function createRetrySession(sessionId: string, input: { clientReque
       runtime.usedCaseIds = [...previous.usedCaseIds];
       runtime.caseExposureCounts = { ...previous.caseExposureCounts };
     }
-    const question = manifest.diagnosticQuestions.find((item) => item.status === "published" && !runtime.usedQuestionIds.includes(item.id))
-      ?? (runtime.v12 ? manifest.diagnosticQuestions.find((item) => item.status === "published" && item.id !== runtime.usedQuestionIds[0]) : undefined);
+    const usedQuestionIds = runtime.usedQuestionIds;
+    const question = manifest.diagnosticQuestions.find((item) => item.status === "published" && !usedQuestionIds.includes(item.id))
+      ?? (runtime.v12 ? manifest.diagnosticQuestions.find((item) => item.status === "published" && item.id !== usedQuestionIds[0]) : undefined);
     if (!question) throw new AppError("CONFLICT", "当前知识版本的诊断题已完成，请开始其他学习任务。", 409);
     diagnostic.assistantMessage = question.questionText;
     diagnostic.knowledgePolicy = "COURSE_KNOWLEDGE_FIRST";
@@ -598,6 +606,11 @@ export async function createRetrySession(sessionId: string, input: { clientReque
       runtime.currentQuestionId = null; runtime.currentTargetId = null;
       runtime.usedQuestionIds = runtime.usedQuestionIds.filter((id) => id !== question.id);
       diagnostic.assistantMessage = `定向巩固目标：${childTask.objective}\n\n预计用时：15–20分钟。`;
+      const now = new Date().toISOString();
+      const coaching = await selectCoaching(manifest, runtime, { kind: "RETRY", content: diagnostic.assistantMessage, learnerLevel: childTask.learnerLevel, studentContent: gap.evidence }, { userId: session.userId, sessionId, requestId: `${input.clientRequestId}:teaching` }, `${sessionId}:retry`);
+      const presented = recordCoaching(runtime, coaching.prepared, coaching.decision, { requestId: `${input.clientRequestId}:teaching`, now });
+      runtime = knowledgeRuntimeSchema.parse(presented.runtime);
+      diagnostic.assistantMessage = presented.assistantMessage;
     }
   }
   try {

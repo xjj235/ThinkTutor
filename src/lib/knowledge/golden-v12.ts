@@ -6,6 +6,7 @@ import type { SessionVersions } from "./runtime-schemas";
 import type { goldenItemSchema } from "./review-schemas";
 import { initialKnowledgeRuntime } from "./orchestrator";
 import { aggregateDiagnosticLevel, applyV12Assessment, selectV12Action } from "./v12-engine";
+import { buildAssessmentRules } from "./assessment-context";
 import { buildV12Report } from "./v12-report";
 import { knowledgeContextBudget } from "./context-budget";
 
@@ -21,7 +22,7 @@ export async function evaluateGoldenSample(manifest: KnowledgeManifest, versions
       if (!manifest.v12!.cases[sample.caseId]) throw new Error("Unknown golden case");
       runtime.v12!.pedagogicalStage = "CASE_TRANSFER"; runtime.v12!.currentCaseId = sample.caseId; runtime.v12!.currentCaseUnseen = true;
     }
-    const assessment = await assess({ message, lockedContext: { phase: sample.caseId && final ? "SOCRATIC" : "DIAGNOSIS", stage: runtime.v12!.pedagogicalStage, targetId: sample.targetId, questionId: q.id, caseId: final ? sample.caseId : null, action: "ASSESS_EVIDENCE", hintLevel: 0, releaseId: versions.releaseId, questionText: final && sample.caseId ? manifest.v12!.cases[sample.caseId].studentQuestions : q.questionText, caseContext: final && sample.caseId ? manifest.cases.find((c) => c.id === sample.caseId)?.studentText : undefined }, evidenceDefinitions: manifest.v12!.evidenceDefinitions, aliases: manifest.v12!.aliases, knowledgeUnits: manifest.knowledgeUnits.filter((u) => u.id === sample.targetId).slice(0, knowledgeContextBudget.knowledgeUnits).map(({ id, content }) => ({ id, content })) });
+    const assessment = await assess({ message, lockedContext: { phase: sample.caseId && final ? "SOCRATIC" : "DIAGNOSIS", stage: runtime.v12!.pedagogicalStage, targetId: sample.targetId, questionId: q.id, caseId: final ? sample.caseId : null, action: "ASSESS_EVIDENCE", hintLevel: 0, releaseId: versions.releaseId, questionText: final && sample.caseId ? manifest.v12!.cases[sample.caseId].studentQuestions : q.questionText, caseContext: final && sample.caseId ? manifest.cases.find((c) => c.id === sample.caseId)?.studentText : undefined }, evidenceDefinitions: manifest.v12!.evidenceDefinitions, aliases: manifest.v12!.aliases, evaluationRules: buildAssessmentRules(manifest, runtime), candidateTargets: { misconceptionIds: Object.keys(manifest.v12!.errors), gapIds: Object.keys(manifest.v12!.gaps) }, knowledgeUnits: manifest.knowledgeUnits.filter((u) => u.id === sample.targetId).slice(0, knowledgeContextBudget.knowledgeUnits).map(({ id, content }) => ({ id, content })) });
     runtime = applyV12Assessment(manifest, runtime, assessment, message, "2026-09-04T00:00:00.000Z");
     messages.push(message);
   }

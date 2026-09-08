@@ -94,6 +94,9 @@ export const auditActionLabels = {
 } satisfies Record<AuditAction, string>;
 
 const aiOperationLabels = {
+  turn_assessment: "学习证据诊断",
+  teaching_selection: "教学策略与追问生成",
+  teaching_review: "追问质量复核",
   diagnostic: "知识诊断",
   coach: "苏格拉底追问",
   feynman_instruction: "费曼讲解说明",

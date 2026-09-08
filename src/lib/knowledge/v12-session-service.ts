@@ -11,11 +11,21 @@ import { nextV12Transition, nextAfterReportSaved, recordStageTransition, confirm
 import { knowledgeRuntimeSchema } from "./runtime-schemas";
 import { resolveRuntimeManifest } from "./releases";
 import { aggregateDiagnosticLevel, applyV12Assessment, constructionReady, diagnosticFinished, mergeCaseExposureHistory, recordV12Action, selectV12Action } from "./v12-engine";
+import { buildAssessmentRules } from "./assessment-context";
 import { buildV12Report } from "./v12-report";
 import { knowledgeContextBudget } from "./context-budget";
+import { buildV12TurnFeedback } from "./turn-feedback";
+import { tutorResponseSchema } from "./v12-schema";
+import { diagnoseCoaching, recordCoaching } from "./coaching";
+import { selectCoaching } from "./coaching-service";
+import type { KnowledgeAction } from "./orchestrator";
+import type { CoachingProfile, CoachingKind } from "./coaching-schema";
 
 const asJson = (value: object): Prisma.InputJsonValue => structuredClone(value) as Prisma.InputJsonValue;
 const dimensionKeyMap = { conceptCompleteness: "CONCEPT_COMPLETENESS", logicCompleteness: "LOGIC_COMPLETENESS", expressionClarity: "EXPRESSION_CLARITY", exampleAbility: "EXAMPLE_ABILITY", transferAbility: "TRANSFER_ABILITY" } as const;
+const feynmanQuestion = "请面向初学者自主解释系统性风险是什么、为什么传播，并用一个有机制的例子串联你的解释。";
+const reflectionQuestion = (label?: string) => `${label ? `围绕${label}，` : "围绕刚才解释中最不确定的一处，"}你能补充关键因果联系并用自己的话修订解释吗？`;
+const resumeQuestion = (label?: string) => `恢复核验：请以一个新的具体情境，说明“${label ?? "因果链与条件变化"}”的适用条件及其因果联系。`;
 
 export async function submitV12Turn(sessionId: string, text: string, clientRequestId: string, explanation = false, hint = false) {
   const session = await readSession(sessionId);
@@ -42,6 +52,10 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
   let questionType: typeof session.messages[number]["questionType"] = null;
   let built: ReturnType<typeof buildV12Report> | null = null;
   let selectCaseInTransaction = false;
+  let pendingCase: KnowledgeAction | null = null;
+  let profile: CoachingProfile | undefined;
+  const wasResume = Boolean(runtime.v12.resumeVerification);
+  let feedback = "";
   if (hint) {
     const action = selectV12Action(manifest, runtime, now, true);
     if (!action) throw new AppError("CONFLICT", "当前提示已用完，请先尝试回答。", 409);
@@ -49,16 +63,31 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
     assistantMessage = action.assistantMessage;
     questionType = "SCAFFOLDED_HINT";
   } else {
+    const answeredRuntime = runtime;
     const target = manifest.knowledgeUnits.find((u) => u.id === runtime.currentTargetId);
+    let questionText = manifest.diagnosticQuestions.find((q) => q.id === runtime.currentQuestionId)?.questionText
+      ?? manifest.socraticQuestions.find((q) => q.id === runtime.currentQuestionId)?.questionText
+      ?? manifest.v12.cases[runtime.v12.currentCaseId ?? ""]?.studentQuestions
+      ?? target?.learningRequirement;
+    // Feedback contains untrusted student quotations and must not become the locked question.
+    if (runtime.v12.resumeVerification) questionText = resumeQuestion(target?.title);
+    else if (runtime.v12.pedagogicalStage === "FEYNMAN_OUTPUT") questionText = feynmanQuestion;
+    else if (runtime.v12.pedagogicalStage === "REFLECTION") questionText = reflectionQuestion(manifest.knowledgeUnits.find((u) => u.id === runtime.v12!.reflectionTargetId)?.title);
+    else if (runtime.currentQuestionId?.startsWith("CASE_VERIFY_")) questionText = "哪一条具体事实支持你的因果判断，条件改变后这一判断是否仍然成立？";
+    if (runtime.v12.coachingPrompt?.questionId === runtime.currentQuestionId && runtime.v12.coachingPrompt?.stage === runtime.v12.pedagogicalStage) questionText = runtime.v12.coachingPrompt.text;
     const assessment = await withAIRequestProtection(session.userId, sessionId, () => getAIProvider().assessLearningTurn({
       userId: session.userId, sessionId, requestId: clientRequestId,
       message: { id: messageId, content: text },
-      lockedContext: { phase: session.phase, stage: runtime.v12!.pedagogicalStage, targetId: runtime.currentTargetId, questionId: runtime.currentQuestionId, caseId: runtime.v12!.currentCaseId, action: "ASSESS_EVIDENCE", hintLevel: runtime.hintLevels[runtime.currentTargetId!] ?? 0, releaseId: manifest.release.id, questionText: session.messages.filter((m) => m.role === "ASSISTANT").at(-1)?.content, caseContext: manifest.cases.find((c) => c.id === runtime.v12!.currentCaseId)?.studentText },
+      lockedContext: { phase: session.phase, stage: runtime.v12!.pedagogicalStage, targetId: runtime.currentTargetId, questionId: runtime.currentQuestionId, caseId: runtime.v12!.currentCaseId, action: "ASSESS_EVIDENCE", hintLevel: runtime.hintLevels[runtime.currentTargetId!] ?? 0, releaseId: manifest.release.id, questionText, caseContext: manifest.cases.find((c) => c.id === runtime.v12!.currentCaseId)?.studentText },
       knowledgeUnits: manifest.knowledgeUnits.filter((u) => u.id === target?.id || target?.prerequisites.includes(u.id)).slice(0, knowledgeContextBudget.knowledgeUnits).map(({ id, content }) => ({ id, content })),
       evidenceDefinitions: manifest.v12!.evidenceDefinitions, aliases: manifest.v12!.aliases,
+      evaluationRules: buildAssessmentRules(manifest, runtime),
+      candidateTargets: { misconceptionIds: Object.keys(manifest.v12!.errors), gapIds: Object.keys(manifest.v12!.gaps) },
     }));
     try { runtime = applyV12Assessment(manifest, runtime, assessment, { id: messageId, content: text }, now); }
     catch { throw new AppError("AI_INVALID_OUTPUT", "证据引用未通过校验，请重试。", 502, true); }
+    feedback = buildV12TurnFeedback(manifest, answeredRuntime, runtime, messageId);
+    profile = diagnoseCoaching(manifest, runtime, session.learnerLevel);
     const s = runtime.v12!;
     const resume = s.resumeVerification;
     if (resume) {
@@ -68,6 +97,7 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
       } else {
         runtime.currentQuestionId = resume.questionId; runtime.currentTargetId = resume.targetId;
         runtime.v12.currentGroupId = resume.groupId; runtime.v12.currentCaseId = resume.caseId;
+        runtime.v12.coachingPrompt = resume.coachingPrompt ?? null;
         assistantMessage = `${s.lastResult === "PASS" ? "恢复核验已完成。" : "恢复核验发现新的证据缺口，已记录为待巩固目标。"}\n\n${resume.assistantMessage}`;
       }
     } else {
@@ -82,17 +112,17 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
       built = buildV12Report(manifest, runtime, [...session.messages, { id: messageId, role: "USER", content: text }]);
       phase = nextAfterReportSaved({ ...session, phase: "REPORTING", socraticTurns: turns }).phase;
       s.activityType = "FORMATIVE_REPORT";
-      assistantMessage = "本次学习反馈已生成。";
+      assistantMessage = built.report.summary;
     } else if (phase === "FEYNMAN") {
       if (s.pedagogicalStage === "REFLECTION") {
         s.reflectionTargetId = Object.values(s.misconceptionStates).find((c) => c.status !== "RESOLVED")?.claimId ?? runtime.currentTargetId;
         s.reflectionTargetId = manifest.v12.errors[s.reflectionTargetId!]?.targetId ?? s.reflectionTargetId;
         s.activityType = "REFLECTION_REVISION";
         const label = manifest.knowledgeUnits.find((u) => u.id === s.reflectionTargetId)?.title;
-        assistantMessage = `${s.experienceLimitReached ? "本次练习已达到轮数上限，未完成的验证会保留。\n\n" : ""}${label ? `围绕${label}，` : "围绕刚才解释中最不确定的一处，"}你能补充关键因果联系并用自己的话修订解释吗？`;
+        assistantMessage = `${s.experienceLimitReached ? "本次练习已达到轮数上限，未完成的验证会保留。\n\n" : ""}${reflectionQuestion(label)}`;
       } else {
         s.activityType = "INDEPENDENT_EXPLANATION";
-        assistantMessage = "请面向初学者自主解释系统性风险是什么、为什么传播，并用一个有机制的例子串联你的解释。";
+        assistantMessage = feynmanQuestion;
       }
       runtime.currentQuestionId = null;
       s.currentCaseId = null;
@@ -100,12 +130,19 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
       const action = selectV12Action(manifest, runtime, now);
       if (!action) throw new AppError("CONFLICT", "当前版本缺少可用的验证题，请联系教师。", 409);
       selectCaseInTransaction = Boolean(action.caseId);
+      pendingCase = selectCaseInTransaction ? action : null;
       if (!selectCaseInTransaction) runtime = recordV12Action(runtime, action, now);
       assistantMessage = action.assistantMessage;
       questionType = action.questionType;
     }
     }
   }
+  const kind: CoachingKind = wasResume ? "RESUME" : hint || questionType === "SCAFFOLDED_HINT" ? "HINT" : built ? "REPORT" : runtime.v12!.pedagogicalStage === "FEYNMAN_OUTPUT" ? "FEYNMAN" : runtime.v12!.pedagogicalStage === "REFLECTION" ? "REFLECTION" : pendingCase ? "CASE" : runtime.v12!.pedagogicalStage === "DIAGNOSIS" ? "DIAGNOSIS" : "QUESTION";
+  // Select only a case-independent frame before the transaction; the case itself
+  // remains reserved under the existing per-student database lock.
+  const presentationRuntime = pendingCase ? recordV12Action(runtime, pendingCase, now) : runtime;
+  const recentTurns = session.messages.filter((m) => m.role === "USER" || m.role === "ASSISTANT").slice(-6).map((m) => ({ role: m.role as "USER" | "ASSISTANT", content: m.content.slice(0, 2000) }));
+  const coaching = await selectCoaching(manifest, presentationRuntime, { kind, content: assistantMessage, learnerLevel: session.learnerLevel, studentContent: hint ? session.messages.filter((m) => m.role === "USER").at(-1)?.content : text, profile, recentTurns }, { userId: session.userId, sessionId, requestId: `${clientRequestId}:teaching` }, sessionId);
   knowledgeRuntimeSchema.parse(runtime);
   try {
     await prisma.$transaction(async (tx) => {
@@ -122,10 +159,17 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
         assistantMessage = action.assistantMessage;
         questionType = action.questionType;
       }
+      const presented = recordCoaching(runtime, coaching.prepared, coaching.decision, { requestId: `${clientRequestId}:teaching`, now }, assistantMessage);
+      runtime = presented.runtime;
+      questionType = presented.questionType ?? questionType;
+      assistantMessage = presented.assistantMessage;
+      if (built) built.report.summary = assistantMessage;
+      const response = tutorResponseSchema.parse({ assistantMessage: feedback && !built ? `${feedback}\n\n${assistantMessage}` : assistantMessage });
+      knowledgeRuntimeSchema.parse(runtime);
       const changed = await tx.learningSession.updateMany({ where: { id: sessionId, version: session.version, phase: session.phase }, data: { phase, socraticTurns: turns, knowledgeRuntime: asJson(runtime), version: { increment: 1 }, ...(built ? { completedAt: new Date() } : {}) } });
       if (changed.count !== 1) throw new AppError("CONFLICT", "会话已变化，请刷新后重试。", 409, true);
       if (!hint) await tx.message.create({ data: { id: messageId, sessionId, role: "USER", phase: session.phase, content: text, clientRequestId } });
-      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase, content: assistantMessage, questionType, ...(hint ? { clientRequestId } : {}) } });
+      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase, content: response.assistantMessage, questionType, ...(hint ? { clientRequestId } : {}) } });
       if (built) {
         const { report, evidenceLinks } = built;
         const created = await tx.learningReport.create({ data: {
@@ -168,11 +212,14 @@ export async function submitV12SessionEvent(sessionId: string, input: { action: 
   } else {
     if (!["DIAGNOSIS", "SOCRATIC", "FEYNMAN"].includes(session.phase) || runtime.v12.pedagogicalStage === "GOAL_PRESENTATION" || runtime.v12.resumeVerification) throw new AppError("CONFLICT", "当前阶段不能重复发起恢复核验。", 409);
     const targetId = Object.keys(runtime.v12.unitStates).find((id) => runtime.v12!.unitStates[id].status === "MASTERED" && manifest.v12!.unitRules[id]) ?? runtime.currentTargetId ?? "C_SR_001";
-    runtime.v12 = resumeV12State(session, runtime.v12, { stage: runtime.v12.pedagogicalStage, activityType: runtime.v12.activityType, questionId: runtime.currentQuestionId, targetId: runtime.currentTargetId, groupId: runtime.v12.currentGroupId, caseId: runtime.v12.currentCaseId, assistantMessage: session.messages.filter((m) => m.role === "ASSISTANT").at(-1)?.content ?? "", requestedAt: now }, now);
+    runtime.v12 = resumeV12State(session, runtime.v12, { stage: runtime.v12.pedagogicalStage, activityType: runtime.v12.activityType, questionId: runtime.currentQuestionId, targetId: runtime.currentTargetId, groupId: runtime.v12.currentGroupId, caseId: runtime.v12.currentCaseId, assistantMessage: session.messages.filter((m) => m.role === "ASSISTANT").at(-1)?.content ?? "", requestedAt: now, coachingPrompt: runtime.v12.coachingPrompt }, now);
     runtime.currentTargetId = targetId; runtime.currentQuestionId = `RESUME_${session.version}`;
-    const title = manifest.knowledgeUnits.find((u) => u.id === targetId)?.title ?? "因果链与条件变化";
-    content = `恢复核验：请以一个新的具体情境，说明“${title}”的适用条件及其因果联系。`;
+    content = resumeQuestion(manifest.knowledgeUnits.find((u) => u.id === targetId)?.title);
   }
+  const coaching = await selectCoaching(manifest, runtime, { kind: input.action === "GOAL_CONFIRMED" ? "DIAGNOSIS" : "RESUME", content, learnerLevel: session.learnerLevel }, { userId: session.userId, sessionId, requestId: `${input.clientRequestId}:teaching` }, sessionId);
+  const presented = recordCoaching(runtime, coaching.prepared, coaching.decision, { requestId: `${input.clientRequestId}:teaching`, now });
+  runtime = knowledgeRuntimeSchema.parse(presented.runtime);
+  content = tutorResponseSchema.parse({ assistantMessage: presented.assistantMessage }).assistantMessage;
   await prisma.$transaction(async (tx) => {
     const changed = await tx.learningSession.updateMany({ where: { id: sessionId, version: session.version }, data: { knowledgeRuntime: asJson(runtime), version: { increment: 1 } } });
     if (changed.count !== 1) throw new AppError("CONFLICT", "会话已变化，请刷新。", 409);

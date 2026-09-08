@@ -1,4 +1,5 @@
 import type { KnowledgeRuntime } from "./runtime-schemas";
+import { createHash } from "node:crypto";
 import type { KnowledgeManifest } from "./schemas";
 import { type EvidenceRule, type TurnAssessment, type V12State, type EvidenceRef, turnAssessmentSchema, v12StateSchema } from "./v12-schema";
 import type { KnowledgeAction } from "./orchestrator";
@@ -50,7 +51,7 @@ export function criticalStepRule(manifest: KnowledgeManifest, step: string): Evi
   return rule;
 }
 
-function activeRule(manifest: KnowledgeManifest, runtime: KnowledgeRuntime): EvidenceRule {
+export function baseV12Rule(manifest: KnowledgeManifest, runtime: KnowledgeRuntime): EvidenceRule {
   const s = runtime.v12!;
   const config = manifest.v12!;
   if (s.resumeVerification) return config.unitRules[runtime.currentTargetId!];
@@ -59,6 +60,12 @@ function activeRule(manifest: KnowledgeManifest, runtime: KnowledgeRuntime): Evi
   if (s.pedagogicalStage === "REFLECTION") return config.unitRules[s.reflectionTargetId ?? ""] ?? { requiredAll: ["clear_expression"], requiredAny: [], prohibited: [] };
   const diagnostic = manifest.diagnosticQuestions.find((q) => q.id === runtime.currentQuestionId);
   return diagnostic ? config.diagnosticRules[diagnostic.equivalentGroup] : config.groups[s.currentGroupId!]?.rule ?? config.unitRules[runtime.currentTargetId!];
+}
+
+export function activeRule(manifest: KnowledgeManifest, runtime: KnowledgeRuntime): EvidenceRule {
+  const s = runtime.v12!;
+  if (["DIAGNOSIS", "KNOWLEDGE_CONSTRUCTION"].includes(s.pedagogicalStage) && !s.resumeVerification && s.coachingPrompt?.questionId === runtime.currentQuestionId && s.coachingPrompt?.stage === s.pedagogicalStage) return s.coachingPrompt.rule;
+  return baseV12Rule(manifest, runtime);
 }
 
 export function applyV12Assessment(manifest: KnowledgeManifest, runtime: KnowledgeRuntime, raw: TurnAssessment, message: { id: string; content: string }, now: string): KnowledgeRuntime {
@@ -77,14 +84,18 @@ export function applyV12Assessment(manifest: KnowledgeManifest, runtime: Knowled
   for (const c of assessment.candidateMisconceptions) if (!config.errors[c.id]) throw new Error("Unknown misconception");
   for (const c of assessment.candidateGaps) if (!config.gaps[c.id]) throw new Error("Unknown gap");
   if (assessment.contradictions.some((id) => !refs.has(id))) throw new Error("Contradiction lacks message evidence");
-  const duplicateText = Object.values(s.assessments).some((a) => a.evidence.length && a.evidence.every((e) => message.content.includes(e.extractedText)) && assessment.evidence.every((e) => a.evidence.some((old) => old.extractedText === e.extractedText)));
+  const fingerprint = createHash("sha256").update(message.content.normalize("NFKC").replace(/\s+/gu, "")).digest("hex");
+  const duplicateText = Object.values(s.answerFingerprints).includes(fingerprint);
   const independent = s.activityType !== "HINT" && !duplicateText && message.content.trim().length >= 12;
   const conflicting = assessment.contradictions.length > 0 || Object.values(config.errors).some((e) => refs.has(e.evidenceId) && e.resolutionRule.requiredAll.every((id) => refs.has(id)));
   const reliable = assessment.modelAssessmentConfidence >= 0.75 && independent && !conflicting;
   s.assessments[message.id] = assessment;
+  s.lastAssessmentMessageId = message.id;
+  s.answerFingerprints[message.id] = fingerprint;
   // Keep raw model confidence in assessments; contradictory evidence cannot support a score.
   for (const [evidenceId, ref] of refs) s.observations.push({ evidenceId, ref, independent, confidence: conflicting ? Math.min(0.49, assessment.modelAssessmentConfidence) : assessment.modelAssessmentConfidence });
   const result = evaluateEvidenceRule(activeRule(manifest, next), refs.keys());
+  const scopedQuestion = JSON.stringify(activeRule(manifest, next)) !== JSON.stringify(baseV12Rule(manifest, next));
   s.lastResult = !reliable ? "NEED_VERIFY" : result;
   if (!reliable) next.flags = [...new Set([...next.flags, "FLAG_NEED_VERIFY", ...(duplicateText ? ["FLAG_COPY_SUSPECTED"] : []), ...(message.content.trim().length < 12 ? ["FLAG_LOW_EFFORT"] : [])])];
   else next.flags = next.flags.filter((id) => !["FLAG_NEED_VERIFY", "FLAG_LOW_EFFORT", "FLAG_COPY_SUSPECTED"].includes(id));
@@ -98,6 +109,7 @@ export function applyV12Assessment(manifest: KnowledgeManifest, runtime: Knowled
     const outcome = evaluateEvidenceRule(r, refs.keys());
     const old = s.unitStates[id];
     if (outcome !== "PASS" && id !== next.currentTargetId) continue;
+    if (scopedQuestion && outcome !== "PASS" && !r.prohibited.some((id) => refs.has(id))) continue;
     const evidenceRefs = [...refs].filter(([e]) => [...r.requiredAll, ...r.requiredAny, ...r.prohibited].includes(e)).map(([, ref]) => ref);
     const newIndependent = reliable && outcome === "PASS" && !old?.questionIds.includes(questionKey);
     const count = (old?.independentEvidenceCount ?? 0) + Number(newIndependent);
@@ -131,6 +143,7 @@ export function applyV12Assessment(manifest: KnowledgeManifest, runtime: Knowled
     const gapIds = Object.keys(config.gaps).filter((id) => config.gaps[id] === target);
     for (const id of gapIds) {
       const old = s.gapStates[id];
+      if (scopedQuestion && s.lastResult === "PASS" && evaluateEvidenceRule(config.unitRules[target], refs.keys()) !== "PASS") continue;
       s.gapStates[id] = { claimId: id, status: s.lastResult === "PASS" ? "RESOLVED" : reliable ? "CONFIRMED" : "CANDIDATE", modelAssessmentConfidence: assessment.modelAssessmentConfidence, verificationCount: (old?.verificationCount ?? 0) + Number(reliable), contradictionCount: Number(conflicting), evidenceConsistency: conflicting ? 0 : 1, systemConfidence: reliable ? 0.8 : 0.4, evidenceRefs: [...(old?.evidenceRefs ?? []), { messageId: message.id, startOffset: 0, endOffset: message.content.length, extractedText: message.content }] };
     }
   }
@@ -165,14 +178,18 @@ export function selectV12Action(manifest: KnowledgeManifest, runtime: KnowledgeR
   if (hint) {
     const level = runtime.hintLevels[runtime.currentTargetId!] ?? 0;
     if (level >= 2 || !runtime.currentQuestionId || !runtime.currentTargetId) return null;
-    return { questionId: runtime.currentQuestionId, groupId: s.currentGroupId ?? "DIAGNOSIS", targetId: runtime.currentTargetId, caseId: s.currentCaseId, questionType: "SCAFFOLDED_HINT", hintLevel: (level + 1) as 1 | 2, assistantMessage: manifest.hints.find((h) => h.questionId === runtime.currentQuestionId && h.level === level + 1)?.hintText ?? "先把条件、参与者的行为和后果分开，你能解释其中一处联系吗？" };
+    const targetQuestion = manifest.socraticQuestions.find((q) => q.targetUnitId === runtime.currentTargetId && q.status === "published");
+    const scaffold = manifest.hints.find((h) => h.questionId === runtime.currentQuestionId && h.level === level + 1)
+      ?? manifest.hints.find((h) => h.questionId === targetQuestion?.id && h.level === level + 1);
+    return { questionId: runtime.currentQuestionId, groupId: s.currentGroupId ?? "DIAGNOSIS", targetId: runtime.currentTargetId, caseId: s.currentCaseId, questionType: "SCAFFOLDED_HINT", hintLevel: (level + 1) as 1 | 2, assistantMessage: scaffold?.hintText ?? "先把条件、参与者的行为和后果分开，你能解释其中一处联系吗？" };
   }
   if (s.pedagogicalStage === "DIAGNOSIS") {
     const answeredGroups = new Set(runtime.usedQuestionIds.map((id) => manifest.diagnosticQuestions.find((q) => q.id === id)?.equivalentGroup));
     const current = manifest.diagnosticQuestions.find((q) => q.id === runtime.currentQuestionId);
     const candidates = manifest.diagnosticQuestions.filter((q) => !runtime.usedQuestionIds.includes(q.id));
     // Exhaustion cannot turn uncertain evidence into a successful diagnosis.
-    const q = (s.lastResult === "NEED_VERIFY" ? candidates.find((q) => q.equivalentGroup === current?.equivalentGroup) : undefined) ?? candidates.find((q) => !answeredGroups.has(q.equivalentGroup)) ?? candidates[0] ?? manifest.diagnosticQuestions.find((q) => q.equivalentGroup === current?.equivalentGroup && q.id !== current.id) ?? manifest.diagnosticQuestions[0];
+    const focusedRetry = s.lastResult === "NEED_VERIFY" || (["PARTIAL", "FAIL"].includes(s.lastResult ?? "") && (s.noProgressCounts[runtime.currentTargetId!] ?? 0) <= (config.coachingPolicy?.focusedRetryLimit ?? 0));
+    const q = (focusedRetry ? candidates.find((q) => q.equivalentGroup === current?.equivalentGroup) : undefined) ?? candidates.find((q) => !answeredGroups.has(q.equivalentGroup)) ?? candidates[0] ?? manifest.diagnosticQuestions.find((q) => q.equivalentGroup === current?.equivalentGroup && q.id !== current.id) ?? manifest.diagnosticQuestions[0];
     return q ? { questionId: q.id, groupId: q.equivalentGroup, targetId: q.targetConcepts[0], caseId: null, questionType: "CONCEPT_CLARIFICATION", hintLevel: 0, assistantMessage: q.questionText } : null;
   }
   if (s.pedagogicalStage === "CASE_TRANSFER") {
@@ -188,7 +205,7 @@ export function selectV12Action(manifest: KnowledgeManifest, runtime: KnowledgeR
   const currentTarget = runtime.currentTargetId!;
   const noProgress = s.noProgressCounts[currentTarget] ?? 0;
   const hintLevel = runtime.hintLevels[currentTarget] ?? 0;
-  const lastAssessment = Object.values(s.assessments).at(-1);
+  const lastAssessment = s.assessments[s.lastAssessmentMessageId ?? s.diagnosticMessageIds.at(-1) ?? ""];
   const lastRule = config.groups[s.currentGroupId!]?.rule;
   const contentResult = lastAssessment && lastRule ? evaluateEvidenceRule(lastRule, lastAssessment.evidence.map((e) => e.evidenceId)) : s.lastResult;
   const edgeCondition = lastAssessment?.contradictions.length ? "contradictory" : s.lastResult === "PASS" ? "success" : hintLevel === 1 && contentResult !== "PASS" ? "fail_after_hint_1" : noProgress >= 2 && hintLevel === 0 ? "fail_twice" : s.lastResult === "NEED_VERIFY" ? "contradictory" : null;

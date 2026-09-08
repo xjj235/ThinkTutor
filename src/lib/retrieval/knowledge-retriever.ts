@@ -52,7 +52,7 @@ export class StructuredKnowledgeRetriever implements RetrievalProvider {
     const results: RetrievedChunk[] = [];
     for (const manifest of await getRuntimeManifests(Boolean(input.releaseId))) {
       if (input.releaseId && input.releaseId !== manifest.release.id) continue;
-      if (!manifestMatches(manifest, input.query) && !manifest.knowledgeUnits.some((unit) => unit.id === input.targetConcept) && !manifest.misconceptions.some((item) => input.errorTags?.includes(item.id))) continue;
+      if (!input.releaseId && !manifestMatches(manifest, input.query) && !manifest.knowledgeUnits.some((unit) => unit.id === input.targetConcept) && !manifest.misconceptions.some((item) => input.errorTags?.includes(item.id))) continue;
       const exactTarget = input.targetConcept ?? manifest.socraticQuestions.find((question) => question.triggerErrorTags.some((tag) => input.errorTags?.includes(tag)))?.targetUnitId;
       collectManifestResults(results, manifest, input.phase, exactTarget, input.errorTags ?? [], terms);
     }
@@ -162,7 +162,7 @@ function collectManifestResults(
     const sources = unit.sourceRefs.map((sourceRef) => `${sourceRef.sourceId}@${sourceRef.sourceLocator}`).join("; ");
     addResult(results, {
       id: unit.id,
-      content: `KnowledgeUnit ${unit.id} (${unit.type}, version ${unit.version}): ${unit.title}. ${unit.summary} Learning requirement: ${unit.learningRequirement}. Sources: ${sources}.`,
+      content: `KnowledgeUnit ${unit.id} (${unit.type}, version ${unit.version}): ${unit.title}. ${unit.content} Learning requirement: ${unit.learningRequirement}. Sources: ${sources}.`,
       score,
       resourceType: "KNOWLEDGE_UNIT",
       visibility: unit.visibility,

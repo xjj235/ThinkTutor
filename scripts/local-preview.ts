@@ -5,8 +5,12 @@ import { connect } from "node:net";
 import { networkInterfaces } from "node:os";
 import { dirname, resolve } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
+import { config as loadEnv } from "dotenv";
+import { resolvePreviewAI } from "./preview-ai-config";
 
 const workspace = resolve(".");
+loadEnv({ path: [resolve(workspace, ".env.local"), resolve(workspace, ".env")], quiet: true });
+const previewAI = resolvePreviewAI(process.env);
 const databaseDir = resolve(process.env.PREVIEW_DATA_DIR ?? ".local-preview/postgres");
 const postgresPort = Number(process.env.PREVIEW_POSTGRES_PORT ?? "55433");
 const webPort = Number(process.env.PREVIEW_WEB_PORT ?? "3100");
@@ -67,17 +71,18 @@ const previewEnv: NodeJS.ProcessEnv = {
   SHADOW_DATABASE_URL: shadowDatabaseUrl,
   AUTH_SECRET: "local-preview-auth-secret-at-least-32-characters",
   STORAGE_SIGNING_SECRET: "local-preview-storage-secret-at-least-32-characters",
-  AI_PSEUDONYM_SECRET: "local-preview-ai-pseudonym-secret-at-least-32-characters",
+  ...previewAI,
   AUTH_COOKIE_SECURE: "false",
-  AI_PROVIDER: "mock",
+  THINKTUTOR_DIST_DIR: process.env.PREVIEW_DIST_DIR ?? process.env.THINKTUTOR_DIST_DIR ?? ".next/local-preview",
+  ALLOW_DRAFT_KNOWLEDGE: process.env.PREVIEW_ALLOW_DRAFT_KNOWLEDGE ?? process.env.ALLOW_DRAFT_KNOWLEDGE ?? "false",
   STORAGE_PROVIDER: "local",
   LOCAL_STORAGE_ROOT: ".local-preview/uploads",
   DEV_SEED_PASSWORD: previewPassword,
   LOCAL_PREVIEW: "true",
   LOCAL_PREVIEW_PASSWORD: previewPassword,
   REDIS_URL: "",
-  RATE_LIMIT_AI_PER_DAY: "10000",
-  RATE_LIMIT_AI_PER_MINUTE: "1000",
+  RATE_LIMIT_AI_PER_DAY: previewAI.AI_PROVIDER === "mock" ? "10000" : process.env.RATE_LIMIT_AI_PER_DAY ?? "120",
+  RATE_LIMIT_AI_PER_MINUTE: previewAI.AI_PROVIDER === "mock" ? "1000" : process.env.RATE_LIMIT_AI_PER_MINUTE ?? "12",
   RATE_LIMIT_LOGIN_PER_15M: "1000",
   RATE_LIMIT_REGISTER_PER_HOUR: "1000",
   PORT: String(webPort),
@@ -258,7 +263,7 @@ async function main(): Promise<void> {
   process.stdout.write(`  教师：teacher@example.test\n`);
   process.stdout.write(`  管理员：admin@example.test\n`);
   process.stdout.write(`  统一密码：${previewPassword}\n`);
-  process.stdout.write("  AI：Mock（确定性、不会产生费用）\n");
+  process.stdout.write(previewAI.AI_PROVIDER === "mock" ? "  AI：Mock（确定性、不会产生费用）\n" : "  AI：DeepSeek（真实模型，调用将产生费用）\n");
   process.stdout.write("  数据：保存在 .local-preview，Ctrl+C 后下次仍可恢复\n\n");
 
   web = spawnNext(["dev", "-H", listenHost, "-p", String(webPort)]);

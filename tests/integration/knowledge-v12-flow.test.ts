@@ -28,6 +28,8 @@ describe("v1.2 transactional learning and teacher gates", () => {
   beforeEach(() => { vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "true"); vi.stubEnv("RATE_LIMIT_AI_PER_MINUTE", "1000"); });
   afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllEnvs(); await prisma.knowledgeRelease.deleteMany(); });
   it("runs diagnosis, unseen transfer, Feynman, revision and evidence report through the API", async () => {
+    const assessmentSpy = vi.spyOn(MockAIProvider.prototype, "assessLearningTurn");
+    const teachingSpy = vi.spyOn(MockAIProvider.prototype, "selectTeachingMove");
     const user = await createTestUser("v12-full"); auth.user = user;
     let payload = await createLearningSession(user.id, task);
     const id = payload.session.id;
@@ -43,8 +45,17 @@ describe("v1.2 transactional learning and teacher gates", () => {
     const result = await response.json();
     expect(result.data.report).toBeNull();
     expect(result.data.payload.session.knowledgeProgress.pedagogicalStage).toBe("REFLECTION");
+    expect(assessmentSpy.mock.calls.at(-1)?.[0].lockedContext.questionText).toBe("请面向初学者自主解释系统性风险是什么、为什么传播，并用一个有机制的例子串联你的解释。");
     const revision = await submitFeynmanExplanation(id, { explanation: `${completeAnswer}这是经条件核验后的最终修订。`, clientRequestId: `v12-${id}-r` });
     expect(revision.payload.session.phase).toBe("COMPLETED");
+    expect(teachingSpy.mock.calls.map(([input]) => input.kind)).toEqual(expect.arrayContaining(["GOAL", "DIAGNOSIS", "CASE", "FEYNMAN", "REFLECTION", "REPORT"]));
+    expect(assessmentSpy.mock.calls.at(-1)?.[0].lockedContext.questionText).toContain("你能补充关键因果联系并用自己的话修订解释吗");
+    for (const [input] of assessmentSpy.mock.calls) {
+      expect(input.evaluationRules?.CURRENT_QUESTION).toBeDefined();
+      expect(input.lockedContext.questionText).not.toContain("原文依据");
+      expect(input.lockedContext.questionText).not.toContain("本轮相关依据");
+      expect(input.lockedContext.questionText).not.toContain("自主回答");
+    }
     expect(revision.report?.sessionVersions?.releaseId).toBe("KR_SR_1_2");
     const report = revision.report!;
     const ids = new Set(revision.payload.messages.filter((m) => m.role === "USER").map((m) => m.id));

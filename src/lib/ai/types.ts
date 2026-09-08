@@ -51,6 +51,8 @@ export interface RetryTaskInput extends AIRequestMeta { task: CreateSessionInput
 export interface ContextSummaryInput extends AIRequestMeta { task: CreateSessionInput; messages: Pick<MessageDTO, "role" | "content">[]; }
 export interface MaterialKeywordsInput extends AIRequestMeta { title: string; content: string; }
 export interface TurnAssessmentInput extends AIRequestMeta {
+  evaluationRules?: Record<string, import("../knowledge/v12-schema").EvidenceRule>;
+  candidateTargets: import("./assessment-schema").AssessmentCandidateTargets;
   message: { id: string; content: string };
   lockedContext: { phase: string; stage: string; targetId: string | null; questionId: string | null; caseId: string | null; action: "ASSESS_EVIDENCE"; hintLevel: number; releaseId: string; questionText?: string; caseContext?: string };
   evidenceDefinitions: Record<string, string>;
@@ -59,6 +61,7 @@ export interface TurnAssessmentInput extends AIRequestMeta {
 }
 
 export interface AIProvider {
+  selectTeachingMove(input: import("./teaching-schema").TeachingSelection & AIRequestMeta): Promise<import("../knowledge/coaching-schema").CoachingDecision>;
   assessLearningTurn(input: TurnAssessmentInput): Promise<import("../knowledge/v12-schema").TurnAssessment>;
   createDiagnosticQuestion(input: DiagnosticInput): Promise<SourcedDiagnosticQuestion>;
   createCoachTurn(input: CoachTurnInput): Promise<SourcedCoachTurn>;

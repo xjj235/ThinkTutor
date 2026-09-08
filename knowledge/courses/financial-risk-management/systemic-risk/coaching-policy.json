@@ -1,0 +1,85 @@
+{
+  "version": "1.0",
+  "basisType": "project_custom",
+  "reviewStatus": "draft",
+  "minimumConfidence": 0.75,
+  "focusedRetryLimit": 2,
+  "generation": {
+    "mode": "GROUNDED_FOLLOW_UP",
+    "maxQuestionChars": 360,
+    "recentTurnLimit": 6,
+    "instructions": [
+      "仅在诊断或知识建构的同目标追问中动态生成；新目标首题、案例、提示、费曼、反思、报告及恢复核验保留已锁定任务。",
+      "逐字引用学生本轮一段有意义的连续表述作为切入点，不把学生观点当成已确认的知识。",
+      "依据服务端指定的缺项追问一个主要推理步骤，完整覆盖当前 requiredAll 或至少一项 requiredAny，不重新要求解释已覆盖的整段定义。",
+      "提问形式是教学策略参考，不是逐字复述的模板。具体追问必须关联学生所述主体、条件或因果环节。",
+      "与近期问题比较，改变所需推理步骤或核验条件；仅替换同义词不算新的追问。确需核验时要求新的独立依据。",
+      "核心定义或抛售机制尚未稳定掌握时，即使历史核验计数非零，也需检查本轮是否提供条件修订；局部条件追问通过但整体证据仍未闭合时，用一个新情境同时检验目标依据和条件变化，不自动提升整体掌握状态。",
+      "只使用提供的知识片段与证据标准，不引入现实事件、数字、人物或库外事实；假设必须明确标为假设，不补造案例。",
+      "不提供缺失环节的标准答案，不代替学生完成推理，不输出分数、掌握结论或阶段变更。",
+      "表达简洁、术语准确，避免空泛鼓励、固定开场和连续堆叠多个问题。生成后复核知识依据、目标覆盖、回答关联、重复与答案泄露；失败则重试，不回退为假模型。"
+    ]
+  },
+  "dimensionPriority": ["CONCEPT", "CONDITION", "MECHANISM", "EVIDENCE", "TRANSFER"],
+  "dimensions": {
+    "CONCEPT": { "label": "概念边界", "criterion": "区分研究对象、概念内涵与不成立的边界，不以事件标签替代判断依据。", "evidenceIds": ["financial_system_scope", "systemic_scope", "systematic_market_factor", "research_object_distinction", "single_event_not_sufficient", "size_not_unique", "no_direct_link_required", "cross_section"] },
+    "MECHANISM": { "label": "因果机制", "criterion": "说明参与者如何受影响及后续行为，补全传播与反馈之间的因果联系。", "evidenceIds": ["shared_asset_loss", "deleveraging_or_concentrated_sale", "transition_to_fire_sale", "functional_impairment", "propagation", "broad_propagation", "broad_external_effect", "shared_asset_exposure", "common_shock_can_harm_both", "price_feedback", "confidence_channel", "interconnectedness", "complexity", "key_function", "direct_exposure", "loss_transmission", "concentrated_or_forced_sale", "price_decline", "further_loss", "withdrawal_funding_pressure", "liquidity_need", "forced_sale_or_service_pressure", "information_confidence_shift", "behavioral_response", "cross_institution_spread", "credit_tightening", "investment_employment_effect", "individual_action", "synchronization", "system_feedback", "infrastructure_disruption", "risk_accumulation", "amplification", "system_consequence"] },
+    "CONDITION": { "label": "假设与适用条件", "criterion": "明确必要前提，改变一项条件并说明原判断是否需要修正。", "evidenceIds": ["condition_revision", "substitutability"] },
+    "EVIDENCE": { "label": "论证依据", "criterion": "用当前作答中的原文支持判断；含糊、冲突、照搬或低置信度只能触发核验。", "evidenceIds": ["shock", "clear_expression"] },
+    "TRANSFER": { "label": "情境迁移", "criterion": "在未见情境中独立应用机制并检验条件变化，不能仅复述定义。", "evidenceIds": ["mechanism_example"] }
+  },
+  "levelCriteria": {
+    "L1": "核心定义尚未稳定，或存在已确认的核心概念混淆；优先小步澄清。自报水平不是掌握证据。",
+    "L2": "能界定研究对象，但尚无两个已核验机制且至少一个非直接机制；追问缺失的条件与因果环节。",
+    "L3": "至少两个机制已独立核验，其中至少一个非直接机制；重点检验综合推理和适用边界。",
+    "L4": "未见情境迁移通过，并有金融功能或实体经济后果的独立证据；检验反例与条件变化。"
+  },
+  "routingRules": [
+    { "id": "COACH_VERIFY_EVIDENCE", "signal": "UNRELIABLE", "description": "原文冲突、重复、依赖提示或置信度不足优先核验，不把缺少证据确认为错误。" },
+    { "id": "COACH_REPAIR_BOUNDARY", "signal": "MISCONCEPTION", "description": "当前规则禁止的明确判断优先检验概念边界，重大已确认错误按题图回退。" },
+    { "id": "COACH_FILL_GAP", "signal": "MISSING", "description": "对照当前问题 requiredAll 和 requiredAny 找缺项，按维度优先级追问；不将未询问的整章要求算作本题缺项。" },
+    { "id": "COACH_VERIFY_INDEPENDENT", "signal": "VERIFY", "description": "当前要求已覆盖后提高独立核验要求；知识建构不重复已掌握目标，诊断仍保留规定的广度和独立核验。" },
+    { "id": "COACH_INITIAL_SCOPE", "signal": "INITIAL", "description": "无作答时只能按自报水平调整呈现难度，不能生成掌握或缺陷判断。" }
+  ],
+  "forms": [
+    { "id": "FORM_CONCEPT_01", "label": "自主界定", "dimension": "CONCEPT", "levels": ["L1", "L2"], "questionType": "CONCEPT_CLARIFICATION", "template": "围绕“{target}”，你会怎样用自己的话界定它的研究对象与判断边界？" },
+    { "id": "FORM_CONCEPT_02", "label": "边界辨析", "dimension": "CONCEPT", "levels": ["L1", "L2", "L3", "L4"], "questionType": "CONCEPT_CLARIFICATION", "template": "对于“{target}”，哪些现象看似相关，却不足以支持这个判断？" },
+    { "id": "FORM_CONCEPT_03", "label": "概念对照", "dimension": "CONCEPT", "levels": ["L2", "L3", "L4"], "questionType": "COUNTEREXAMPLE", "template": "你能用一组成立与不成立的对照，说明“{target}”的关键区别吗？" },
+    { "id": "FORM_CONDITION_01", "label": "前提检验", "dimension": "CONDITION", "levels": ["L1", "L2"], "questionType": "ASSUMPTION_TEST", "template": "围绕“{target}”，如果去掉你认为必要的一个条件，原判断会怎样变化？" },
+    { "id": "FORM_CONDITION_02", "label": "条件扰动", "dimension": "CONDITION", "levels": ["L1", "L2", "L3", "L4"], "questionType": "ASSUMPTION_TEST", "template": "围绕“{target}”，改变一个关键条件后，你会怎样修正原来的判断？" },
+    { "id": "FORM_CONDITION_03", "label": "失效边界", "dimension": "CONDITION", "levels": ["L3", "L4"], "questionType": "COUNTEREXAMPLE", "template": "对于“{target}”，什么条件变化会使原有推理失效，其原因是什么？" },
+    { "id": "FORM_MECHANISM_01", "label": "单步因果", "dimension": "MECHANISM", "levels": ["L1", "L2"], "questionType": "CAUSE_PROBE", "template": "在“{target}”中，前一个环节通过什么过程引出后一个环节？" },
+    { "id": "FORM_MECHANISM_02", "label": "链条补全", "dimension": "MECHANISM", "levels": ["L1", "L2", "L3", "L4"], "questionType": "CAUSE_PROBE", "template": "围绕“{target}”，你会怎样补全从初始变化到后续影响之间缺失的因果联系？" },
+    { "id": "FORM_MECHANISM_03", "label": "反馈检验", "dimension": "MECHANISM", "levels": ["L3", "L4"], "questionType": "CAUSE_PROBE", "template": "在“{target}”的推理中，后续结果是否会反过来影响前面的环节，你的依据是什么？" },
+    { "id": "FORM_EVIDENCE_01", "label": "原文定位", "dimension": "EVIDENCE", "levels": ["L1", "L2", "L3", "L4"], "questionType": "EVIDENCE_PROBE", "template": "关于“{target}”，请独立重述你的判断：哪一条具体事实能够支持它？" },
+    { "id": "FORM_EVIDENCE_02", "label": "事实与推断", "dimension": "EVIDENCE", "levels": ["L1", "L2", "L3", "L4"], "questionType": "EVIDENCE_PROBE", "template": "在“{target}”的解释中，哪些是已经给出的事实，哪些仍是需要验证的推断？" },
+    { "id": "FORM_EVIDENCE_03", "label": "一致性核验", "dimension": "EVIDENCE", "levels": ["L1", "L2", "L3", "L4"], "questionType": "EVIDENCE_PROBE", "template": "围绕“{target}”，你能给出一个前后一致、并说明事实依据的独立解释吗？" },
+    { "id": "FORM_TRANSFER_01", "label": "近情境应用", "dimension": "TRANSFER", "levels": ["L1", "L2", "L3", "L4"], "questionType": "TRANSFER", "template": "请为“{target}”另举一个具体情境，你会如何将判断依据应用于其中？" },
+    { "id": "FORM_TRANSFER_02", "label": "结构迁移", "dimension": "TRANSFER", "levels": ["L2", "L3", "L4"], "questionType": "TRANSFER", "template": "把“{target}”放入参与者不同的新情境后，哪些因果联系仍然适用？" },
+    { "id": "FORM_TRANSFER_03", "label": "反例迁移", "dimension": "TRANSFER", "levels": ["L3", "L4"], "questionType": "COUNTEREXAMPLE", "template": "你能为“{target}”构造一个表面相似却结论不同的情境，并说明决定性条件吗？" }
+  ],
+  "openings": [
+    { "id": "OPEN_DIRECT", "text": "" },
+    { "id": "OPEN_FOCUS", "text": "我们先聚焦一个关键判断。" },
+    { "id": "OPEN_REASONING", "text": "请保留你的推理过程，逐步检验判断依据。" }
+  ],
+  "stageFrames": {
+    "GOAL": [{ "id": "FRAME_GOAL_1", "template": "{content}" }, { "id": "FRAME_GOAL_2", "template": "本次研习以独立解释与证据核验为主线。\n\n{content}" }],
+    "DIAGNOSIS": [{ "id": "FRAME_DIAGNOSIS_1", "template": "{content}" }, { "id": "FRAME_DIAGNOSIS_2", "template": "先呈现你当前的理解，暂不求表述完整。\n\n{content}" }],
+    "QUESTION": [{ "id": "FRAME_QUESTION_1", "template": "{content}" }, { "id": "FRAME_QUESTION_2", "template": "请将判断与依据连在一起。\n\n{content}" }],
+    "HINT": [{ "id": "FRAME_HINT_1", "template": "{content}" }, { "id": "FRAME_HINT_2", "template": "先完成一个可以解释清楚的环节。\n\n{content}" }],
+    "CASE": [{ "id": "FRAME_CASE_1", "template": "{content}" }, { "id": "FRAME_CASE_2", "template": "请区分情境事实与仍需论证的推断。\n\n{content}" }],
+    "FEYNMAN": [{ "id": "FRAME_FEYNMAN_1", "template": "{content}" }, { "id": "FRAME_FEYNMAN_2", "template": "现在将分散的判断组织成一段连贯讲解。\n\n{content}" }],
+    "REFLECTION": [{ "id": "FRAME_REFLECTION_1", "template": "{content}" }, { "id": "FRAME_REFLECTION_2", "template": "修订时保留成立的部分，明确说明调整的理由。\n\n{content}" }],
+    "REPORT": [{ "id": "FRAME_REPORT_1", "template": "{content}" }, { "id": "FRAME_REPORT_2", "template": "以下反馈以本次实际呈现的证据为依据。\n\n{content}" }],
+    "RETRY": [{ "id": "FRAME_RETRY_1", "template": "{content}" }, { "id": "FRAME_RETRY_2", "template": "本轮先检验优先巩固项，不重复已完成的整体讲解。\n\n{content}" }],
+    "RESUME": [{ "id": "FRAME_RESUME_1", "template": "{content}" }, { "id": "FRAME_RESUME_2", "template": "先用一份新的独立解释核验当前理解。\n\n{content}" }]
+  },
+  "scoreCriteria": {
+    "conceptCompleteness": [["financial_system_scope"], ["functional_impairment", "single_event_not_sufficient"], ["research_object_distinction", "systematic_market_factor"], ["condition_revision"]],
+    "logicCompleteness": [["shock"], ["propagation"], ["amplification"], ["system_consequence", "investment_employment_effect"]],
+    "expressionClarity": [["financial_system_scope", "shock"], ["propagation"], ["clear_expression"], ["condition_revision"]],
+    "exampleAbility": [["mechanism_example"], ["propagation"], ["amplification"], ["system_consequence"]],
+    "transferAbility": [["shock"], ["propagation"], ["amplification", "system_consequence"], ["condition_revision"]]
+  }
+}

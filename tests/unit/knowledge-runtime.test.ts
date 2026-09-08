@@ -118,4 +118,14 @@ describe("knowledge runtime safety", () => {
     const context = await buildLearningContext({ topic: "系统性风险", objective: "概念", learnerState: { ...learner, gaps: ["M_SR_007"] }, phase: "SOCRATIC", messages: [] });
     expect(context.retrievedContext.join("\n")).toContain("Target unit: M_SR_007");
   });
+
+  it("keeps pinned knowledge in generic queries and supplies the actual unit content", async () => {
+    const retriever = new StructuredKnowledgeRetriever();
+    const diagnostic = await retriever.retrieve({ courseId: "curated-public", query: "解释风险传播路径", releaseId: "KR_SR_1_2", phase: "DIAGNOSIS", limit: 6 });
+    expect(diagnostic.some((item) => item.resourceType === "DIAGNOSTIC_QUESTION")).toBe(true);
+    const results = await retriever.retrieve({ courseId: "curated-public", query: "解释机制", releaseId: "KR_SR_1_2", targetConcept: "M_SR_002", phase: "SOCRATIC", limit: 8 });
+    expect(results.find((item) => item.id === "M_SR_002")?.content).toContain(manifest.knowledgeUnits.find((unit) => unit.id === "M_SR_002")!.content);
+    expect(results.filter((item) => item.resourceType === "KNOWLEDGE_UNIT").length).toBeLessThanOrEqual(3);
+    expect(results.some((item) => item.visibility === "TEACHER")).toBe(false);
+  });
 });

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowUpRight } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
+import { getServerEnv } from "@/lib/env";
 
 const steps = [
   { title: "认知诊断", text: "辨识先备知识与概念边界。" },
@@ -36,8 +37,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     <main id="main-content" className="home-page">
       {accountDeleted ? <section className="public-status" role="status">账号和关联的个人数据已删除，你已经安全退出。</section> : null}
       {localPreview ? (
-        <section className="preview-banner" aria-labelledby="preview-title">
-          <div><span className="preview-status" aria-hidden="true" /><div><strong id="preview-title">本地预览模式</strong><p>Mock AI 与本地数据已启用，不产生模型费用。</p></div></div>
+        <section className="preview-banner" aria-labelledby="preview-title" data-ai-provider={getServerEnv().AI_PROVIDER}>
+          <div><span className="preview-status" aria-hidden="true" /><div><strong id="preview-title">本地预览模式</strong><p>{getServerEnv().AI_PROVIDER === "deepseek" ? "DeepSeek 真实模型已启用，调用将消耗 API 额度。" : "Mock AI 与本地数据已启用，不产生模型费用。"}</p></div></div>
           <a href="#preview-access">查看演示账号</a>
         </section>
       ) : null}

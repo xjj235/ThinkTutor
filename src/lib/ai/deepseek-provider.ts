@@ -2,8 +2,11 @@ import "server-only";
 
 import { createHmac } from "node:crypto";
 import { z } from "zod";
-import { modelTurnAssessmentSchema, normalizeModelAssessment } from "../knowledge/v12-schema";
+import { normalizeModelAssessment } from "../knowledge/v12-schema";
+import { createModelAssessmentSchema } from "./assessment-schema";
 import { assessmentV12Prompt } from "./prompts/assessment-v12";
+import { teachingV12Prompt, teachingReviewPrompt } from "./prompts/teaching-v12";
+import { attachTeachingScope, createTeachingOutputSchema, teachingSelectionInputSchema, teachingReviewSchema, type TeachingSelection } from "./teaching-schema";
 import type { TurnAssessmentInput } from "./types";
 import {
   DEFAULT_MAX_TURNS,
@@ -68,7 +71,8 @@ const responseApiSchema = z.object({
   }).optional(),
 });
 
-type Operation = "diagnostic" | "coach" | "feynman_instruction" | "report" | "retry_task" | "context_summary" | "material_keywords" | "turn_assessment";
+type Operation = "diagnostic" | "coach" | "feynman_instruction" | "report" | "retry_task" | "context_summary" | "material_keywords" | "turn_assessment" | "teaching_selection" | "teaching_review";
+const boundedOperations: Operation[] = ["turn_assessment", "teaching_selection", "teaching_review"];
 
 interface DeepSeekProviderOptions {
   fetcher?: typeof fetch;
@@ -76,6 +80,8 @@ interface DeepSeekProviderOptions {
 }
 
 const examples: Record<Operation, string> = {
+  teaching_selection: '{"choiceId":"an_id_from_choices","openingId":"an_id_from_openings"}',
+  teaching_review: '{"grounded":true,"targetAligned":true,"answerConnected":true,"nonRedundant":true,"noAnswerLeak":true}',
   turn_assessment: JSON.stringify({ evidence: [], candidateMisconceptions: [], candidateGaps: [], candidateMastery: [], contradictions: [], recommendTransition: false }),
   diagnostic: '{"assistantMessage":"你目前如何理解这个概念？","questionType":"CONCEPT_CLARIFICATION","learnerState":{"masteryEstimate":0,"confirmedPoints":[],"gaps":["待诊断"],"misconceptions":[]},"nextAction":"ASK_QUESTION","transitionReason":"需要初始诊断","webSources":[{"title":"来源标题","url":"https://example.com/source"}]}',
   coach: '{"assistantMessage":"这个结论依赖的关键前提是什么？","questionType":"ASSUMPTION_TEST","learnerState":{"masteryEstimate":50,"confirmedPoints":["已表达核心概念"],"gaps":["前提尚未说明"],"misconceptions":[]},"nextAction":"ASK_QUESTION","transitionReason":"仍需检验前提","webSources":[{"title":"来源标题","url":"https://example.com/source"}]}',
@@ -171,17 +177,17 @@ function extractAnnotationSources(value: unknown): WebSource[] {
 
 type StructuredPayload<T> = T & { webSources?: WebSource[] };
 
-function parseStructuredPayload<T>(schema: z.ZodType<T>, content: string): StructuredPayload<T> {
+function parseStructuredPayload<T>(schema: z.ZodType<T>, content: string, allowWebSources = true): StructuredPayload<T> {
   const raw: unknown = JSON.parse(content);
   if (!isRecord(raw)) throw new AIProviderError("AI_INVALID_OUTPUT", "模型输出无法解析。", 502, true);
   const webSources = z.array(webSourceSchema).max(5).optional().safeParse(raw.webSources);
-  const base = Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "webSources"));
+  const base = allowWebSources ? Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "webSources")) : raw;
   const validated = schema.safeParse(base);
   if (!validated.success) {
-    logger.warn({ issues: validated.error.issues.map((issue) => ({ code: issue.code, path: issue.path.map(String).join(".").slice(0, 100) })) }, "AI output schema validation failed");
+    logger.warn({ issues: validated.error.issues.map((issue) => ({ code: issue.code, path: issue.path.map(String).join(".").slice(0, 100), ...("expected" in issue ? { expected: issue.expected } : {}) })) }, "AI output schema validation failed");
     throw new AIProviderError("AI_INVALID_OUTPUT", "模型输出不符合结构约束。", 502, true);
   }
-  return webSources.success && webSources.data?.length
+  return allowWebSources && webSources.success && webSources.data?.length
     ? { ...validated.data, webSources: uniqueSources(webSources.data) }
     : validated.data as StructuredPayload<T>;
 }
@@ -251,14 +257,17 @@ export class DeepSeekProvider implements AIProvider {
     payload: unknown,
     meta: AIRequestMeta,
     thinking: boolean,
+    review?: (value: T) => Promise<void>,
   ): Promise<T> {
     const env = getServerEnv();
     if (!env.DEEPSEEK_API_KEY) throw new AIProviderError("AI_PROVIDER_ERROR", "DeepSeek API Key 未配置。", 500, false);
     const startedAt = Date.now();
     let lastError = new AIProviderError("AI_PROVIDER_ERROR", "模型服务暂时不可用。", 503, true);
     const useWebSearch = shouldUseWebSearchFallback(operation, payload);
+    // The outer generation retry already covers its reviewer; do not multiply retries.
+    const retryLimit = operation === "teaching_review" ? 0 : env.AI_MAX_RETRIES;
 
-    for (let attempt = 0; attempt <= env.AI_MAX_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= retryLimit; attempt += 1) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
@@ -289,13 +298,15 @@ export class DeepSeekProvider implements AIProvider {
             body: JSON.stringify({
               model: env.DEEPSEEK_MODEL,
               messages: [
-                { role: "system", content: `${systemPrompt}\n\n你必须只输出合法 JSON（JSON），不得输出 Markdown。示例 JSON：${examples[operation]}${operation === "turn_assessment" ? `\n必须严格符合以下 JSON Schema，不得增加字段：${JSON.stringify(z.toJSONSchema(modelTurnAssessmentSchema))}` : ""}` },
-                ...(operation === "turn_assessment" && isRecord(requestPayload) ? [{ role: "system", content: JSON.stringify({ lockedContext: requestPayload.lockedContext, evidenceDefinitions: requestPayload.evidenceDefinitions, knowledgeUnits: requestPayload.knowledgeUnits, aliases: requestPayload.aliases }) }] : []),
-                { role: "user", content: wrapUntrustedLearningContent(operation === "turn_assessment" && isRecord(requestPayload) ? { message: requestPayload.message } : requestPayload) },
+                { role: "system", content: `${systemPrompt}\n\n你必须只输出合法 JSON（JSON），不得输出 Markdown。示例 JSON：${operation === "teaching_selection" && isRecord(requestPayload) && requestPayload.grounding ? '{"choiceId":"choices中的ID","openingId":"openings中的ID","followUp":{"question":"根据本轮原话及知识边界实际生成的单个问题？","studentAnchor":"学生本轮连续原话","sourceIds":["提供的来源ID"]}}' : examples[operation]}${boundedOperations.includes(operation) ? `\n必须严格符合以下 JSON Schema，不得增加字段：${JSON.stringify(z.toJSONSchema(schema))}` : ""}` },
+                ...(operation === "turn_assessment" && isRecord(requestPayload) ? [{ role: "system", content: JSON.stringify({ lockedContext: requestPayload.lockedContext, evidenceDefinitions: requestPayload.evidenceDefinitions, evaluationRules: requestPayload.evaluationRules, knowledgeUnits: requestPayload.knowledgeUnits, aliases: requestPayload.aliases, candidateTargets: requestPayload.candidateTargets }) }] : []),
+                ...(["teaching_selection", "teaching_review"].includes(operation) && isRecord(requestPayload) ? [{ role: "system", content: JSON.stringify({ kind: requestPayload.kind, profile: requestPayload.profile, standard: requestPayload.standard, choices: requestPayload.choices, openings: requestPayload.openings, grounding: requestPayload.grounding }) }] : []),
+                ...(attempt > 0 && lastError.code === "AI_INVALID_OUTPUT" && boundedOperations.includes(operation) ? [{ role: "system", content: operation === "turn_assessment" ? "上次输出未通过结构或证据校验，请重新生成。extractedText 必须逐字复制本次 message.content 中的连续片段，保留原有标点、空格和字词，不能拼接不同位置、概括、改写或引用题干。必要时引用完整原句；无法找到有效原文的证据项应省略，不得补造。所有标识只能从提供的枚举中选择，不得增加字段。" : "上次追问未通过结构或教学复核，请重新生成。studentAnchor 必须逐字复制本轮 studentContent 的连续片段，并在问题中原样出现。只提出一个问题；实质关联这段回答，完整询问锁定缺项，不泄露答案、不添加库外事实、不重复近期问题。不要用泛化模板加原话作为追问；所有标识必须来自提供的枚举，不能增加字段。" }] : []),
+                { role: "user", content: wrapUntrustedLearningContent(operation === "turn_assessment" && isRecord(requestPayload) ? { message: requestPayload.message, questionText: requestPayload.questionText } : ["teaching_selection", "teaching_review"].includes(operation) && isRecord(requestPayload) ? { studentContent: requestPayload.studentContent, recentTurns: requestPayload.recentTurns, previousQuestions: requestPayload.previousQuestions, candidate: requestPayload.candidate } : requestPayload) },
               ],
               response_format: { type: "json_object" },
               thinking: { type: thinking ? "enabled" : "disabled" },
-              ...(thinking ? { reasoning_effort: "high" } : {}),
+              ...(thinking ? { reasoning_effort: "high" } : boundedOperations.includes(operation) ? { temperature: 0 } : {}),
               max_tokens: operation === "report" || operation === "turn_assessment" ? 4_000 : 1_500,
               user: anonymousUserId(meta.userId, env.AI_PSEUDONYM_SECRET),
             }),
@@ -309,7 +320,8 @@ export class DeepSeekProvider implements AIProvider {
         const responseTextParts = responsesOutput?.output.flatMap((item) => item.content ?? []).filter((item) => item.type === "output_text").map((item) => item.text ?? "") ?? [];
         const content = (completion?.choices[0]?.message.content ?? responseTextParts.join("\n")).trim();
         if (!content) throw new AIProviderError("AI_INVALID_OUTPUT", "模型返回了空输出。", 502, true);
-        const validated = parseStructuredPayload(schema, content);
+        const validated = parseStructuredPayload(schema, content, !boundedOperations.includes(operation));
+        if (review) await review(validated);
         const annotationSources = uniqueSources(responsesOutput?.output.flatMap((item) => [
           ...extractAnnotationSources(item.content),
           ...extractAnnotationSources(item.action),
@@ -336,14 +348,14 @@ export class DeepSeekProvider implements AIProvider {
               ? new AIProviderError("AI_INVALID_OUTPUT", "模型输出无法解析。", 502, true)
               : new AIProviderError("AI_PROVIDER_ERROR", "无法连接模型服务，请重试。", 503, true);
         logger.warn({ operation, attempt, code: lastError.code, retryable: lastError.retryable }, "DeepSeek request failed");
-        if (!lastError.retryable || attempt >= env.AI_MAX_RETRIES) break;
+        if (!lastError.retryable || attempt >= retryLimit) break;
         await sleep(250 * 3 ** attempt);
       } finally {
         clearTimeout(timeout);
       }
     }
 
-    await this.recordUsage(operation, meta, startedAt, "FAILED", env.AI_MAX_RETRIES, undefined, lastError.code);
+    await this.recordUsage(operation, meta, startedAt, "FAILED", retryLimit, undefined, lastError.code);
     throw lastError;
   }
 
@@ -351,8 +363,23 @@ export class DeepSeekProvider implements AIProvider {
     return this.structured("diagnostic", diagnosticQuestionSchema, renderSystemPrompt(diagnosticSystemPrompt, input), input, input, false);
   }
 
+  async selectTeachingMove(input: TeachingSelection & AIRequestMeta) {
+    const selection = teachingSelectionInputSchema.parse(removeInternalRequestMetadata(input));
+    const decision = await this.structured("teaching_selection", createTeachingOutputSchema(selection), teachingV12Prompt, selection, input, false, async (decision) => {
+      if (!selection.grounding) return;
+      const checked = await this.structured("teaching_review", teachingReviewSchema, teachingReviewPrompt, { ...selection, candidate: decision.followUp }, { ...input, requestId: input.requestId ? `${input.requestId}:review` : undefined }, false);
+      if (Object.values(checked).some((passed) => !passed)) {
+        logger.warn({ checks: checked }, "Generated follow-up rejected by teaching review");
+        throw new AIProviderError("AI_INVALID_OUTPUT", "追问未通过知识边界与教学针对性复核，请重试。", 502, true);
+      }
+    });
+    return attachTeachingScope(selection, decision);
+  }
+
   async assessLearningTurn(input: TurnAssessmentInput) {
-    return normalizeModelAssessment(await this.structured("turn_assessment", modelTurnAssessmentSchema, assessmentV12Prompt, input, input, false));
+    // A generated question can quote student text; never promote it to a system message.
+    const { questionText, ...lockedContext } = input.lockedContext;
+    return normalizeModelAssessment(await this.structured("turn_assessment", createModelAssessmentSchema(input), assessmentV12Prompt, { ...input, lockedContext, questionText }, input, false));
   }
 
   createCoachTurn(input: CoachTurnInput): Promise<SourcedCoachTurn> {

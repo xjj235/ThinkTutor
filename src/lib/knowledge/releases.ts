@@ -12,6 +12,8 @@ import type { SessionVersions } from "./runtime-schemas";
 import { assessmentV12Prompt } from "../ai/prompts/assessment-v12";
 import { z } from "zod";
 import { modelTurnAssessmentSchema } from "./v12-schema";
+import { teachingV12Prompt, teachingReviewPrompt } from "../ai/prompts/teaching-v12";
+import { coachingDecisionSchema } from "./coaching-schema";
 
 export function releaseAllowed(manifest: KnowledgeManifest, environment: string, allowDraft: boolean): boolean {
   if (environment === "production" && allowDraft) return false;
@@ -40,9 +42,10 @@ export async function getRuntimeManifests(includeArchived = false): Promise<Know
   return [...getActiveManifests().filter((m) => !records.some((p) => p.id === m.release.id)), ...published];
 }
 
-export async function findKnowledgeManifest(topic: string): Promise<KnowledgeManifest | undefined> {
-  const manifest = [...await getRuntimeManifests()].reverse().find((manifest) => topic.includes(manifest.knowledgePoint.title) || topic.toLowerCase().includes("systemic risk"));
-  if (!manifest && getServerEnv().DEPLOYMENT_ENV === "production" && /系统性风险|systemic risk/iu.test(topic)) throw new AppError("CONFLICT", "系统性风险知识版本尚未完成发布审核。", 409);
+export async function findKnowledgeManifest(topic: string, context: { chapter?: string | null; objective?: string } = {}): Promise<KnowledgeManifest | undefined> {
+  const subjects = [topic, context.chapter, context.objective].filter((value): value is string => Boolean(value)).map((value) => value.normalize("NFKC").toLowerCase().replace(/\s+/gu, " "));
+  const manifest = [...await getRuntimeManifests()].reverse().find((manifest) => subjects.some((subject) => subject.includes(manifest.knowledgePoint.title.toLowerCase()) || (manifest.knowledgePoint.code === "KP_SYSTEMIC_RISK" && subject.includes("systemic risk"))));
+  if (!manifest && getServerEnv().DEPLOYMENT_ENV === "production" && subjects.some((subject) => /系统性风险|systemic risk/u.test(subject))) throw new AppError("CONFLICT", "系统性风险知识版本尚未完成发布审核。", 409);
   return manifest;
 }
 
@@ -64,8 +67,8 @@ export function createVersionSnapshot(manifest: KnowledgeManifest): SessionVersi
     questionGraphVersion: version,
     caseBankVersion: version,
     rubricVersion: manifest.rubric.version,
-    promptVersion: manifest.v12 ? `assessment-1.2:${createHash("sha256").update(assessmentV12Prompt).update(JSON.stringify(z.toJSONSchema(modelTurnAssessmentSchema))).digest("hex")}` : `knowledge-orchestration-1:${createHash("sha256").update(tutorSystemPrompt).update(reportSystemPrompt).digest("hex")}`,
-    workflowVersion: manifest.v12 ? "evidence-workflow-1.2.1" : "runtime-activities-1",
+    promptVersion: manifest.v12 ? `assessment-1.2:${createHash("sha256").update(assessmentV12Prompt).update(JSON.stringify(z.toJSONSchema(modelTurnAssessmentSchema))).update(teachingV12Prompt).update(teachingReviewPrompt).update(JSON.stringify(z.toJSONSchema(coachingDecisionSchema))).digest("hex")}` : `knowledge-orchestration-1:${createHash("sha256").update(tutorSystemPrompt).update(reportSystemPrompt).digest("hex")}`,
+    workflowVersion: manifest.v12 ? "evidence-workflow-1.2.3-grounded-followup" : "runtime-activities-1",
     ...(manifest.v12 ? { schemaVersion: "1.2", pedagogyVersion: "1.2.1" } : {}),
     modelProvider: env.AI_PROVIDER,
     modelName: env.AI_PROVIDER === "mock" ? "deterministic-mock" : env.DEEPSEEK_MODEL,

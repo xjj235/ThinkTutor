@@ -80,6 +80,15 @@ function supportQuestion(input: CoachTurnInput): CoachTurn {
 }
 
 export class MockAIProvider implements AIProvider {
+  async selectTeachingMove(input: import("./teaching-schema").TeachingSelection) {
+    const studentAnchor = input.studentContent.match(/[^?？\r\n]{2,30}/u)?.[0].trim() ?? "";
+    return { choiceId: input.choices[0].id, openingId: input.openings[0].id, ...(input.grounding ? { followUp: {
+      question: `你提到“${studentAnchor}”，${input.choices[0].template}`,
+      studentAnchor,
+      focusEvidenceIds: [...new Set([...input.grounding.requirements.requiredAll, ...input.grounding.requirements.requiredAny])],
+      sourceIds: [input.grounding.sources[0].id],
+    } } : {}) };
+  }
   async assessLearningTurn(input: TurnAssessmentInput) { return mockAssessLearningTurn(input); }
   async createDiagnosticQuestion(
     input: DiagnosticInput,

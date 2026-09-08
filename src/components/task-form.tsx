@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useRef, useState } from "react";
+import { ArrowRight } from "lucide-react";
 import {
   ApiResponse,
   SessionPayload,
@@ -105,7 +106,7 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
   return (
     <form
       onSubmit={submit}
-      className="task-form space-y-5"
+      className="task-form"
       aria-describedby={error ? "task-error" : undefined}
       aria-busy={pending}
       noValidate
@@ -156,6 +157,9 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
           </div>
         ) : <p className="curriculum-empty">暂无已发布课程 · 自主研习</p>}
       </fieldset>
+      <fieldset className="form-section">
+        <legend>研习目标</legend>
+        <div className="form-grid">
       <Field
         id="topic"
         label="知识点"
@@ -164,18 +168,6 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
         onChange={(value) => updateField("topic", value)}
         required
         maxLength={120}
-        disabled={pending}
-      />
-
-      <TextArea
-        id="objective"
-        label="学习目标"
-        value={form.objective}
-        error={fieldErrors.objective}
-        onChange={(value) => updateField("objective", value)}
-        required
-        maxLength={400}
-        rows={3}
         disabled={pending}
       />
 
@@ -210,6 +202,24 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
         ) : null}
       </div>
 
+      <div className="form-wide">
+        <TextArea
+          id="objective"
+          label="学习目标"
+          value={form.objective}
+          error={fieldErrors.objective}
+          onChange={(value) => updateField("objective", value)}
+          required
+          maxLength={400}
+          rows={3}
+          disabled={pending}
+        />
+      </div>
+        </div>
+      </fieldset>
+
+      <fieldset className="form-section">
+        <legend>补充资料</legend>
       <div className="grid gap-4 md:grid-cols-2">
         <Field
           id="course"
@@ -243,6 +253,7 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
         rows={4}
         disabled={pending}
       />
+      </fieldset>
 
       {error ? (
         <p id="task-error" role="alert" className="text-sm text-[#b42318]">
@@ -250,13 +261,16 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
         </p>
       ) : null}
 
+      <div className="form-actions">
       <button
         type="submit"
         disabled={pending}
-        className="inline-flex min-h-11 items-center justify-center rounded-md bg-[#0f766e] px-5 py-2.5 font-medium text-white transition hover:bg-[#115e59] disabled:cursor-not-allowed disabled:bg-[#94b8b4]"
+        className="button disabled:cursor-not-allowed disabled:bg-[#94b8b4]"
       >
         {pending ? "正在创建..." : "创建并开始学习"}
+        <ArrowRight size={18} aria-hidden="true" />
       </button>
+      </div>
     </form>
   );
 }

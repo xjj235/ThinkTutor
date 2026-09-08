@@ -2,6 +2,8 @@ import legacy from "../../../knowledge/courses/financial-risk-management/systemi
 import { knowledgeManifestSchema, type KnowledgeManifest } from "./schemas";
 import { type EvidenceRule, type V12Resources } from "./v12-schema";
 import { buildPedagogyRules } from "./pedagogy";
+import coachingPolicy from "../../../knowledge/courses/financial-risk-management/systemic-risk/coaching-policy.json" with { type: "json" };
+import { coachingPolicySchema } from "./coaching-schema";
 
 const rule = (requiredAll: string[], requiredAny: string[] = [], prohibited: string[] = []): EvidenceRule => ({ requiredAll, requiredAny, prohibited });
 export const legacySignalMap: Record<string, string[]> = {
@@ -96,6 +98,7 @@ export function buildV12Manifest(): KnowledgeManifest {
     caseConfigs[c.id] = { synthetic: true, studentQuestions: "请依据情境说明冲击如何发展及其后果，并选择一个条件变化说明你的判断会如何改变？", criticalSteps: critical[i], followUp, rule: unitRules.COMP_SR_TRANSFER };
   });
   m.v12 = {
+    coachingPolicy: coachingPolicySchema.parse(coachingPolicy),
     specVersion: "1.2.1",
     pedagogyRules: buildPedagogyRules(),
     sourceDocumentHashes: Object.fromEntries([

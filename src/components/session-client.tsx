@@ -596,13 +596,13 @@ function MessageItem({ message }: { message: MessageDTO }) {
             : "learning-entry-student border-[#c8d8e0] bg-white",
       ].join(" ")}
     >
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[#5d6b70]">
+      <div className="learning-entry-meta mb-2 flex flex-wrap items-center gap-2 text-xs text-[#5d6b70]">
         <span className="font-semibold text-[#213236]">
           {author}
         </span>
         <span>{phase}</span>
         {message.questionType ? (
-          <span className="rounded-full border border-[#b9d8d4] px-2 py-0.5">
+          <span className="question-type-label border border-[#b9d8d4] px-2 py-0.5">
             {questionTypeLabels[message.questionType]}
           </span>
         ) : null}
