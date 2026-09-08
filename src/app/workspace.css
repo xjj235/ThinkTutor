@@ -466,10 +466,16 @@ input,select,textarea { max-width: 100%; }
 .async-feedback { padding: var(--space-4); border-radius: var(--radius-control); font-size: var(--text-body); line-height: var(--leading-body); }
 .async-feedback>span { min-width: 0; overflow-wrap: anywhere; }
 .async-feedback .button { flex-shrink: 0; }
+.feedback-message { display: flex; align-items: flex-start; gap: var(--space-3); }
+.feedback-message>span { min-width: 0; overflow-wrap: anywhere; }
+.feedback-icon { flex-shrink: 0; margin-top: var(--space-1); }
+.async-feedback-loading .feedback-icon { animation: feedback-progress 900ms linear infinite; }
+@keyframes feedback-progress { to { transform: rotate(360deg); } }
 .stack-form>button { min-height: var(--control-height); }
 .empty-state { background: var(--paper-subtle); }
 @media (prefers-reduced-motion: reduce) {
   :is(.button,.icon-button,.workspace-profile,.workspace-link,.nav-link,.review-tab-list button,.data-row,input,textarea,select) { transition: none; }
+  .async-feedback-loading .feedback-icon { animation: none; }
 }
 
 @media (max-width: 1180px) {

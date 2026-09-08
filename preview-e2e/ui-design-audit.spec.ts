@@ -34,7 +34,13 @@ async function measure(page: Page) {
       const large = parseFloat(css.fontSize) >= 24 || (parseFloat(css.fontSize) >= 18.67 && Number(css.fontWeight) >= 700);
       return [{ tag: element.tagName, text: element.textContent?.trim().slice(0, 32), ratio, required: large ? 3 : 4.5 }];
     });
-    return { tokens, boxes, contrasts, overflow: document.documentElement.scrollWidth > innerWidth, colorScheme: root.colorScheme };
+    const controlBorders = Array.from(document.querySelectorAll("main input:not([type=hidden]), main textarea, main select")).flatMap(element => {
+      if (element.matches(":disabled") || !element.checkVisibility()) return [];
+      const style = getComputedStyle(element);
+      const a = luminance(rgba(style.borderTopColor)), b = luminance(rgba(style.backgroundColor));
+      return [{ id: element.id, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) }];
+    });
+    return { tokens, boxes, contrasts, controlBorders, overflow: document.documentElement.scrollWidth > innerWidth, colorScheme: root.colorScheme };
   });
 }
 
@@ -51,8 +57,35 @@ test("key surfaces, focus, dark preference and reduced motion", async ({ page },
     await page.goto(path);
     results.push({ path, ...await measure(page) });
   }
+  expect(results.flatMap(result => result.contrasts.filter(item => item.ratio < item.required))).toEqual([]);
+  expect(results.flatMap(result => result.controlBorders.filter(item => item.ratio < 3))).toEqual([]);
+  await page.goto("/dashboard");
+  const alignment = await page.evaluate(() => ({
+    heading: document.querySelector(".list-heading>span")!.getBoundingClientRect().x,
+    content: document.querySelector(".data-row-detail strong")!.getBoundingClientRect().x,
+    header: document.querySelector(".workspace-topbar")!.getBoundingClientRect().x,
+    main: document.querySelector("main")!.getBoundingClientRect().x,
+  }));
+  expect(Math.abs(alignment.heading - alignment.content)).toBeLessThan(2);
+  expect(Math.abs(alignment.header - alignment.main)).toBeLessThan(2);
+  const button = page.locator("main .button").first();
+  await button.hover();
+  await page.screenshot({ path: info.outputPath("hover.png"), caret: "initial" });
+  const rect = await button.boundingBox();
+  await page.mouse.down();
+  await page.screenshot({ path: info.outputPath("active.png"), caret: "initial" });
+  const activeRect = await button.boundingBox();
+  expect(activeRect).toEqual(rect);
+  await page.mouse.move(0, 0);
+  await page.mouse.up();
   await page.goto("/learn/new");
   const input = page.locator("#topic");
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("DOM.enable");
+  await cdp.send("CSS.enable");
+  const { root } = await cdp.send("DOM.getDocument");
+  const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: "main h1" });
+  const fonts = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
   await input.focus();
   await page.keyboard.press("Tab");
   const focus = await page.locator(":focus").evaluate(el => ({ outline: getComputedStyle(el).outlineStyle, width: getComputedStyle(el).outlineWidth }));
@@ -61,13 +94,17 @@ test("key surfaces, focus, dark preference and reduced motion", async ({ page },
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
   await page.goto("/dashboard");
   const reduced = await page.locator("main .button").first().evaluate(el => ({ transform: getComputedStyle(el).transform, duration: getComputedStyle(el).transitionDuration }));
+  expect(reduced.duration.split(",").every(duration => parseFloat(duration) === 0)).toBe(true);
   await page.screenshot({ path: info.outputPath("system-dark-preference.png"), caret: "initial" });
   expect(await page.locator("html").evaluate(el => getComputedStyle(el).colorScheme)).toBe("light");
   await page.setViewportSize({ width: 768, height: 900 });
   await page.goto("/learn/new");
   expect((await measure(page)).overflow).toBe(false);
   await page.screenshot({ path: info.outputPath("tablet-form.png"), fullPage: true, caret: "initial" });
-  await writeFile(info.outputPath("audit.json"), JSON.stringify({ results, focus, reduced, runtimeErrors: errors }, null, 2));
+  await page.evaluate(() => { document.documentElement.style.zoom = "2"; });
+  expect((await measure(page)).overflow).toBe(false);
+  await page.screenshot({ path: info.outputPath("zoom-200.png"), fullPage: true, caret: "initial" });
+  await writeFile(info.outputPath("audit.json"), JSON.stringify({ results, alignment, fonts, focus, reduced, runtimeErrors: errors }, null, 2));
   expect(errors).toEqual([]);
 });
 
@@ -87,9 +124,31 @@ test("loading and error feedback without writing preview data", async ({ page },
   await expect(page.getByRole("button", { name: "创建中…", exact: true })).toBeDisabled();
   await page.screenshot({ path: info.outputPath("loading-disabled.png"), fullPage: true, caret: "initial" });
   release?.();
-  await expect(page.getByRole("alert")).toBeVisible();
+  const feedback = page.locator("main").getByRole("alert");
+  await expect(feedback).toBeVisible();
+  await expect(feedback.locator(".feedback-icon")).toBeVisible();
+  expect(await feedback.evaluate(el => getComputedStyle(el).fontSize)).toBe("16px");
   await expect(page.getByRole("button", { name: "创建课程", exact: true })).toBeEnabled();
   await expect(page.getByLabel("课程名称", { exact: true })).toHaveValue("界面状态验证（不保存）");
   await page.screenshot({ path: info.outputPath("error.png"), fullPage: true, caret: "initial" });
   await writeFile(info.outputPath("error-state.json"), JSON.stringify({ faultInjection: "intercepted POST /api/courses -> 503, no database write", ...await measure(page) }, null, 2));
+});
+
+test("native dangerous-change confirmation cancels without a mutation", async ({ page }, info) => {
+  await page.goto("/login?email=admin%40example.test");
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page).toHaveURL(/admin$/);
+  await page.goto("/admin/users");
+  const dialogs: string[] = [];
+  const mutations: string[] = [];
+  page.on("request", request => { if (request.method() === "PATCH") mutations.push(request.url()); });
+  page.on("dialog", async dialog => { dialogs.push(dialog.message()); await dialog.dismiss(); });
+  const select = page.locator('select[aria-label$="的状态"]:enabled').first();
+  const original = await select.inputValue();
+  await select.selectOption("DISABLED");
+  await expect(select).toHaveValue(original);
+  expect(dialogs).toHaveLength(1);
+  expect(mutations).toHaveLength(0);
+  await page.screenshot({ path: info.outputPath("native-confirm-cancelled.png"), caret: "initial" });
+  await writeFile(info.outputPath("native-dialog.json"), JSON.stringify({ dialogs, mutations, original, note: "Browser-native dialog; screenshot records page after cancel, not dialog chrome." }, null, 2));
 });
