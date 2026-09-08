@@ -8,7 +8,7 @@ The durable design source of truth is [design-system/thinktutor/MASTER.md](desig
 
 Light professional learning workspace, selected by the user on 2026-09-04.
 Top navigation replaces the sidebar at the user's request, implemented on 2026-09-07.
-White content canvas, faint gray navigation, restrained emerald actions,
+Near-white content canvas, faint gray navigation, restrained emerald actions,
 blue informational states and amber knowledge gaps. Reading-first Chinese typography,
 revised on 2026-09-09 after a fresh GitHub reference and page-by-page review.
 
@@ -47,3 +47,5 @@ GitHub references inform composition; no external project code or product data i
   [docs/UI_TOP_NAVIGATION_REDESIGN_2026-09-07.md](docs/UI_TOP_NAVIGATION_REDESIGN_2026-09-07.md).
 - Typography, form grouping and responsive page verification are recorded in
   [docs/UI_READABILITY_REDESIGN_2026-09-09.md](docs/UI_READABILITY_REDESIGN_2026-09-09.md).
+- Shared values now live in `src/app/tokens.css`; spacing, state feedback and
+  before/after evidence are documented in [docs/UI-改造总结.md](docs/UI-改造总结.md).

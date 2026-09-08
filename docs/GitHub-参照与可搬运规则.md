@@ -34,7 +34,7 @@ GitHub API本轮返回：shadcn/ui **123,377**、Ant Design **99,438**、daisyUI
 
 - [Refactoring UI官方公开目录](https://refactoringui.com/)强调层级、字号体系、行长与空态。转译：每个操作区域仅一个主动作，次要动作用轮廓或链接；标题前留白大于标题后。具体16/24/32数值是本项目选择，不能归称为书中规定。
 - [Law of Proximity](https://lawsofux.com/law-of-proximity/)：相关信息靠近。转译：字段标签到控件8px，同组字段24px，组间32px；错误信息紧邻当前表单。
-- [WCAG 2.2文本对比](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)：常规文字4.5:1，大字3:1；不能将4.499四舍五入为通过。输入边界和焦点另按3:1目标核查；灰线仅作为布局分隔不等同输入边界。
+- [WCAG 2.2文本对比](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)：常规文字4.5:1，大字3:1；不能将4.499四舍五入为通过。[非文本对比](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)用于核查必要控件边界和焦点的3:1；灰线仅作为布局分隔不等同输入边界。
 - 暗色不等于一律“降饱和”：应成对定义背景/前景和状态，逐一复核对比度。LobeHub暗色部分状态更明亮，说明不能机械套用单一公式。
 
 ## 许可证与署名边界

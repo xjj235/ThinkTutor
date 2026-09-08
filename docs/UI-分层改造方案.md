@@ -10,7 +10,9 @@
 | L1-A 统一视觉token | `src/app/tokens.css`、`layout.tsx`、`globals.css`、`workspace.css` | 单一色彩/字体/圆角来源，近白画布、语义强调色，布局线与控件边界分离 | 低；共享CSS影响所有页面，必须全角色截图；不改业务 |
 | L1-B 栅格与阅读节奏 | `workspace.css` | 4/8基准与16/24/32节奏，移动左右基准一致，表头对齐，阅读行高，正文不缩小 | 低；防止长中文换行挤压标签，测375/768/1440和200%缩放 |
 | L1-C 交互状态 | `globals.css`、`workspace.css` | 180/220ms过渡、稳定禁用态、清晰错误/焦点、危险按钮独立、低动态偏好 | 低；防hover覆盖禁用、outline被容器裁切；键盘流程不变 |
+| L1-D 截图复核修正 | `workspace.css`、`next.config.ts` | 输入内容不继承标签粗体，关闭遮挡手机按钮的Next开发徽标 | 低；仅开发徽标，不关闭异常overlay/日志；生产业务不变 |
 | L2 状态内容分层 | `src/components/async-feedback.tsx` | 加载/成功/失败使用Lucide图标，消息与重试动作分栏且可换行 | 中；只改呈现，不改role/live region/retry回调，增加状态验证 |
+| L2 用语校准 | `src/app/teacher/courses/new/page.tsx` | 从操作说明改为精确的课程设定维度 | 低；标题、字段、按钮命令均不变 |
 | L3 可选品牌化，暂不实施 | 无 | 暂不改品牌、主题、字体资源或装饰图 | 用户已有方向；新增暗色和自定义确认弹窗需要独立完整验收，不夹带进本次 |
 | 验证与交付 | `preview-e2e/ui-design-audit.spec.ts`、`ui-readability.spec.ts`、设计文档 | 当前运行证据、三份中文报告与前后截图 | 故障注入仅拦截请求，不写入本地学习数据 |
 
