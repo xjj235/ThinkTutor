@@ -453,7 +453,8 @@ input,select,textarea { max-width: 100%; }
   opacity: 1; background: var(--disabled-bg); color: var(--disabled-ink); border-color: var(--line); box-shadow: none; cursor: not-allowed;
 }
 :is(.stack-form,.auth-form,.filter-form,.curriculum-picker,.inline-controls,.task-form,.response-composer,.feynman-composer) :is(input,textarea,select) {
-  transition: border-color var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out);
+  font-weight: 400;
+  transition: border-color var(--motion-fast) var(--ease-out), background-color var(--motion-normal) var(--ease-out);
 }
 :is(.stack-form,.auth-form,.filter-form,.curriculum-picker,.inline-controls,.task-form,.response-composer,.feynman-composer) :is(input,textarea,select):disabled {
   opacity: 1; background: var(--disabled-bg); color: var(--disabled-ink)!important; border-color: var(--line)!important; cursor: not-allowed;

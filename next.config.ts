@@ -22,6 +22,7 @@ export default function nextConfig(phase: string): NextConfig {
 
   return {
     distDir,
+    devIndicators: false,
     output: "standalone",
     async headers() {
       return [
