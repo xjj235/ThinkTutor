@@ -1,0 +1,78 @@
+/* ThinkTutor-owned tokens. Research attribution: docs/GitHub-参照与可搬运规则.md. */
+:root {
+  color-scheme: light;
+  --canvas: #fafbfc;
+  --paper: #fdfefe;
+  --paper-subtle: #f1f3f5;
+  --ink: #252a31;
+  --ink-soft: #525e6b;
+  --ink-faint: #5e6976;
+  --line: #dce1e6;
+  --line-strong: #858f9b;
+  --teal: #16776a;
+  --teal-strong: #105b51;
+  --teal-soft: #eaf5f0;
+  --on-accent: #fdfefe;
+  --focus: var(--teal);
+  --blue: #4266a8;
+  --blue-soft: #eef3fb;
+  --amber: #916014;
+  --amber-soft: #fff6e7;
+  --danger: #a83227;
+  --danger-strong: #81251e;
+  --danger-soft: #f9e9e6;
+  --danger-line: #c4847c;
+  --success-line: #99bfb2;
+  --disabled-bg: #e8ecef;
+  --disabled-ink: #596470;
+  --scroll-thumb: #858f9b;
+  --shadow-subtle: 0 1px 2px #252a310a;
+  --shadow-popover: 0 4px 12px #252a3114;
+
+  --font-ui: "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "PingFang SC", ui-sans-serif, system-ui, sans-serif;
+  --font-numeric: "Segoe UI", Arial, sans-serif;
+  --text-caption: 14px;
+  --text-small: 15px;
+  --text-body: 16px;
+  --text-reading: 18px;
+  --text-subheading: 18px;
+  --text-section: 20px;
+  --text-title: 32px;
+  --text-title-mobile: 28px;
+  --leading-body: 1.75;
+  --leading-reading: 1.777778;
+  --leading-heading: 1.4;
+  --reading-measure: 44em;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 48px;
+  --space-9: 64px;
+  --space-row: 20px;
+  --space-reading: 28px;
+  --radius-tag: 4px;
+  --radius-control: 6px;
+  --radius-surface: 8px;
+  --control-height: 48px;
+  --icon-target: 44px;
+  --workspace-width: 1320px;
+  --learning-width: 1160px;
+  --task-width: 1080px;
+  --page-gutter: 32px;
+  --motion-fast: 180ms;
+  --motion-normal: 220ms;
+  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+@media (max-width: 1180px) {
+  :root { --page-gutter: 24px; }
+}
+
+@media (max-width: 700px) {
+  :root { --page-gutter: 16px; }
+}
