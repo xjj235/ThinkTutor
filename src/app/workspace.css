@@ -441,6 +441,37 @@ input,select,textarea { max-width: 100%; }
 .empty-state p { font-size: var(--text-body); }
 .public-nav .nav-link,.public-nav .button { font-size: var(--text-body); }
 .public-hero .hero-lead { font-size: var(--text-reading); }
+
+/* State styling stays independent of page layout and never moves the target. */
+:is(.button,.icon-button,.workspace-profile,.workspace-link,.nav-link,.review-tab-list button,.data-row) {
+  transition: color var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out);
+}
+:is(.button,.icon-button,.review-tab-list button):active:not(:disabled) { box-shadow: inset 0 0 0 1px currentColor; transform: none; }
+.button-secondary:active:not(:disabled),.icon-button:active:not(:disabled) { background: var(--teal-soft); color: var(--teal-strong); }
+.button-danger-outline:hover { border-color: var(--danger); color: var(--danger); }
+.button:disabled,.button:disabled:hover,.task-form button[type="submit"]:disabled {
+  opacity: 1; background: var(--disabled-bg); color: var(--disabled-ink); border-color: var(--line); box-shadow: none; cursor: not-allowed;
+}
+:is(.stack-form,.auth-form,.filter-form,.curriculum-picker,.inline-controls,.task-form,.response-composer,.feynman-composer) :is(input,textarea,select) {
+  transition: border-color var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out);
+}
+:is(.stack-form,.auth-form,.filter-form,.curriculum-picker,.inline-controls,.task-form,.response-composer,.feynman-composer) :is(input,textarea,select):disabled {
+  opacity: 1; background: var(--disabled-bg); color: var(--disabled-ink)!important; border-color: var(--line)!important; cursor: not-allowed;
+}
+:is(.task-form,.response-composer,.feynman-composer) :is(input,textarea,select):not(:disabled) { background: var(--paper); border-color: var(--line-strong)!important; }
+:is(.stack-form,.auth-form,.task-form,.response-composer,.feynman-composer) :is(input,textarea,select)[aria-invalid="true"] { border-color: var(--danger)!important; }
+:is(.task-form,.response-composer,.feynman-composer) :is(input,textarea,select):focus-visible { border-color: var(--focus)!important; }
+.data-row:focus-visible { outline-offset: -3px; background: var(--teal-soft); }
+.learning-entries { scrollbar-gutter: stable; }
+.async-feedback { padding: var(--space-4); border-radius: var(--radius-control); font-size: var(--text-body); line-height: var(--leading-body); }
+.async-feedback>span { min-width: 0; overflow-wrap: anywhere; }
+.async-feedback .button { flex-shrink: 0; }
+.stack-form>button { min-height: var(--control-height); }
+.empty-state { background: var(--paper-subtle); }
+@media (prefers-reduced-motion: reduce) {
+  :is(.button,.icon-button,.workspace-profile,.workspace-link,.nav-link,.review-tab-list button,.data-row,input,textarea,select) { transition: none; }
+}
+
 @media (max-width: 1180px) {
   .workspace-links { gap: var(--space-row); }
   .overview-columns { grid-template-columns: minmax(0,1fr) 250px; gap: var(--space-reading); }
