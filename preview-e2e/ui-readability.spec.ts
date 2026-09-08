@@ -3,6 +3,19 @@ import { writeFile } from "node:fs/promises";
 
 type PageMeasure = { path: string; body: string; heading: string; horizontalOverflow: boolean };
 
+const runtimeErrors = new WeakMap<Page, string[]>();
+test.beforeEach(async ({ page }) => {
+  const errors: string[] = [];
+  runtimeErrors.set(page, errors);
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+});
+test.afterEach(async ({ page }, info) => {
+  const errors = runtimeErrors.get(page) ?? [];
+  await writeFile(info.outputPath("runtime-errors.json"), JSON.stringify({ count: errors.length, errors }, null, 2));
+  expect(errors).toEqual([]);
+});
+
 async function checkPage(page: Page, path: string): Promise<PageMeasure> {
   await expect(page.locator("main")).toBeVisible();
   await expect(page.locator("main h1")).toBeVisible();
