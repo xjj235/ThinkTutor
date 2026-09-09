@@ -39,6 +39,14 @@ function getServerSnapshot(): Theme {
   return "light";
 }
 
+function getReadySnapshot() {
+  return initialized;
+}
+
+function getServerReadySnapshot() {
+  return false;
+}
+
 function toggleTheme() {
   const nextTheme = theme === "light" ? "dark" : "light";
   applyTheme(nextTheme);
@@ -51,10 +59,11 @@ function toggleTheme() {
 
 export function ThemeToggle() {
   const currentTheme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const ready = useSyncExternalStore(subscribe, getReadySnapshot, getServerReadySnapshot);
   const label = currentTheme === "light" ? "切换为深色" : "切换为浅色";
 
   return (
-    <button type="button" className="icon-button theme-toggle" aria-label={label} title={label} onClick={toggleTheme}>
+    <button type="button" className="icon-button theme-toggle" aria-label={label} title={label} onClick={toggleTheme} disabled={!ready} aria-busy={!ready}>
       {currentTheme === "light" ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
     </button>
   );
