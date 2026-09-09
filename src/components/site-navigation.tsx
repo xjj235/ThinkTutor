@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { UserRole } from "@prisma/client";
 import { ArrowUpRight, BookOpen, BookOpenCheck, ChartNoAxesCombined, ChevronRight, ClipboardCheck, FileText, FolderOpen, LayoutDashboard, Menu, Plus, Settings2, ShieldCheck, Users, X, type LucideIcon } from "lucide-react";
 import { LogoutButton } from "./logout-button";
+import { ThemeToggle } from "./theme-toggle";
 
 interface NavigationUser { name: string; role: UserRole }
 interface NavigationItem { href: string; label: string; icon: LucideIcon }
@@ -64,16 +65,17 @@ export function SiteNavigation({ user }: { user: NavigationUser | null }) {
     };
   }, [open]);
   const brand = <Link href={user ? user.role === "STUDENT" ? "/dashboard" : user.role === "TEACHER" ? "/teacher" : "/admin" : "/"} className="brand" onClick={() => setExpandedPath(null)}><span className="brand-mark"><BookOpenCheck size={21} aria-hidden="true" /></span><span className="brand-copy"><strong>问思学伴</strong><small>ThinkTutor</small></span></Link>;
-  if (!user) return <header className="site-header"><div className="site-header-inner">{brand}<nav aria-label="主导航" className="main-nav public-nav"><Link className="nav-link" href="/about">学习方法</Link><Link className="nav-link" href="/login">登录</Link><Link className="button button-small" href="/register">开始学习<ArrowUpRight size={15} aria-hidden="true" /></Link></nav></div></header>;
+  if (!user) return <header className="site-header"><div className="site-header-inner">{brand}<nav aria-label="主导航" className="main-nav public-nav flex-wrap"><ThemeToggle /><Link className="nav-link workspace-help" href="/about">学习方法</Link><Link className="nav-link" href="/login">登录</Link><Link className="button button-small" href="/register">开始学习<ArrowUpRight size={15} aria-hidden="true" /></Link></nav></div></header>;
 
   const items = itemsFor(user.role);
   const current = items.find((item) => isCurrentPath(pathname, item.href));
   const title = current?.label ?? (pathname.startsWith("/session/") ? "研习空间" : pathname.startsWith("/report/") ? "学习报告" : pathname.startsWith("/profile") ? "个人资料" : "工作区");
   const roleName = { STUDENT: "学生工作区", TEACHER: "教师工作区", ADMIN: "管理工作区" }[user.role];
   return <header className="workspace-shell">
-    <div className="workspace-topbar">
-      <div className="workspace-brand-group">{brand}<span className="workspace-role">{roleName}</span></div>
-      <div className="workspace-account">
+    <div className="workspace-topbar flex-wrap">
+      <div className="workspace-brand-group shrink-0">{brand}<span className="workspace-role">{roleName}</span></div>
+      <div className="workspace-account ml-auto">
+        <ThemeToggle />
         <Link className="icon-button workspace-help" href="/about" aria-label="学习方法" title="学习方法"><FileText size={18} aria-hidden="true" /></Link>
         <Link href="/profile" className="workspace-profile" aria-label="个人资料" title={`${user.name} · 个人资料与安全`} aria-current={pathname === "/profile" ? "page" : undefined} onClick={() => setExpandedPath(null)}><span className="profile-initial" aria-hidden="true">{user.name.slice(0, 1)}</span><span className="profile-name">{user.name}</span></Link>
         <LogoutButton />

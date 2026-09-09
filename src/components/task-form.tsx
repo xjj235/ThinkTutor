@@ -111,8 +111,8 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
       aria-busy={pending}
       noValidate
     >
-      <p className="text-sm text-[#5d6b70]">
-        <span className="font-semibold text-[#b42318]">*</span> 必填信息
+      <p className="text-sm text-muted-foreground">
+        <span className="font-semibold text-destructive">*</span> 必填信息
       </p>
       <fieldset className="curriculum-picker">
         <legend>课程关联</legend>
@@ -174,7 +174,7 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
       <div className="space-y-2">
         <label
           htmlFor="learnerLevel"
-          className="block text-sm font-medium text-[#213236]"
+          className="block text-sm font-medium text-foreground"
         >
           学习者水平 <RequiredMark />
         </label>
@@ -188,7 +188,7 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
           aria-describedby={
             fieldErrors.learnerLevel ? "learnerLevel-error" : undefined
           }
-          className="w-full rounded-md border border-[#c9d9d7] bg-white px-3 py-2 text-[#172126]"
+          className="w-full rounded-md border border-input bg-card px-3 py-2 text-foreground"
         >
           <option value="">请选择</option>
           <option value="入门">基础认知</option>
@@ -196,7 +196,7 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
           <option value="进阶">进阶研习</option>
         </select>
         {fieldErrors.learnerLevel ? (
-          <p id="learnerLevel-error" className="text-sm text-[#b42318]">
+          <p id="learnerLevel-error" className="text-sm text-destructive">
             {fieldErrors.learnerLevel}
           </p>
         ) : null}
@@ -256,7 +256,7 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
       </fieldset>
 
       {error ? (
-        <p id="task-error" role="alert" className="text-sm text-[#b42318]">
+        <p id="task-error" role="alert" className="text-sm text-destructive">
           {error}
         </p>
       ) : null}
@@ -265,7 +265,7 @@ export function TaskForm({ courses = [] }: { courses?: CurriculumCourse[] }) {
       <button
         type="submit"
         disabled={pending}
-        className="button disabled:cursor-not-allowed disabled:bg-[#94b8b4]"
+        className="button"
       >
         {pending ? "正在创建..." : "创建并开始学习"}
         <ArrowRight size={18} aria-hidden="true" />
@@ -298,7 +298,7 @@ function Field({
 }) {
   return (
     <div className="space-y-2">
-      <label htmlFor={id} className="block text-sm font-medium text-[#213236]">
+      <label htmlFor={id} className="block text-sm font-medium text-foreground">
         {label} {required ? <RequiredMark /> : null}
       </label>
       <input
@@ -311,11 +311,11 @@ function Field({
         aria-invalid={Boolean(error)}
         aria-describedby={`${id}-count${error ? ` ${id}-error` : ""}`}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-md border border-[#c9d9d7] bg-white px-3 py-2 text-[#172126] read-only:bg-[#edf2f1] disabled:cursor-not-allowed disabled:bg-[#edf2f1]"
+        className="w-full rounded-md border border-input bg-card px-3 py-2 text-foreground read-only:bg-muted disabled:cursor-not-allowed disabled:bg-muted"
       />
-      <div className="flex justify-between gap-3 text-xs text-[#5d6b70]">
+      <div className="flex justify-between gap-3 text-xs text-muted-foreground">
         {error ? (
-          <span id={`${id}-error`} className="text-[#b42318]">
+          <span id={`${id}-error`} className="text-destructive">
             {error}
           </span>
         ) : (
@@ -352,7 +352,7 @@ function TextArea({
 }) {
   return (
     <div className="space-y-2">
-      <label htmlFor={id} className="block text-sm font-medium text-[#213236]">
+      <label htmlFor={id} className="block text-sm font-medium text-foreground">
         {label} {required ? <RequiredMark /> : null}
       </label>
       <textarea
@@ -365,11 +365,11 @@ function TextArea({
         aria-invalid={Boolean(error)}
         aria-describedby={`${id}-count${error ? ` ${id}-error` : ""}`}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full resize-y rounded-md border border-[#c9d9d7] bg-white px-3 py-2 text-[#172126] disabled:cursor-not-allowed disabled:bg-[#edf2f1]"
+        className="w-full resize-y rounded-md border border-input bg-card px-3 py-2 text-foreground disabled:cursor-not-allowed disabled:bg-muted"
       />
-      <div className="flex justify-between gap-3 text-xs text-[#5d6b70]">
+      <div className="flex justify-between gap-3 text-xs text-muted-foreground">
         {error ? (
-          <span id={`${id}-error`} className="text-[#b42318]">
+          <span id={`${id}-error`} className="text-destructive">
             {error}
           </span>
         ) : (
@@ -385,7 +385,7 @@ function TextArea({
 
 function RequiredMark() {
   return (
-    <span aria-hidden="true" className="font-semibold text-[#b42318]">
+    <span aria-hidden="true" className="font-semibold text-destructive">
       *
     </span>
   );

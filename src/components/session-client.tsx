@@ -20,7 +20,8 @@ import {
 } from "@/lib/contracts";
 import { PhaseProgress } from "./phase-progress";
 import { SafeMarkdown } from "./safe-markdown";
-import { ArrowLeft, ArrowUpRight, Lightbulb, SendHorizontal, Play, RotateCcw } from "lucide-react";
+import { WorkspaceState } from "./workspace-state";
+import { ArrowLeft, ArrowUpRight, BookOpenCheck, Info as InfoIcon, Lightbulb, SendHorizontal, Play, RotateCcw, UserRound } from "lucide-react";
 
 function makeRequestId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -306,9 +307,17 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
   if (loading) {
     return (
       <main id="main-content" className="session-state">
-        <p aria-live="polite" className="text-[#5d6b70]">
-          正在读取学习会话...
-        </p>
+        <WorkspaceState
+          variant="loading"
+          title="正在读取学习会话"
+          description="正在加载本次研习的目标与对话记录。"
+          actions={
+            <Link href="/dashboard" className="button button-secondary">
+              <ArrowLeft size={16} aria-hidden="true" />
+              返回学习总览
+            </Link>
+          }
+        />
       </main>
     );
   }
@@ -316,16 +325,23 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
   if (!payload) {
     return (
       <main id="main-content" className="session-state">
-        <p role="alert" className="text-[#b42318]">
-          {error || "会话不存在。"}
-        </p>
-        <button
-          type="button"
-          onClick={loadSession}
-          className="mt-4 rounded-md border border-[#b9d8d4] px-4 py-2 text-[#115e59]"
-        >
-          重新加载
-        </button>
+        <WorkspaceState
+          variant="error"
+          title="无法读取学习会话"
+          description={error || "会话不存在。"}
+          actions={
+            <>
+              <button type="button" onClick={loadSession} className="button">
+                <RotateCcw size={16} aria-hidden="true" />
+                重新加载
+              </button>
+              <Link href="/dashboard" className="button button-secondary">
+                <ArrowLeft size={16} aria-hidden="true" />
+                返回学习总览
+              </Link>
+            </>
+          }
+        />
       </main>
     );
   }
@@ -345,50 +361,50 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
       data-parent-session-id={session.parentSessionId ?? ""}
     >
       <header className="learning-context">
-        <Link href="/dashboard" className="text-sm font-medium text-[#115e59]">
-          <ArrowLeft size={15} aria-hidden="true" />学习总览
-        </Link>
-        <div className="learning-title">
-          <h1 className="mt-1 text-2xl font-semibold text-[#172126]">
-            {session.topic}
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-[#435257]">
-            {session.objective}
-          </p>
-        </div>
-        <div className="learning-details">
+        <div className="learning-context-tools flex items-start justify-between gap-3">
+          <Link href="/dashboard" className="text-sm font-medium text-brand">
+            <ArrowLeft size={15} aria-hidden="true" />学习总览
+          </Link>
           <details className="learning-metadata"><summary>任务信息</summary><dl className="grid gap-3 text-sm">
             <Info label="学习者水平" value={session.learnerLevel} />
             <Info label="课程" value={session.course ?? "自主研习"} />
             <Info label="章节" value={session.chapter ?? "未关联章节"} />
             <Info label="关联原会话" value={session.parentSessionId ? "已关联" : "无"} />
           </dl></details>
-          <PhaseProgress phase={session.phase} socraticTurns={session.socraticTurns} maxTurns={session.maxTurns} knowledgeProgress={session.knowledgeProgress} />
         </div>
+        <div className="learning-title">
+          <h1 className="mt-1 text-2xl font-semibold text-foreground">
+            {session.topic}
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            {session.objective}
+          </p>
+        </div>
+        <PhaseProgress phase={session.phase} socraticTurns={session.socraticTurns} maxTurns={session.maxTurns} knowledgeProgress={session.knowledgeProgress} />
       </header>
 
       <section className="learning-main space-y-5">
         {goalPending ? <section className="space-y-4 border-b pb-5" aria-labelledby="goal-heading">
           <h2 id="goal-heading" className="text-xl font-semibold">研习目标确认</h2>
           <p className="leading-7">{session.objective}</p>
-          <p className="text-sm text-[#435257]">预计用时 15–20 分钟</p>
+          <p className="text-sm text-muted-foreground">预计用时 15–20 分钟</p>
           <button className="button" disabled={pending} onClick={() => void submitSessionEvent("GOAL_CONFIRMED")}><Play size={16} aria-hidden="true" />确认目标并开始</button>
         </section> : null}
         {!goalPending && session.knowledgeProgress && ["DIAGNOSIS", "SOCRATIC", "FEYNMAN"].includes(session.phase) && !session.knowledgeProgress.resumeVerification ? <div className="flex flex-wrap items-center justify-between gap-3">
-          {resumeRequired ? <p>研习已间隔较长时间，需先核验关键理解。</p> : <span className="text-sm text-[#435257]">当前研习进度已保存</span>}
+          {resumeRequired ? <p>研习已间隔较长时间，需先核验关键理解。</p> : <span className="text-sm text-muted-foreground">当前研习进度已保存</span>}
           <button className="button button-secondary" disabled={pending} onClick={() => void submitSessionEvent("SESSION_RESUMED")}><RotateCcw size={15} aria-hidden="true" />恢复核验</button>
         </div> : null}
         {session.knowledgeProgress?.resumeVerification ? <p role="status">恢复核验进行中</p> : null}
-        <div className="learning-record rounded-md border border-[#dce7e6] bg-white">
-          <div className="learning-record-heading border-b border-[#dce7e6] px-4 py-3">
-            <h2 className="font-semibold text-[#172126]">研习记录</h2>
-            <p className="mt-1 text-sm text-[#5d6b70]">
+        <div className="learning-record">
+          <div className="learning-record-heading">
+            <h2 className="font-semibold text-foreground">研习记录</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               {phaseLabels[session.phase]}
             </p>
           </div>
-          <div ref={recordRef} className="learning-entries space-y-4 px-4 py-4" role="log" aria-label="研习记录" aria-relevant="additions">
+          <div ref={recordRef} className="learning-entries" role="log" aria-label="研习记录" aria-relevant="additions">
             {messages.length === 0 ? (
-              <p className="rounded-md border border-dashed border-[#b9d8d4] p-4 text-sm text-[#5d6b70]">
+              <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
                 暂无研习记录。
               </p>
             ) : (
@@ -399,21 +415,21 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
           </div>
         </div>
 
-        <div aria-live="polite" className="min-h-6 text-sm text-[#5d6b70]">
+        <div aria-live="polite" className="min-h-6 text-sm text-muted-foreground">
           {pending ? pendingMessage : ""}
         </div>
 
         {error ? (
           <div
             role="alert"
-            className="flex flex-col gap-3 rounded-md border border-[#f3b7ae] bg-[#fff7f5] p-4 text-sm text-[#8f1f13] sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-3 rounded-md border border-destructive-border bg-destructive-subtle p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"
           >
             <span>{error}</span>
             <button
               type="button"
               onClick={retryLastAction}
               disabled={pending}
-              className="rounded-md border border-[#d69a92] px-3 py-2 font-medium disabled:cursor-not-allowed disabled:opacity-60"
+              className="button button-secondary"
             >
               {retryAction && retryAction !== "load"
                 ? "重试本次操作"
@@ -425,12 +441,12 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
         {canAnswer ? (
           <form
             onSubmit={submitAnswer}
-            className="response-composer rounded-md border border-[#dce7e6] bg-[#f7fbfa] p-4"
+            className="response-composer"
             aria-busy={pending}
           >
             <label
               htmlFor="answer"
-              className="block text-sm font-medium text-[#213236]"
+              className="block text-sm font-medium text-foreground"
             >
               独立作答
             </label>
@@ -446,7 +462,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
               rows={5}
               required
               disabled={pending}
-              className="mt-2 w-full resize-y rounded-md border border-[#c9d9d7] bg-white px-3 py-2"
+              className="mt-2 w-full resize-y rounded-md border border-input bg-card px-3 py-2"
               placeholder="陈述观点、推理依据与尚待澄清的疑问。"
             />
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
@@ -455,27 +471,27 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
                   type="button"
                   onClick={requestHint}
                   disabled={!canHint || pending}
-                  className="rounded-md border border-[#b9d8d4] px-4 py-2 font-medium text-[#115e59] disabled:cursor-not-allowed disabled:text-[#8aa09d]"
+                  className="button button-secondary"
                 >
                   <Lightbulb size={15} aria-hidden="true" />{canHint ? "申请提示" : "暂无可用提示"}
                 </button>
                 <button
                   type="submit"
                   disabled={!answer.trim() || pending}
-                  className="rounded-md bg-[#0f766e] px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:bg-[#94b8b4]"
+                  className="button"
                 >
                   提交回答<SendHorizontal size={15} aria-hidden="true" />
                 </button>
               </div>
             </div>
             {canEnterFeynman ? (
-              <div className="mt-4 rounded-md border border-[#b9d8d4] bg-white p-3 text-sm text-[#435257]">
+              <div className="mt-4 rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
                 <p>已达到自主阐释的轮次要求。</p>
                 <button
                   type="button"
                   onClick={enterFeynman}
                   disabled={pending}
-                  className="mt-3 rounded-md border border-[#0f766e] px-4 py-2 font-medium text-[#115e59] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="button button-secondary mt-3"
                 >
                   进入费曼阐释
                 </button>
@@ -487,20 +503,20 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
         {canFeynman ? (
           <form
             onSubmit={submitFeynman}
-            className="feynman-composer rounded-md border border-[#b9d8d4] bg-[#eef8f6] p-4"
+            className="feynman-composer"
             aria-busy={pending}
           >
             <label
               htmlFor="feynman"
-              className="block text-sm font-medium text-[#213236]"
+              className="block text-sm font-medium text-foreground"
             >
               {session.knowledgeProgress?.pedagogicalStage === "REFLECTION" ? "反思修订" : "费曼阐释"}
             </label>
             <div
               id="feynman-requirements"
-              className="mt-2 rounded-md border border-[#cfe3e0] bg-white p-3 text-sm leading-6 text-[#435257]"
+              className="mt-2 rounded-md border border-border bg-card p-3 text-sm leading-6 text-muted-foreground"
             >
-              <p className="font-medium text-[#213236]">阐释要素</p>
+              <p className="font-medium text-foreground">阐释要素</p>
               <ul className="mt-1 list-disc space-y-1 pl-5">
                 <li>核心概念及其边界</li>
                 <li>条件、原因和结果之间的联系</li>
@@ -521,14 +537,14 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
               required
               disabled={pending}
               aria-describedby="feynman-requirements"
-              className="mt-3 w-full resize-y rounded-md border border-[#b9d8d4] bg-white px-3 py-2"
+              className="mt-3 w-full resize-y rounded-md border border-border bg-card px-3 py-2"
               placeholder="形成完整阐释：概念边界、因果机制、例证与迁移条件。"
             />
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="submit"
                 disabled={!explanation.trim() || pending}
-                className="rounded-md bg-[#0f766e] px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:bg-[#94b8b4]"
+                className="button"
               >
                 {session.knowledgeProgress ? session.knowledgeProgress.pedagogicalStage === "REFLECTION" ? "提交修订并生成报告" : "提交讲解" : "生成学习报告"}<ArrowUpRight size={15} aria-hidden="true" />
               </button>
@@ -537,11 +553,11 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
         ) : null}
 
         {session.phase === "COMPLETED" ? (
-          <div className="rounded-md border border-[#b9d8d4] bg-[#eef8f6] p-4">
-            <p className="font-medium text-[#0f3f3b]">学习闭环已完成。</p>
+          <div className="rounded-md border border-border bg-brand-subtle p-4">
+            <p className="font-medium text-brand">学习闭环已完成。</p>
             <Link
               href={`/report/${session.id}`}
-              className="mt-3 inline-flex rounded-md bg-[#0f766e] px-4 py-2 font-medium text-white"
+              className="button mt-3"
             >
               查看学习报告
             </Link>
@@ -555,8 +571,8 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[#5d6b70]">{label}</dt>
-      <dd className="mt-1 font-medium text-[#213236]">{value}</dd>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="mt-1 font-medium text-foreground">{value}</dd>
     </div>
   );
 }
@@ -570,45 +586,51 @@ function MessageItem({ message }: { message: MessageDTO }) {
         ? "学习进度"
         : "学生";
   const phase = phaseLabels[message.phase as LearningPhase];
+  const AvatarIcon = assistant ? BookOpenCheck : message.role === "SYSTEM" ? InfoIcon : UserRound;
 
   return (
     <article
       data-role={message.role}
       className={[
-        "learning-entry rounded-md border p-4",
+        "learning-entry",
         assistant
-          ? "learning-entry-assistant border-[#dce7e6] bg-[#f7fbfa]"
+          ? "learning-entry-assistant"
           : message.role === "SYSTEM"
-            ? "learning-entry-system border-[#dce7e6] bg-white"
-            : "learning-entry-student border-[#c8d8e0] bg-white",
+            ? "learning-entry-system"
+            : "learning-entry-student",
       ].join(" ")}
     >
-      <div className="learning-entry-meta mb-2 flex flex-wrap items-center gap-2 text-xs text-[#5d6b70]">
-        <span className="font-semibold text-[#213236]">
-          {author}
-        </span>
-        <span>{phase}</span>
-        {message.questionType ? (
-          <span className="question-type-label border border-[#b9d8d4] px-2 py-0.5">
-            {questionTypeLabels[message.questionType]}
+      <div className="entry-avatar" aria-hidden="true">
+        <AvatarIcon size={20} />
+      </div>
+      <div className="entry-body min-w-0">
+        <div className="learning-entry-meta">
+          <span className="font-semibold text-foreground">
+            {author}
           </span>
+          <span>{phase}</span>
+          {message.questionType ? (
+            <span className="question-type-label">
+              {questionTypeLabels[message.questionType]}
+            </span>
+          ) : null}
+        </div>
+        <SafeMarkdown>{message.content}</SafeMarkdown>
+        {message.webSources.length ? (
+          <div className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
+            <p className="font-semibold text-foreground">实时网页来源</p>
+            <ul className="mt-1 space-y-1">
+              {message.webSources.map((source) => (
+                <li key={source.url}>
+                  <a className="text-brand underline underline-offset-2" href={source.url} target="_blank" rel="noreferrer">
+                    {source.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
       </div>
-      <SafeMarkdown>{message.content}</SafeMarkdown>
-      {message.webSources.length ? (
-        <div className="mt-3 border-t border-[#dce7e6] pt-3 text-xs text-[#5d6b70]">
-          <p className="font-semibold text-[#213236]">实时网页来源</p>
-          <ul className="mt-1 space-y-1">
-            {message.webSources.map((source) => (
-              <li key={source.url}>
-                <a className="text-[#006d75] underline underline-offset-2" href={source.url} target="_blank" rel="noreferrer">
-                  {source.title}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </article>
   );
 }
