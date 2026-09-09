@@ -44,7 +44,6 @@ const serverEnvSchema = z
     RATE_LIMIT_AI_PER_MINUTE: z.coerce.number().int().min(1).max(1_000).default(12),
     RATE_LIMIT_AI_PER_DAY: z.coerce.number().int().min(1).max(100_000).default(120),
     MAX_REFERENCE_TEXT_LENGTH: z.coerce.number().int().positive().max(50_000).default(12_000),
-    MAX_USER_MESSAGE_LENGTH: z.coerce.number().int().positive().max(8_000).default(4_000),
     MAX_MESSAGES_PER_SESSION: z.coerce.number().int().positive().max(300).default(80),
     AUTH_SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(24 * 30).default(24 * 7),
     AUTH_COOKIE_SECURE: booleanString,

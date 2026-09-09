@@ -13,8 +13,6 @@ import {
   ApiResponse,
   LearningPhase,
   MessageDTO,
-  MIN_ANSWER_LENGTH,
-  MIN_FEYNMAN_EXPLANATION_LENGTH,
   SessionPayload,
   phaseLabels,
   questionTypeLabels,
@@ -203,7 +201,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
   async function sendFeynman() {
     if (
       !payload ||
-      explanation.trim().length < MIN_FEYNMAN_EXPLANATION_LENGTH ||
+      !explanation.trim() ||
       pending
     ) {
       return;
@@ -446,16 +444,12 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
                 setRetryAction(null);
               }}
               rows={5}
-              maxLength={2000}
               required
               disabled={pending}
               className="mt-2 w-full resize-y rounded-md border border-[#c9d9d7] bg-white px-3 py-2"
               placeholder="陈述观点、推理依据与尚待澄清的疑问。"
             />
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <span className="text-xs text-[#5d6b70]">
-                {answer.length} / 2000，至少 {MIN_ANSWER_LENGTH} 字
-              </span>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -467,7 +461,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
                 </button>
                 <button
                   type="submit"
-                  disabled={answer.trim().length < MIN_ANSWER_LENGTH || pending}
+                  disabled={!answer.trim() || pending}
                   className="rounded-md bg-[#0f766e] px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:bg-[#94b8b4]"
                 >
                   提交回答<SendHorizontal size={15} aria-hidden="true" />
@@ -524,23 +518,16 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
                 setRetryAction(null);
               }}
               rows={8}
-              maxLength={4000}
               required
               disabled={pending}
               aria-describedby="feynman-requirements"
               className="mt-3 w-full resize-y rounded-md border border-[#b9d8d4] bg-white px-3 py-2"
               placeholder="形成完整阐释：概念边界、因果机制、例证与迁移条件。"
             />
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <span className="text-xs text-[#5d6b70]">
-                {explanation.length} / 4000，至少 {MIN_FEYNMAN_EXPLANATION_LENGTH} 字
-              </span>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="submit"
-                disabled={
-                  explanation.trim().length <
-                    MIN_FEYNMAN_EXPLANATION_LENGTH || pending
-                }
+                disabled={!explanation.trim() || pending}
                 className="rounded-md bg-[#0f766e] px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:bg-[#94b8b4]"
               >
                 {session.knowledgeProgress ? session.knowledgeProgress.pedagogicalStage === "REFLECTION" ? "提交修订并生成报告" : "提交讲解" : "生成学习报告"}<ArrowUpRight size={15} aria-hidden="true" />

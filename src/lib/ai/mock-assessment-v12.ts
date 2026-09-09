@@ -29,6 +29,11 @@ const patterns: Record<string, RegExp> = {
   direct_link_only: /^只有直接借贷才会传播风险[。！!]?$/u, size_only: /^只看规模就能判断系统重要性[。！!]?$/u, micro_safe_equals_system_safe: /^每家都安全系统就一定安全[。！!]?$/u,
 };
 export function mockAssessLearningTurn(input: TurnAssessmentInput): TurnAssessment {
-  const evidence = Object.entries(patterns).filter(([id, pattern]) => input.evidenceDefinitions[id] && pattern.test(input.message.content)).map(([evidenceId]) => ({ evidenceId, messageId: input.message.id, extractedText: input.message.content }));
+  const evidence = Object.entries(patterns).flatMap(([evidenceId, pattern]) => {
+    const match = input.evidenceDefinitions[evidenceId] ? input.message.content.match(pattern) : null;
+    if (!match) return [];
+    // Long answers remain intact; only the cited evidence has an output budget.
+    return [{ evidenceId, messageId: input.message.id, extractedText: input.message.content.length <= 4000 ? input.message.content : match[0] }];
+  });
   return normalizeModelAssessment({ evidence, candidateMisconceptions: [], candidateGaps: [], candidateMastery: input.lockedContext.targetId ? [{ unitId: input.lockedContext.targetId, modelConfidence: evidence.length ? 0.9 : 0.3 }] : [], contradictions: [], recommendTransition: false });
 }

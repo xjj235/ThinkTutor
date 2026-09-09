@@ -18,7 +18,7 @@ export const teachingSelectionInputSchema = z.object({
   standard: z.string().max(1200),
   choices: z.array(z.object({ id: z.string(), purpose: z.string(), template: z.string().max(8000) }).strict()).min(1).max(8),
   openings: z.array(z.object({ id: z.string(), text: z.string() }).strict()).min(1).max(6),
-  studentContent: z.string().max(20_000),
+  studentContent: z.string(),
   grounding: groundingSchema.optional(),
   recentTurns: z.array(z.object({ role: z.enum(["USER", "ASSISTANT"]), content: z.string().max(2000) }).strict()).max(8).optional(),
   previousQuestions: z.array(z.string().max(8000)).max(8).optional(),

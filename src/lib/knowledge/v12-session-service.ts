@@ -36,7 +36,7 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
     return { ...serializePayload(session), duplicate: true };
   }
   const env = getServerEnv();
-  if (session.messages.length + 2 > env.MAX_MESSAGES_PER_SESSION || text.length > env.MAX_USER_MESSAGE_LENGTH) throw new AppError("CONFLICT", "本次提交超过会话容量限制。", 409);
+  if (session.messages.length + 2 > env.MAX_MESSAGES_PER_SESSION) throw new AppError("CONFLICT", "本次提交超过会话容量限制。", 409);
   if (explanation ? session.phase !== "FEYNMAN" : !["DIAGNOSIS", "SOCRATIC"].includes(session.phase)) throw new AppError("CONFLICT", "当前阶段不接受此类回答。", 409);
   let runtime = knowledgeRuntimeSchema.parse(session.knowledgeRuntime);
   const manifest = await resolveRuntimeManifest(runtime.versions);

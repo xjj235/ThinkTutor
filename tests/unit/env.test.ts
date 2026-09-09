@@ -37,7 +37,7 @@ describe("server environment", () => {
     const env = getServerEnv();
     expect(env.AI_TIMEOUT_MS).toBe(30_000);
     expect(env.MAX_REFERENCE_TEXT_LENGTH).toBe(12_000);
-    expect(env.MAX_USER_MESSAGE_LENGTH).toBe(4_000);
+    expect(env).not.toHaveProperty("MAX_USER_MESSAGE_LENGTH");
     expect(env.MAX_MESSAGES_PER_SESSION).toBe(80);
   });
 
@@ -53,9 +53,9 @@ describe("server environment", () => {
       AI_PROVIDER: "deepseek",
       AI_TIMEOUT_MS: 45_000,
       MAX_REFERENCE_TEXT_LENGTH: 7_000,
-      MAX_USER_MESSAGE_LENGTH: 1_500,
       MAX_MESSAGES_PER_SESSION: 35,
     });
+    expect(getServerEnv()).not.toHaveProperty("MAX_USER_MESSAGE_LENGTH");
   });
 
   it("requires complete OSS source credentials for cross-account AssumeRole", () => {

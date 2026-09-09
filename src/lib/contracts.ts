@@ -71,8 +71,6 @@ export const MAX_MESSAGES_PER_SESSION = 40;
 export const MIN_SOCRATIC_TURNS = 3;
 export const MAX_SOCRATIC_TURNS = 5;
 export const DEFAULT_MAX_TURNS = 5;
-export const MIN_ANSWER_LENGTH = 10;
-export const MIN_FEYNMAN_EXPLANATION_LENGTH = 30;
 
 export const textLimits = {
   course: 80,
@@ -81,8 +79,6 @@ export const textLimits = {
   objective: 400,
   learnerLevel: 80,
   referenceText: 8000,
-  answer: 2000,
-  feynmanExplanation: 4000,
   clientRequestId: 80,
 } as const;
 
@@ -125,11 +121,7 @@ export const createSessionRequestSchema = createSessionInputSchema
 
 export const answerInputSchema = z
   .object({
-    answer: z
-      .string()
-      .trim()
-      .min(MIN_ANSWER_LENGTH, `回答不能少于 ${MIN_ANSWER_LENGTH} 个字。`)
-      .max(textLimits.answer),
+    answer: z.string().trim().min(1, "请填写回答。"),
     clientRequestId: z.string().trim().min(8).max(textLimits.clientRequestId),
   })
   .strict();
@@ -142,14 +134,7 @@ export const hintInputSchema = z
 
 export const feynmanInputSchema = z
   .object({
-    explanation: z
-      .string()
-      .trim()
-      .min(
-        MIN_FEYNMAN_EXPLANATION_LENGTH,
-        `费曼讲解不能少于 ${MIN_FEYNMAN_EXPLANATION_LENGTH} 个字。`,
-      )
-      .max(textLimits.feynmanExplanation),
+    explanation: z.string().trim().min(1, "请填写阐释内容。"),
     clientRequestId: z.string().trim().min(8).max(textLimits.clientRequestId),
   })
   .strict();

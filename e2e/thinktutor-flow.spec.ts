@@ -38,25 +38,30 @@ test("mock mode completes the ThinkTutor learning loop", async ({ page }, testIn
   expect(record!.y).toBeGreaterThanOrEqual(context!.y + context!.height);
   const stages = await page.locator(".phase-progress li").evaluateAll((items) => items.map((item) => item.getBoundingClientRect().y));
   expect(new Set(stages).size).toBe(1);
+  await expect(page.getByLabel("独立作答")).not.toHaveAttribute("maxlength");
+  await expect(page.getByLabel("独立作答")).not.toHaveAttribute("minlength");
+  await page.getByLabel("独立作答").fill(" \n　");
+  await expect(page.getByRole("button", { name: "提交回答" })).toBeDisabled();
   await page
     .getByLabel("独立作答")
-    .fill("我认为系统性风险是单个机构的问题扩散到整个市场。");
+    .fill("否");
   await page.getByRole("button", { name: "提交回答" }).click();
   await expect(page.locator(".learning-record-heading").getByText("苏格拉底追问")).toBeVisible();
   await page.reload();
   await expect(page.locator(".learning-record-heading").getByText("苏格拉底追问")).toBeVisible();
   await expect(
-    page.getByText("我认为系统性风险是单个机构的问题扩散到整个市场。"),
+    page.getByText("否", { exact: true }),
   ).toBeVisible();
 
   const answers = [
-    "关键概念是传染，因为机构之间有共同资产和信心联系。",
+    `关键概念是传染，因为机构之间有共同资产和信心联系。${"长文本输入检验。".repeat(600)}`,
     "如果流动性下降，会导致抛售，所以风险会被放大。",
     "这个判断依赖机构之间高度关联的前提，因此前提变化会影响结论。",
   ];
 
   for (const answer of answers) {
     await page.getByLabel("独立作答").fill(answer);
+    await expect(page.getByLabel("独立作答")).toHaveValue(answer);
     await Promise.all([
       page.waitForResponse(
         (response) =>
@@ -76,6 +81,13 @@ test("mock mode completes the ThinkTutor learning loop", async ({ page }, testIn
   await page.screenshot({ path: testInfo.outputPath("learning-workspace.png"), fullPage: true });
   await page.getByRole("button", { name: "进入费曼阐释" }).click();
   await expect(page.getByLabel("费曼阐释")).toBeVisible();
+  await expect(page.getByLabel("费曼阐释")).not.toHaveAttribute("maxlength");
+  await expect(page.getByLabel("费曼阐释")).not.toHaveAttribute("minlength");
+  await page.getByLabel("费曼阐释").fill(" \n　");
+  await expect(page.getByRole("button", { name: "生成学习报告" })).toBeDisabled();
+  const longExplanation = "长篇阐释输入检验。".repeat(2500);
+  await page.getByLabel("费曼阐释").fill(longExplanation);
+  await expect(page.getByLabel("费曼阐释")).toHaveValue(longExplanation);
   await expect.poll(() => page.locator('.phase-progress [aria-current="step"]').evaluate((element) => {
     const track = element.closest("ol")!.getBoundingClientRect();
     const step = element.getBoundingClientRect();
@@ -86,7 +98,7 @@ test("mock mode completes the ThinkTutor learning loop", async ({ page }, testIn
   await page
     .getByLabel("费曼阐释")
     .fill(
-      "系统性风险是局部冲击通过机构关联、杠杆和流动性扩散为整体金融风险。例如一家大机构被迫卖资产会导致价格下跌，所以其他机构也会亏损。如果换到供应链场景，也要检查节点之间是否高度依赖。",
+      "否",
     );
   await page.getByRole("button", { name: "生成学习报告" }).click();
 

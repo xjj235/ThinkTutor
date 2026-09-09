@@ -9,6 +9,9 @@ const privateResponseHeaders = {
   vary: "Cookie",
 };
 
+// Match the Nginx transport ceiling without imposing a learning word count.
+export const MAX_JSON_BODY_BYTES = 2 * 1024 * 1024;
+
 export function createRequestId(request?: Request): string {
   const provided = request?.headers.get("x-request-id")?.trim();
   return provided && provided.length <= 100 ? provided : `req_${crypto.randomUUID()}`;
@@ -47,9 +50,30 @@ export async function readJson(request: Request): Promise<unknown> {
   if (!contentType.toLowerCase().includes("application/json")) {
     throw new AppError("VALIDATION_ERROR", "请求必须使用 application/json。", 415);
   }
+  const tooLarge = () => new AppError("PAYLOAD_TOO_LARGE", "请求数据过大，请拆分后提交。", 413);
+  if (Number(request.headers.get("content-length")) > MAX_JSON_BODY_BYTES) throw tooLarge();
+  const reader = request.body?.getReader();
+  if (!reader) throw new AppError("VALIDATION_ERROR", "请求体必须是有效 JSON。", 400);
   try {
-    return await request.json();
-  } catch {
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+    let bytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAX_JSON_BODY_BYTES) {
+        await reader.cancel();
+        throw tooLarge();
+      }
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+    chunks.push(decoder.decode());
+    return JSON.parse(chunks.join("")) as unknown;
+  } catch (error) {
+    if (error instanceof AppError) throw error;
     throw new AppError("VALIDATION_ERROR", "请求体必须是有效 JSON。", 400);
+  } finally {
+    reader.releaseLock();
   }
 }

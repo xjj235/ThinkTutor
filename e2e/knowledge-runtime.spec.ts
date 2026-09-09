@@ -87,9 +87,20 @@ test("curated knowledge runs through browser and preserves the versioned report"
     }
   }
   await expect(page.getByLabel("费曼阐释")).toBeVisible();
+  await expect(page.getByLabel("费曼阐释")).not.toHaveAttribute("maxlength");
+  await page.getByLabel("费曼阐释").fill("否");
+  await expect(page.getByRole("button", { name: "提交讲解", exact: true })).toBeEnabled();
   await page.getByLabel("费曼阐释").fill(`${answer}这是我的完整自主讲解。`);
   await page.getByRole("button", { name: "提交讲解", exact: true }).click();
   await expect(page.getByLabel("反思修订")).toBeVisible();
+  await expect(page.getByLabel("反思修订")).not.toHaveAttribute("maxlength");
+  await page.getByLabel("反思修订").fill(" \n　");
+  await expect(page.getByRole("button", { name: "提交修订并生成报告" })).toBeDisabled();
+  await page.getByLabel("反思修订").fill("否");
+  await expect(page.getByRole("button", { name: "提交修订并生成报告" })).toBeEnabled();
+  const longRevision = "长篇修订输入检验。".repeat(2500);
+  await page.getByLabel("反思修订").fill(longRevision);
+  await expect(page.getByLabel("反思修订")).toHaveValue(longRevision);
   await page.getByLabel("反思修订").fill(`${answer}这是检查关键条件后的最终修订。`);
   const reportResponse = page.waitForResponse((response) => response.url().endsWith("/feynman") && response.request().method() === "POST" && response.ok());
   await page.getByRole("button", { name: "提交修订并生成报告" }).click();

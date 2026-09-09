@@ -41,6 +41,15 @@ describe("real provider teaching-selection contract with injected transport", ()
     expect(usage.provider).toBe("deepseek");
   });
 
+  it.each(["否", "答".repeat(20_001)])("passes short and long answers intact to the real-provider transport", async (studentContent) => {
+    const followUp = { ...wireGenerated.followUp, studentAnchor: studentContent[0], question: `你回答“${studentContent[0]}”，在关键业务可被其他机构及时接替的条件下，原判断应如何调整？` };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response({ ...valid, followUp })).mockResolvedValueOnce(response(approved));
+    const result = await new DeepSeekProvider({ fetcher }).selectTeachingMove({ ...groundedInput, studentContent });
+    expect(result.followUp?.studentAnchor).toBe(studentContent[0]);
+    const body = z.object({ messages: z.array(z.object({ role: z.string(), content: z.string() })) }).parse(JSON.parse(String(fetcher.mock.calls[0][1]?.body)));
+    expect(body.messages.at(-1)?.content).toContain(studentContent);
+  });
+
   it.each([{ ...valid, choiceId: "invented" }, { ...valid, score: 100 }, { ...valid, webSources: [] }])("retries forbidden output instead of accepting it: %j", async (invalid) => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response(invalid)).mockResolvedValueOnce(response(valid));
     expect(await new DeepSeekProvider({ fetcher }).selectTeachingMove(input)).toEqual(valid);

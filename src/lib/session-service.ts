@@ -348,7 +348,6 @@ export async function createLearningSession(userId: string, input: CreateSession
 
 export async function submitLearningAnswer(sessionId: string, input: { answer: string; clientRequestId: string }): Promise<SessionPayload & { duplicate: boolean }> {
   answerInputSchema.parse(input);
-  if (input.answer.length > getServerEnv().MAX_USER_MESSAGE_LENGTH) throw new AppError("VALIDATION_ERROR", "回答超过允许长度。", 400);
   if (await findDuplicate(sessionId, input.clientRequestId)) return { ...(await getSessionPayload(sessionId)), duplicate: true };
   const session = await getRequiredSessionRecord(sessionId);
   if (!canSubmitAnswer(session)) throw new AppError("CONFLICT", "当前阶段不能提交普通回答。", 409);

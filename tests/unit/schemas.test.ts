@@ -13,7 +13,6 @@ import {
   reportGapsSchema,
   feynmanInputSchema,
   sessionIdSchema,
-  textLimits,
 } from "@/lib/contracts";
 
 describe("zod schemas", () => {
@@ -53,13 +52,10 @@ describe("zod schemas", () => {
     }
   });
 
-  it("rejects overlong student answers", () => {
-    const result = answerInputSchema.safeParse({
-      answer: "a".repeat(textLimits.answer + 1),
-      clientRequestId: "answer-123456",
-    });
-
-    expect(result.success).toBe(false);
+  it.each([1, 9, 10, 29, 30, 2000, 2001, 4000, 4001, 20_001])("accepts %i characters without a learning length quota", (length) => {
+    const text = "答".repeat(length);
+    expect(answerInputSchema.parse({ answer: text, clientRequestId: "answer-length-001" }).answer).toBe(text);
+    expect(feynmanInputSchema.parse({ explanation: text, clientRequestId: "feynman-length-001" }).explanation).toBe(text);
   });
 
   it("validates dynamic session ids", () => {
@@ -144,19 +140,24 @@ describe("zod schemas", () => {
     );
   });
 
-  it("enforces the documented answer and Feynman minimum lengths", () => {
+  it.each(["", " ", "\n\t　"])("still rejects blank learning input: %j", (text) => {
     expect(
       answerInputSchema.safeParse({
-        answer: "不足十字",
+        answer: text,
         clientRequestId: "answer-minimum-001",
       }).success,
     ).toBe(false);
     expect(
       feynmanInputSchema.safeParse({
-        explanation: "不足三十字的费曼讲解",
+        explanation: text,
         clientRequestId: "feynman-minimum-001",
       }).success,
     ).toBe(false);
+  });
+
+  it("trims surrounding whitespace without changing the submitted content", () => {
+    expect(answerInputSchema.parse({ answer: "  答\n", clientRequestId: "answer-trim-001" }).answer).toBe("答");
+    expect(feynmanInputSchema.parse({ explanation: "\n否　", clientRequestId: "feynman-trim-001" }).explanation).toBe("否");
   });
 
   it("accepts the documented Socratic coach output", () => {

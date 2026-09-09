@@ -136,6 +136,39 @@ describe("ThinkTutor API flow", () => {
     await prisma.$disconnect();
   });
 
+  it.each(["否", "答".repeat(20_001)])("accepts short and long learning inputs through the API and persists them intact", async (text) => {
+    const id = (await createSession()).data.session.id;
+    const answered = await postAnswer(id, text, `length-answer-${id}`);
+    expect(answered.status).toBe(200);
+    expect((await parseSessionResponse(answered)).data.messages.some((m) => m.content === text)).toBe(true);
+    for (let i = 0; i < 3; i++) {
+      expect((await postAnswer(id, "因为机构关联，所以风险会传导并放大。", `length-turn-${id}-${i}`)).status).toBe(200);
+    }
+    expect((await enterFeynmanRoute(jsonRequest(`/api/sessions/${id}/feynman/enter`, { clientRequestId: `length-enter-${id}` }), sessionContext(id))).status).toBe(200);
+    const result = await feynmanRoute(jsonRequest(`/api/sessions/${id}/feynman`, { explanation: text, clientRequestId: `length-feynman-${id}` }), sessionContext(id));
+    expect(result.status).toBe(200);
+    const loaded = await parseSessionResponse(await getSessionRoute(new Request(`http://localhost/api/sessions/${id}`), sessionContext(id)));
+    expect(loaded.data.session.phase).toBe("COMPLETED");
+    expect(loaded.data.messages.filter((m) => m.content === text)).toHaveLength(2);
+  });
+
+  it("rejects blank and oversized transport inputs without advancing the session", async () => {
+    const created = await createSession();
+    const id = created.data.session.id;
+    const coach = vi.spyOn(MockAIProvider.prototype, "createCoachTurn");
+    const report = vi.spyOn(MockAIProvider.prototype, "createLearningReport");
+    for (const text of ["", " \n\t　"]) {
+      expect((await postAnswer(id, text, `blank-answer-${id}`)).status).toBe(400);
+      expect((await feynmanRoute(jsonRequest(`/api/sessions/${id}/feynman`, { explanation: text, clientRequestId: `blank-feynman-${id}` }), sessionContext(id))).status).toBe(400);
+    }
+    expect((await postAnswer(id, "字".repeat(800_000), `oversize-${id}`)).status).toBe(413);
+    const loaded = await parseSessionResponse(await getSessionRoute(new Request(`http://localhost/api/sessions/${id}`), sessionContext(id)));
+    expect(loaded.data.session).toEqual(created.data.session);
+    expect(loaded.data.messages).toEqual(created.data.messages);
+    expect(coach).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+  });
+
   it("completes all endpoints with validation, idempotency, report, and retry", async () => {
     const created = await createSession();
     const sessionId = created.data.session.id;
@@ -478,7 +511,7 @@ describe("ThinkTutor API flow", () => {
       ),
       feynmanRoute(
         jsonRequest(`/api/sessions/${sessionId}/feynman`, {
-          explanation: "太短",
+          explanation: " \n　",
           clientRequestId: "feynman-valid-id",
         }),
         sessionContext(sessionId),

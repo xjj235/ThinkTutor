@@ -27,7 +27,7 @@ export const coachingProfileSchema = z.object({
 export type CoachingProfile = z.infer<typeof coachingProfileSchema>;
 export const generatedFollowUpSchema = z.object({
   question: z.string().trim().min(10).max(500),
-  studentAnchor: z.string().trim().min(2).max(100),
+  studentAnchor: z.string().trim().min(1).max(100),
   focusEvidenceIds: evidenceIds.min(1),
   sourceIds: z.array(z.string().min(1)).min(1).max(8),
 }).strict();

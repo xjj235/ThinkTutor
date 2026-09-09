@@ -27,6 +27,18 @@ export const completeAnswer = "首先，Systemic关注金融体系功能，Syste
 describe("v1.2 transactional learning and teacher gates", () => {
   beforeEach(() => { vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "true"); vi.stubEnv("RATE_LIMIT_AI_PER_MINUTE", "1000"); });
   afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllEnvs(); await prisma.knowledgeRelease.deleteMany(); });
+  it.each(["否", `${"答".repeat(20_001)}${completeAnswer}`])("processes short and long v1.2 answers without a hidden character gate", async (text) => {
+    vi.stubEnv("MAX_USER_MESSAGE_LENGTH", "1");
+    const assessment = vi.spyOn(MockAIProvider.prototype, "assessLearningTurn");
+    const teaching = vi.spyOn(MockAIProvider.prototype, "selectTeachingMove");
+    const user = await createTestUser("v12-input-length"); auth.user = user;
+    const id = (await createLearningSession(user.id, task)).session.id;
+    const result = await submitLearningAnswer(id, { answer: text, clientRequestId: `length-${id}` });
+    expect(result.messages.some((m) => m.role === "USER" && m.content === text)).toBe(true);
+    expect(assessment.mock.calls.at(-1)?.[0].message.content).toBe(text);
+    expect(teaching.mock.calls.at(-1)?.[0].studentContent).toBe(text);
+    expect(result.session.phase).not.toBe("COMPLETED");
+  });
   it("runs diagnosis, unseen transfer, Feynman, revision and evidence report through the API", async () => {
     const assessmentSpy = vi.spyOn(MockAIProvider.prototype, "assessLearningTurn");
     const teachingSpy = vi.spyOn(MockAIProvider.prototype, "selectTeachingMove");
