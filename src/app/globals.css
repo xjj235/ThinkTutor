@@ -155,10 +155,10 @@ tbody tr:hover { background: var(--muted); }
   .pagination>span { flex-basis: 100%; text-align: center; order: -1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: 0s !important; }
+  *,*::before,*::after { scroll-behavior: auto !important; animation: none !important; transition-duration: 0s !important; }
 }
 @media (forced-colors: active) {
   input[type="checkbox"],input[type="radio"],select { appearance: auto; }
-  select { background-image: none; }
+  select,:root[data-theme="dark"] select,input[type="checkbox"]:checked,:root[data-theme="dark"] input[type="checkbox"]:checked { background-image: none; }
   .button,.icon-button { border: 1px solid ButtonText; }
 }

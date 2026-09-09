@@ -67,6 +67,7 @@
 .data-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); min-height: 96px; padding: var(--space-4) var(--space-5); color: var(--foreground); text-decoration: none; }
 .data-row+.data-row { border-top: 1px solid var(--border); }
 a.data-row:hover { background: var(--muted); }
+a.data-row:focus-visible { outline-offset: -3px; background: var(--muted); }
 .data-row>span:first-child,.data-row-detail { min-width: 0; }
 .data-row-detail { flex: 1; }
 .session-list .data-row { display: grid; grid-template-columns: 40px minmax(0,1fr) 112px 20px; }
@@ -158,6 +159,7 @@ a.card:hover { border-color: var(--input); }
 .phase-notice { padding-block: var(--space-3); color: var(--warning); font-size: var(--text-caption); }
 .learning-main { min-width: 0; width: min(100%,1040px); margin-inline: auto; }
 .learning-main>[aria-live] { margin-block: var(--space-2); }
+.learning-main>[aria-live]:empty { min-height: 0; margin: 0; }
 .learning-record { border: 1px solid var(--border); border-radius: var(--radius-surface); background: var(--card); box-shadow: var(--shadow-xs); overflow: hidden; }
 .learning-record-heading { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border); }
 .learning-record-heading h2 { font-size: var(--text-reading); }
@@ -225,15 +227,14 @@ a.card:hover { border-color: var(--input); }
 .preview-banner>div { display: flex; align-items: center; gap: var(--space-3); }
 .preview-banner strong { font-weight: 500; color: var(--foreground); }
 .preview-status { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); flex-shrink: 0; }
-.public-hero.home-hero { position: relative; isolation: isolate; display: flex; align-items: center; min-height: min(520px,65dvh); padding: var(--space-8) max(var(--page-gutter),calc((100% - var(--workspace-width))/2)); background: #e9eff0; color: #171717; }
+.public-hero.home-hero { position: relative; isolation: isolate; display: flex; align-items: center; min-height: min(520px,65dvh); padding: var(--space-8) max(var(--page-gutter),calc((100% - var(--workspace-width))/2)); background: var(--hero-surface); color: var(--foreground); }
 .public-hero-image { position: absolute; inset: 0; z-index: -2; object-fit: cover; object-position: center; }
-.public-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg,rgb(250 250 250 / 97%) 0%,rgb(250 250 250 / 90%) 36%,rgb(250 250 250 / 8%) 70%); }
+.public-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg,rgb(var(--hero-wash) / 97%) 0%,rgb(var(--hero-wash) / 90%) 36%,rgb(var(--hero-wash) / 8%) 70%); }
 .hero-copy { max-width: 560px; }
 .hero-copy h1 { font-size: var(--text-title); }
-.hero-lead { margin-top: var(--space-5); max-width: 32em; color: #404040; font-size: var(--text-reading); line-height: var(--leading-reading); }
+.hero-lead { margin-top: var(--space-5); max-width: 32em; color: var(--foreground); font-size: var(--text-reading); line-height: var(--leading-reading); }
 .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-top: var(--space-6); }
-.hero-actions .button { color: #fafafa; background: #262626; border-color: #262626; }
-.hero-actions .text-link { color: #105b51; }
+.hero-actions .text-link { color: var(--brand-hover); }
 .method-section,.roles-section { padding-block: var(--space-8); }
 .method-intro,.section-heading { max-width: 64ch; }
 .method-intro p,.section-heading p,.home-cta p { margin-top: var(--space-3); color: var(--muted-foreground); }
@@ -350,7 +351,7 @@ a.card:hover { border-color: var(--input); }
   .dimension-card { padding: var(--space-4); }
   .preview-banner>a { display: none; }
   .public-hero.home-hero { min-height: min(480px,64dvh); padding-block: var(--space-6); }
-  .public-hero::before { background: rgb(250 250 250 / 88%); }
+  .public-hero::before { background: rgb(var(--hero-wash) / 88%); }
   .hero-lead { margin-top: var(--space-4); }
   .hero-actions { margin-top: var(--space-5); }
   .method-section,.roles-section { padding-block: var(--space-6); }

@@ -33,6 +33,8 @@
   --disabled-foreground: #737373;
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 5%);
   --shadow-overlay: 0 8px 24px rgb(0 0 0 / 10%);
+  --hero-surface: #e9eff0;
+  --hero-wash: 250 250 250;
 
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
   --font-numeric: var(--font-ui);
@@ -132,6 +134,8 @@
   --disabled-foreground: #a3a3a3;
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 20%);
   --shadow-overlay: 0 8px 24px rgb(0 0 0 / 30%);
+  --hero-surface: #171717;
+  --hero-wash: 23 23 23;
 }
 
 @media (max-width: 960px) { :root { --page-gutter: 24px; } }

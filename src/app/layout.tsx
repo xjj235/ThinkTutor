@@ -16,7 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" data-scroll-behavior="smooth">
+    <html lang="zh-CN" data-scroll-behavior="smooth" data-theme="light" suppressHydrationWarning>
+      <head>
+        {/* Static first-party code applies the saved appearance before first paint. */}
+        <script id="thinktutor-theme-init" dangerouslySetInnerHTML={{ __html: 'try{document.documentElement.dataset.theme=localStorage.getItem("thinktutor-theme")==="dark"?"dark":"light"}catch{}' }} />
+      </head>
       <body>
         <a className="skip-link" href="#main-content">跳到主要内容</a>
         <SiteHeader />
