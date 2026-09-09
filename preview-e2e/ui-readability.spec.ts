@@ -17,6 +17,8 @@ test.afterEach(async ({ page }, info) => {
 });
 
 async function checkPage(page: Page, path: string): Promise<PageMeasure> {
+  await expect(page.locator('.workspace-state[data-variant="loading"]')).toBeHidden();
+  await expect(page.locator("main")).toHaveCount(1);
   await expect(page.locator("main")).toBeVisible();
   await expect(page.locator("main h1")).toBeVisible();
   const measured = await page.evaluate(() => ({

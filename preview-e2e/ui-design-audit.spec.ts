@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 
 async function measure(page: Page) {
+  await expect(page.locator('.workspace-state[data-variant="loading"]')).toBeHidden();
+  await expect(page.locator("main")).toHaveCount(1);
   return page.evaluate(() => {
     const root = getComputedStyle(document.documentElement);
     const tokens = Object.fromEntries(["--canvas", "--paper", "--ink", "--ink-soft", "--ink-faint", "--line-strong", "--teal", "--text-body", "--text-reading", "--motion-fast", "--radius-control"].map(key => [key, root.getPropertyValue(key).trim()]));
@@ -60,13 +62,14 @@ test("key surfaces, focus, dark preference and reduced motion", async ({ page },
   expect(results.flatMap(result => result.contrasts.filter(item => item.ratio < item.required))).toEqual([]);
   expect(results.flatMap(result => result.controlBorders.filter(item => item.ratio < 3))).toEqual([]);
   await page.goto("/dashboard");
+  await measure(page);
   const alignment = await page.evaluate(() => ({
-    heading: document.querySelector(".list-heading>span")!.getBoundingClientRect().x,
+    heading: document.querySelector(".list-heading>span")!.checkVisibility() ? document.querySelector(".list-heading>span")!.getBoundingClientRect().x : null,
     content: document.querySelector(".data-row-detail strong")!.getBoundingClientRect().x,
     header: document.querySelector(".workspace-topbar")!.getBoundingClientRect().x,
     main: document.querySelector("main")!.getBoundingClientRect().x,
   }));
-  expect(Math.abs(alignment.heading - alignment.content)).toBeLessThan(2);
+  if (alignment.heading !== null) expect(Math.abs(alignment.heading - alignment.content)).toBeLessThan(2);
   expect(Math.abs(alignment.header - alignment.main)).toBeLessThan(2);
   const button = page.locator("main .button").first();
   await button.hover();

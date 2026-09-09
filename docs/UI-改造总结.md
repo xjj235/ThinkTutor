@@ -1,155 +1,146 @@
 # ThinkTutor UI 改造总结
 
-日期：2026-09-09。方向：浅色专业学习工作台、顶部导航、中文阅读优先。
+执行时间：2026-09-09 至 2026-09-10。分支：`codex/ui-shadcn-system`。
 
-## 1. 结果与入口
+## 结果与入口
 
-本轮完成现状勘察、源码研究、分层方案、四个独立L1提交、反馈组件与用语优化、前后截图和重新验证。没有改变学习状态机、知识包、评分、API或真实模型配置。
+本轮选择 **shadcn/ui new-york-v4** 为唯一视觉基准，整体重写 `globals.css` 与 `workspace.css`，不是在旧样式上叠加修补。保留浅色默认、顶部导航、中文阅读与既有学习流程，增加可持久化的深色外观。未修改知识库、评分、API、权限、模型调用或作答字数规则。
 
-- [本地应用](http://127.0.0.1:3102)：同一套Next.js应用，当前健康检查为ready/database ok/aiProvider deepseek。
-- [前后截图对照页](<D:/Codex/New project/.local-preview/ui-audit-2026-09-09/对照.html>)：10组、20张实际截图；已验证图片全部加载。
-- [改造前审计](<D:/Codex/New project/docs/UI-审计报告.md>)。
-- [GitHub参照与数值规则](<D:/Codex/New project/docs/GitHub-参照与可搬运规则.md>)。
-- [实施前分层方案与复核追加项](<D:/Codex/New project/docs/UI-分层改造方案.md>)。
+- [本地应用](http://127.0.0.1:3102)：同一套 Next.js 应用。当前任务健康检查确认 `ready / database ok / aiProvider deepseek`。
+- [32 张前后截图对照](<D:/Codex/New project/.local-preview/ui-shadcn-2026-09-09/对照.html>)：8 个页面、两种屏幕，分别有改造前后截图。
+- [本轮改造前审计](<D:/Codex/New project/docs/UI-SHADCN-改造前审计.md>)。
+- [源码数值、偏差说明与分层方案](<D:/Codex/New project/docs/GitHub-SHADCN-数值参照.md>)。
+- 证据根目录：`D:/Codex/New project/.local-preview/ui-shadcn-2026-09-09/`；`before`为本轮新基线，`final`为最终复核，`after`保留上一批含一次就绪时序失败的记录。此前任务的测试和分数不作为本轮验收。
 
-## 2. 审美判据与评分
+## 判断框架
 
-判断本质：优先级清楚，空间和排版有秩序，交互状态可信，持续阅读不费力。1=阻碍、2=明显缺陷、3=可用但不一致、4=成熟且有实证、5=本次范围内突出。评分为工程证据支持的设计判断，不是用户研究或WCAG认证。
+“好看”的本质是信息有优先级、空间有秩序、文字适合持续阅读、每个交互状态可信。以实际页面而不是 token 文件本身作为评判对象。
 
-| 判据 | 前 | 后 | 本轮可验证变化 |
-|---|---:|---:|---|
-| 层级 | 4 | 4 | 保留单一主动作与顶部阶段；删除按指标序号分配的装饰性颜色，状态色只承担信息用途。 |
-| 对齐与栅格 | 3 | 5 | 总览列表表头/内容起点桌面均149、手机均81px；手机顶栏/正文均16px；首统计项不再被旧选择器挤偏。 |
-| 间距与留白 | 3 | 4 | 4/8基准变量替换零散间距，字段/组/章节节奏清晰；任务课程区上移约32px而不缩小文字。 |
-| 字体排版 | 4 | 4 | 正文16、对话18保留；错误反馈13.76升至16；输入值400与标签600分开；实际字体为Microsoft YaHei。 |
-| 色彩 | 3 | 4 | 近白画布、灰阶分组与一个青绿品牌强调；关键文本抽样最低4.6478升至5.0234:1；输入边界1.5049升至3.2478:1。 |
-| 一致性 | 3 | 4 | 根主题数值统一到tokens.css，标签/控件/表面圆角4/6/8；仍保留部分历史选择器，不宣称全部组件已重写。 |
-| 状态完整性 | 3 | 4 | 状态图标、16px反馈、稳定禁用、重试恢复、焦点、空态均验证；原生危险确认取消后PATCH数0。 |
-| 动效 | 3 | 4 | 常规色彩180ms、输入背景220ms，按下不位移；减少动态偏好下过渡为0，加载图标停止旋转但状态文案保留。 |
-| 克制 | 5 | 5 | 无新增大依赖、装饰图、侧栏、营销模块或嵌套卡片；现有真实学习场景图继续使用。 |
-| 细节质感 | 3 | 4 | 阅读区预留滚动条位置、行焦点不被边界裁掉；移除本地开发徽标对手机提交按钮的遮挡。 |
-| 总分 | **34/50** | **42/50** | 7项提升、3项保持；没有为抬分而把已良好的排版判为低分。 |
+评分：1=阻碍使用；2=明显缺陷；3=可用但不统一；4=成熟且有证据；5=在细节、覆盖度与跨平台体验上突出。以下是设计判断，不是用户研究或 WCAG 认证。
 
-## 3. 参照与取舍
+| 九项判据 | 前 | 第一轮复核 | 最终 | 修复与验证依据 |
+| --- | ---: | ---: | ---: | --- |
+| 层级 | 3 | 4 | 4 | 首屏区分标题、唯一主动作、统计项与记录；报告摘要先于维度与原文。 |
+| 对齐 | 3 | 4 | 4 | 页面统一1280px顶层栅格；列表图标、正文、状态、箭头共享列定义。 |
+| 间距节奏 | 3 | 3.5 | 4 | 16/24/32px为主节奏；修复必填标签换行、记录与作答间空状态占位。 |
+| 排版 | 3 | 4 | 4 | 14/16/18/20/32五档；Markdown恢复段落、列表、标题与引用层级；正文实际使用Microsoft YaHei。 |
+| 色彩 | 3 | 3.5 | 4 | 中性表面与单一品牌色；修复首页证据区低对比、暗色主按钮hover配对。 |
+| 一致性 | 2 | 4 | 4 | 学习、表单、报告改用语义色；248处!important降为3处，均用于减少动态效果。 |
+| 状态与空态 | 3 | 3.5 | 4 | 加载骨架、错误与恢复、404；行焦点改内侧，深色偏好在首次绘制前应用。 |
+| 动效克制 | 4 | 3.5 | 4 | 180ms色彩过渡、按下不位移；reduce时明确animation:none，保留静态反馈。 |
+| 细节质感 | 3 | 4 | 4 | 本地Lucide控件图标、统一滚动条、分割线、引用样式、6/8px圆角。 |
 
-主选是 [Radix spacing](https://github.com/radix-ui/themes/blob/main/packages/radix-ui-themes/src/styles/tokens/space.css) 的尺度、[Primer border/radius](https://github.com/primer/css/blob/main/src/support/variables/misc.scss) 的边界，以及AI对话应用的作者/内容/状态分组。
+最终评分基于本轮截图复核与完整50项UI检查。各项达到4分，不以自动测试通过代替审美判断，也不将自评描述为客观产品评级。
 
-研究清单：shadcn/ui、Radix Themes、Mantine、daisyUI、Ant Design、Primer CSS、Carbon；LobeHub（原lobe-chat）、Open WebUI、Chatbot UI、Dify；Vercel Platforms、Geist UI、cmdk的Linear/Raycast示例；Refactoring UI公开目录、Laws of UX、WCAG。
+## 十项丑因清零
 
-没有照抄英文后台常见的12–14px正文、32–36px控件或聊天侧栏。所有规则对应的具体源码、数值、使用位置、Stars核验范围及许可证记录在参照文档中。无第三方代码/图片/字体复制，无新安装依赖，无运行时外网字体。
+| 清单 | 修复前 → 修复后 |
+| --- | --- |
+| ① 对齐 | 页面上限1320/1160/1080混用 → 顶层1280统一，学习内层1040与文本44em单独约束；状态列与表头共享112px列宽。 |
+| ② 间距 | 表单内边距与旧覆盖交错、标签星号另起一行 → 标签内联语义恢复；字段24px、分组24px、主区块32px；空播报区不占布局。 |
+| ③ 字号 | 多档标题、15px辅助、36/48px数字及特殊hero字级 → 全局五档，中文UI16px、学习文字18px，手机标题不缩成另一套规格。 |
+| ④ 颜色 | 灰蓝、蓝、青绿及硬编码混用；公共证据区前景背景失配 → paired semantic tokens；普通信息中性化，品牌青绿与错误红职责分离。 |
+| ⑤ 阴影/发光 | 两层CSS重复定义局部阴影 → 仅1px/2px/5%微影与8px/24px/10%浮层影；没有发光或玻璃装饰。 |
+| ⑥ 圆角 | tag4、control6、surface8与rounded-full混用 → 标签/控件6、重复项/记录8；仅头像、阶段序号和radio使用圆形。 |
+| ⑦ 默认控件 | 默认select箭头、checkbox、分散焦点 → 保留原生语义，以本地Lucide箭头/勾号统一外观；键盘2px焦点；强制颜色模式恢复原生控件。 |
+| ⑧ 层级 | 表单全宽堆叠、学习元数据占首屏、报告解释平铺 → 桌面表单标题轨与字段轨，元数据收进披露，学习身份与原文独立，维度可并排比较。 |
+| ⑨ 空/加载/错误 | 部分加载与读取失败只有一行字 → 可读标题、状态图标、骨架与恢复按钮；故障注入验证GET重试，不新增学习记录。 |
+| ⑩ 装饰 | 旧视觉规则存在无效遗留样式 → 删除旧装饰规则；保留真实本地学习图片；暗色遮罩与按钮成对切换，无新角色/背景光斑。 |
 
-## 4. 文件与Token对照
+## 真实迭代
 
-| 文件 | 变化 |
-|---|---|
-| [tokens.css](<D:/Codex/New project/src/app/tokens.css>) | 唯一主题数值来源：颜色、空间、字号、行高、圆角、尺寸、动效。 |
-| [globals.css](<D:/Codex/New project/src/app/globals.css>) | 保留语义别名，移除重复色值；基础样式引用token，取消按钮位移和全局0.01ms覆盖。 |
-| [workspace.css](<D:/Codex/New project/src/app/workspace.css>) | 统一栅格/边距/阅读节奏，收敛重复视觉尺度，完善控件和反馈状态。 |
-| [layout.tsx](<D:/Codex/New project/src/app/layout.tsx>) | 载入统一tokens，不改导航和路由。 |
-| [async-feedback.tsx](<D:/Codex/New project/src/components/async-feedback.tsx>) | 既有Lucide状态/重试图标，保留aria-live、role和重试行为。 |
-| [新建课程页](<D:/Codex/New project/src/app/teacher/courses/new/page.tsx>) | “先建立…之后再…”改为“课程范围、适用对象与教学定位。”；字段与命令不变。 |
-| [next.config.ts](<D:/Codex/New project/next.config.ts>) | `devIndicators:false`关闭开发徽标；不关闭控制台错误、异常检测或业务校验。 |
-| [ui-design-audit.spec.ts](<D:/Codex/New project/preview-e2e/ui-design-audit.spec.ts>) / [ui-readability.spec.ts](<D:/Codex/New project/preview-e2e/ui-readability.spec.ts>) | 当前截图、对比度、实际字体、焦点、布局、放大、原生确认与错误数检查。 |
-| DESIGN.md / MASTER.md | 同步新的设计来源、规则与验收边界。 |
+1. **存档与审计**：`2ee1a2a`保存已有未提交工作；本轮14项基线浏览器检查通过，先看截图再编辑。
+2. **整体替换**：`243f4bb`替换三个样式文件并记录来源；`2b4efa6`完成主题、学习结构和状态组件。首次截图暴露星号换行、列表状态对齐、报告段落间距问题，已真实修改代码。全角色8项浏览器检查通过。
+3. **独立复核修复**：复核20张前后截图，指出暗色按钮、空档、焦点、闪白、循环动画问题；`9759201`修复这些问题。当前范围代码复核无遗留P1/P2，最终视觉与行为由新增测试确认。
+4. **启动时序收尾**：50项复核中49通过，存储不可用且刷新后极早操作开关时发现初始化竞态；`329de25`使主题开关在客户端就绪前禁用，测试也等待真实可操作状态。随后重新运行完整50项，不以单次失败重试代替修复。
 
-| 变量或实测属性 | 原值 | 新值 |
-|---|---|---|
-| --canvas | #ffffff | #fafbfc |
-| --paper | #ffffff | #fdfefe |
-| --paper-subtle | #f7f8fa | #f1f3f5 |
-| --ink | #24282f | #252a31 |
-| --ink-soft | #616975 | #525e6b |
-| --ink-faint | #68717e | #5e6976 |
-| --line | #e6e8ec | #dce1e6 |
-| --line-strong | #ced3da | #858f9b |
-| --teal | #16776a | 不变，品牌连续性 |
-| 字号/行高 | 正文16/27.2，对话18/34.2 | 正文16/28，对话18/32 |
-| 错误反馈 | 13.76px | 16px |
-| 控件输入字重 | 继承标签600 | 400 |
-| 圆角 | 4/5/6/7/8等分散字面值 | --radius-tag=4、control=6、surface=8 |
-| --space-1…9 | 无共享空间变量 | 4/8/12/16/24/32/40/48/64px；row=20、reading=28 |
-| --page-gutter | 手机顶栏14、正文18 | 手机16、平板24、桌面32，居中上限仍保留 |
-| --control-height / --icon-target | 48 / 44px散落定义 | 48 / 44px集中定义，长内容允许增高 |
-| --motion-fast / --motion-normal | 100/160/180ms分散 | 180 / 220ms，统一ease-out |
-| 低动态模式 | 全局transition 0.01ms | 控件transition:none，状态文字保留 |
+中间失败如实保留：首次浏览器批次遇开发缓存缺失返回500，废弃该批验收并更换独立缓存重启；随后测试遇Next流式加载的临时双main，改为等待加载结束；第二轮两项失败是测试的alert选择器同时匹配Next路由播报，限定到main后重测。以上失败没有伪装成通过。
 
-中性色分背景、文字、边界三组；青绿是品牌强调。蓝色信息、琥珀警示和红色错误属于功能语义，不作为装饰配色。整体仍是浅色，不变成单色青绿页面。
+## Token 对照
 
-## 5. 本轮验证
+| 变量/规则 | 原值 | 当前值 |
+| --- | --- | --- |
+| 画布/面板 | #fafbfc / #fdfefe | #fafafa / #fdfdfd；暗#0a0a0a / #171717 |
+| 正文/辅助 | #252a31 / #525e6b、#5e6976 | #171717 / #666666；暗#fafafa / #b0b0b0 |
+| 主按钮 | 青绿#16776a | #262626；暗#e5e5e5，前景相应反转 |
+| 边界/输入 | #dce1e6 / #858f9b | #e5e5e5 / #888888；暗#383838 / #808080 |
+| 字号 | 14/15/16/18/20/22/28/32/36等 | 14/16/18/20/32 |
+| 标题字重 | 多处650/750/800历史覆盖 | 600；动作500，正文400 |
+| 标签/控件/表面圆角 | 4/6/8px | 6/6/8px |
+| 行内/阅读分组间距 | 20/28px | 16/24px |
+| 顶栏/导航 | 84/60px | 72/48px；首屏少占24px |
+| 顶层宽度 | 1320/1160/1080px | 统一1280px |
+| 过渡 | 多处0.16s及覆盖规则 | 180ms，reduce为0s；循环动画关闭 |
+| 兼容样式 | globals146 + workspace102处!important | globals3 + workspace0；仅无障碍例外 |
 
-| 验证 | 最终结果 | 证据/范围 |
-|---|---|---|
-| pnpm lint | 通过，0 errors / 0 warnings | 全仓ESLint；临时迁移脚本也改用ESM后重跑。 |
-| pnpm test | 321通过、3跳过 | 35文件通过、1文件跳过；隔离PostgreSQL，未将Mock故障测试日志当成真实模型失败。 |
-| pnpm build | 通过 | 独立`.next/ui-audit-build`，TypeScript通过，52个静态生成项；未占用预览缓存。 |
-| 本地UI检查 | 14/14通过 | 37页面×1440桌面/375手机，外加768表单、CSS zoom=2、焦点/按下/状态/确认。 |
-| 普通核心闭环 | 14/14通过 | thinktutor-flow、workspace-design、teacher-assignment-flow、admin-user-management、resilience双视口。 |
-| v1.2专项闭环 | 4/4通过 | knowledge-runtime双视口，包含有依据反馈、案例迁移、版本化报告。 |
-| 浏览器控制台 | 0 | 8份全页面runtime-errors.json合计0，关键状态审计正常流程额外两份也为0。503故障注入单独标记。 |
-| 对比度探针 | 通过 | 关键固色文本最低5.0234:1，输入边界最低3.2478:1；不将四舍五入用于通过判定。 |
-| 对照页 | 20/20图片加载 | comparison-check.json；公共图片亦通过naturalWidth检查。 |
-| 机械设计扫描 | 0条 | impeccable detect输出`[]`；不能替代视觉审阅或全站无障碍认证。 |
-| 预览健康 | ready / database ok / deepseek | 本轮`/api/health/ready`；Redis未配置，不能视作生产基础设施验收。 |
+不引入远程字体、外部图片或重型组件库。shadcn的36px控件和14px桌面输入没有照搬：本项目保留48px/16px，以满足中文阅读与触控。数值偏差均明确列于参照文档。
 
-首次把resilience与knowledge-runtime显式混跑时12通过、4失败。启动器会因knowledge-runtime文件将整组设置为v1.2，旧测试未确认学习目标就等待作答/提交答案，产生等待超时或409。分为普通模式14项和v1.2模式4项重跑后全部通过；未改产品逻辑，也未删除失败断言。完整初次失败产物仍在`core-loop`。
+## 验证结果
 
-最初审计测试的定位器/截图光标问题也保留在本地历史产物；最终产物另存，未覆盖失败记录。pnpm依赖状态提示、pg并发query弃用提示属于既有工具链警告；本轮不进行无关依赖升级。
+所有命令均在本轮重新运行。pnpm执行前使用现有依赖容差环境变量 `pnpm_config_verify_deps_before_run=warn`，未重装依赖或更换锁文件。
 
-### 复现命令
+| 项目 | 本轮结果 |
+| --- | --- |
+| `pnpm lint` | 通过；主题就绪修复后已重新补验 |
+| `pnpm test` | 347通过，3跳过；36个测试文件通过，1个跳过 |
+| `pnpm build` | 通过；独立目录`.next/shadcn-build`，52个静态生成项完成 |
+| 核心流程：`thinktutor-flow` + `resilience` | 8通过，桌面与手机；含失败重试、幂等、完整学习至报告与再练 |
+| 知识库流程：`knowledge-runtime` | 4通过，桌面与手机；含课程目标、版本报告与知识库流程 |
+| 最终UI整批 | 50通过，4.2分钟；桌面与手机，含明暗主题、首帧主题、存储异常、减少动态效果、加载与错误恢复 |
+| 控制台/运行时 | 未捕获异常0、意外控制台错误0、意外HTTP失败0、失败网络请求0；故障注入产生的2条预期503另行记录 |
+| 几何与对比度 | 72份测量，横向溢出0、品牌元素重叠0；3,206个文本样本最低4.85:1，224个控件边界样本最低3.40:1 |
+| 截图对照文件 | 1440px与375px下32/32图片完整加载；控制台错误0，无横向溢出 |
+| 样式检测器 | 两条告警均为blockquote的中性引用边框，不是装饰卡片；已人工复核并保留语义，不将告警冒称为零 |
 
-在项目目录PowerShell运行：
+自动流程测试使用隔离临时数据库与Mock，这是稳定回归证据，不是真实模型教学质量或生产验收。用户本地预览持续使用DeepSeek；本轮UI检查不额外生成学习数据。正常页控制台、故障注入产生的预期503以及构建/工具警告分开记录。
+
+对比度数字只覆盖测量脚本可可靠解析的可见文字与控件，不等于全站WCAG认证。测试环境、两条样式检测告警和3个跳过用例均保留，不以历史通过记录填补。
+
+复现命令（项目目录内执行，预览已在3102运行）：
 
 ```powershell
 $env:pnpm_config_verify_deps_before_run='warn'
 $env:PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='C:\Program Files\Google\Chrome\Application\chrome.exe'
-$env:PREVIEW_BASE_URL='http://127.0.0.1:3102'
 pnpm lint
-$env:TEST_POSTGRES_PORT='55436'
 pnpm test
-$env:THINKTUTOR_DIST_DIR='.next/ui-audit-build'
+$env:THINKTUTOR_DIST_DIR='.next/shadcn-build'
 pnpm build
-pnpm preview:check preview-e2e/ui-design-audit.spec.ts preview-e2e/ui-readability.spec.ts --output=.local-preview/ui-audit-2026-09-09/recheck-ui
-$env:TEST_POSTGRES_PORT='55435'
-pnpm e2e e2e/thinktutor-flow.spec.ts e2e/workspace-design.spec.ts e2e/teacher-assignment-flow.spec.ts e2e/admin-user-management.spec.ts e2e/resilience.spec.ts --output=.local-preview/ui-audit-2026-09-09/recheck-core
-pnpm e2e e2e/knowledge-runtime.spec.ts --output=.local-preview/ui-audit-2026-09-09/recheck-v12
+pnpm e2e e2e/thinktutor-flow.spec.ts e2e/resilience.spec.ts
+pnpm e2e e2e/knowledge-runtime.spec.ts
+$env:PREVIEW_BASE_URL='http://127.0.0.1:3102'
+pnpm preview:check preview-e2e/ui-readability.spec.ts preview-e2e/ui-design-audit.spec.ts preview-e2e/ui-shadcn-quality.spec.ts --output=.local-preview/ui-shadcn-2026-09-09/recheck
 ```
 
-两个e2e命令不可合并为一次显式文件调用。构建/E2E自动产生的tsconfig/next-env缓存路径已恢复为本轮开始前内容，避免提交环境噪声。
+知识库与普通流程分别运行，避免两种测试模式共用知识配置。构建不可使用默认`.next`目录覆盖运行中的预览缓存。本轮预览缓存为`.next/ui-shadcn-preview`，持久数据仍在`.local-preview/v121/postgres`，端口3102/55437。
 
-### 截图索引
+## 截图与测量
 
-根目录：`D:/Codex/New project/.local-preview/ui-audit-2026-09-09/`。
+- `before/`与`final/`的`ui-readability-*`：公共6页、学生11页、教师14页、管理员6页，全部桌面/手机各一份；实际记录页与报告使用相同已有会话。
+- `final/ui-shadcn-quality-*`：公共入口、学生总览/表单/资料/研习/报告、教师与管理员总览的两主题整页图，以及每页computed-styles JSON。
+- `ui-design-audit-*`：hover、active、表单focus、768px平板、200%缩放、错误/禁用、原生确认取消后的界面。
+- 新focused记录：首次paint时主题、减少动态效果时动画数、深色首页hover颜色/尺寸、列表键盘内侧焦点。
+- 浏览器原生危险确认框继续保留。记录确认文案与取消后零PATCH，不把取消后的截图声称为原生弹窗截图。
+- 图片背景文字不使用“纯色祖先背景”算法虚报对比度；其阅读效果单独看截图，实心主按钮额外计算真实颜色比值。
 
-- before：本轮基线公共页、列表、表单、会话、报告、教师/管理页。
-- before-states-final：基线焦点、系统暗色偏好、错误、加载/禁用。
-- after-release：最终37页面与交互状态；其中audit.json、runtime-errors.json、native-dialog.json为测量证据。
-- core-final：普通闭环、实际新账号空态及键盘导航。
-- v12-final：知识反馈、案例迁移与版本报告。
-- 对照.html：8组学习页面及2组错误反馈的前后并排对照。
+## 改动文件
 
-本轮截图与测量包含本地账号/学习内容，仅保留本机，Git忽略。所有新演练数据来自隔离测试数据库；预览故障测试拦截请求、不保存课程。
+| 范围 | 文件 | 影响 |
+| --- | --- | --- |
+| 统一样式 | `src/app/tokens.css`、`src/app/globals.css`、`src/app/workspace.css` | 整体重建语义令牌、栅格、字号与控件状态，保留旧名称兼容映射 |
+| 顶部导航与外观 | `src/components/site-navigation.tsx`、`src/components/theme-toggle.tsx`、`src/app/layout.tsx` | 明暗切换、首帧外观、主题就绪状态；导航保持顶部 |
+| 学习与报告 | `src/components/session-client.tsx`、`src/components/report-client.tsx`、`src/components/task-form.tsx` | 信息层级、布局与语义样式，不改提交、评分或阶段规则 |
+| 通用状态 | `src/components/workspace-state.tsx`、`src/app/loading.tsx`、`src/app/error.tsx`、`src/app/not-found.tsx` | 加载、错误、未找到状态与恢复动作 |
+| 图标与许可 | `public/icons/`、`THIRD_PARTY_NOTICES.md` | 本地控件图标与第三方许可，无外网运行时依赖 |
+| 规范与回归 | `DESIGN.md`、`design-system/thinktutor/MASTER.md`、`docs/`内本轮报告、`preview-e2e/ui-*.spec.ts` | 单一设计基准、前后证据及可复现检查 |
 
-## 6. 提交与回滚
+Next构建自动写入的临时类型目录已恢复为安全基线配置，不提交本机缓存路径；依赖、锁文件和环境密钥未改动。
 
-分支：`codex/ui-evidence-refinement`。本轮只创建本地提交，未push。
+## 与基准的差距
 
-| 提交 | 内容 |
-|---|---|
-| ce91877 | 用户要求的现状安全基线，保留原有60个改动文件；不等于对全部历史改动验收 |
-| 8b430a6 | 审计、GitHub参照、分层方案与审计脚本 |
-| 4aa067b | L1-A：语义颜色/圆角token |
-| f36c620 | L1-B：栅格与阅读节奏 |
-| 88e4871 | L1-C：交互状态 |
-| 511da6d | L2：反馈分层及状态验证 |
-| cdaed6f | L1-D：输入字重与预览遮挡修正 |
-| 5ad0ce7 | 课程设定用语校准 |
+**基础排版、表面、按钮、阅读节奏和明暗主题已统一到所选规则；仍不宣称达到shadcn完整组件生态的成熟度。** 差距主要是复杂数据表操作、跨平台字体度量、原生确认弹窗的视觉一致性，以及多语言/超长真实课程数据的长期验证。当前不是1:1像素复制：保留顶部导航、更大的中文字号和控件，这是产品约束而非混用风格。
 
-单项撤销可用`git revert <commit>`，保留历史。整体撤销本轮UI时按从新到旧撤销基线之后的提交；不要撤销`ce91877`，它保存的是用户此前工作。后续状态样式依赖tokens，单独撤销较早token提交可能需要处理后续依赖，不能承诺任意顺序零冲突。密钥、env和本地数据库始终未提交。
+下一轮应以真实师生使用记录选择一个最频繁的工作流，重点优化复杂表格的筛选与批量操作、长对话的阅读定位；涉及新功能时另行确认范围。视觉层本轮已整体重建，不建议再次堆叠另一套样式。生产、教师审核与模型诊断稳定性不在这份UI验收中。
 
-## 7. 边界与下一轮
+## 回滚
 
-现有应用没有暗色主题或自定义HTML模态框。系统暗色偏好下维持浅色的行为未降低；原生确认只验证取消和无写入，不冒充自定义弹窗截图。低动态、移动导航、错误恢复均保留。
-
-本轮不是教学效果/真实模型评分一致性/教师审核/生产云验收。普通测试与v1.2专项使用Mock保证流程可重复；本地预览继续使用真实DeepSeek配置，但没有将本轮UI验证说成新的模型质量验收。
-
-下一轮优先：用教师与学生真实长文本做可用性访谈，观察连续10分钟阅读和作答的负担；逐页将仍在TSX中的历史颜色类替换为语义组件；随后再单独评估完整暗色主题和自定义危险确认。品牌图片与字体不是当前最优先的投入。
+安全基线：`2ee1a2a`；样式体系：`243f4bb`；结构与主题：`2b4efa6`；复核修复：`9759201`；主题就绪：`329de25`。交付文档和回归用例另行提交。不推送、不重置分支、不覆盖其他工作；需要回滚时按后到前使用`git revert`对应提交，保留已有学习输入改动。

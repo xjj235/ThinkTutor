@@ -8,9 +8,11 @@ The durable design source of truth is [design-system/thinktutor/MASTER.md](desig
 
 Light professional learning workspace, selected by the user on 2026-09-04.
 Top navigation replaces the sidebar at the user's request, implemented on 2026-09-07.
-Near-white content canvas, faint gray navigation, restrained emerald actions,
-blue informational states and amber knowledge gaps. Reading-first Chinese typography,
-revised on 2026-09-09 after a fresh GitHub reference and page-by-page review.
+Unique visual benchmark: shadcn/ui new-york-v4 at
+`3ba91b1cc83e1bbe4ab35a422ff2a694849c5048`, selected on 2026-09-09.
+Neutral surfaces, charcoal primary actions, one restrained teal brand accent.
+The complete style layer was replaced, not extended with legacy overrides.
+Default light appearance, with a persistent optional dark appearance.
 
 ## Product Expression
 
@@ -26,7 +28,8 @@ revised on 2026-09-09 after a fresh GitHub reference and page-by-page review.
 
 Preserve routes, role permissions, server-owned state and scoring contracts.
 Never invent student evidence, metrics, testimonials, cloud verification or teacher approval.
-GitHub references inform composition; no external project code or product data is copied.
+The semantic tokens adapt the pinned MIT-licensed shadcn source. Attribution is in
+THIRD_PARTY_NOTICES.md. No external product data or runtime resources are copied.
 
 ## Responsive and Accessibility Decisions
 
@@ -38,7 +41,7 @@ GitHub references inform composition; no external project code or product data i
 - Touch inputs use 16px text. Current items use aria-current.
 - General interface text is 16px; study dialogue and response text are 18px.
   Secondary labels are at least 14px. Section headings use 18-20px.
-- Desktop page titles use 32px; mobile titles use 28px. Controls reserve
+- Page titles use 32px on desktop and mobile. Five sizes only: 14/16/18/20/32px. Controls reserve
   44-48px touch targets; larger type must not be compensated by clipped labels.
 - Knowledge review tabs support arrows, Home and End; inactive forms retain their input.
 - Reference research and current verification are recorded in
@@ -49,3 +52,6 @@ GitHub references inform composition; no external project code or product data i
   [docs/UI_READABILITY_REDESIGN_2026-09-09.md](docs/UI_READABILITY_REDESIGN_2026-09-09.md).
 - Shared values now live in `src/app/tokens.css`; spacing, state feedback and
   before/after evidence are documented in [docs/UI-改造总结.md](docs/UI-改造总结.md).
+- The pinned numerical reference is [docs/GitHub-SHADCN-数值参照.md](docs/GitHub-SHADCN-数值参照.md).
+- Root appearance is applied before first paint; storage failure never blocks use.
+- Focus is inset on clipped list rows. Reduced motion stops looping animations.

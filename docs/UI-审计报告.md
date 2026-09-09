@@ -1,5 +1,7 @@
 # ThinkTutor UI 审计报告
 
+> 历史批次保留。2026-09-09至10日的shadcn整体重建使用新基线`2ee1a2a`，当前审计见[UI-SHADCN-改造前审计.md](UI-SHADCN-改造前审计.md)，验收见[UI-改造总结.md](UI-改造总结.md)。下文结果不可作为当前批次证据。
+
 日期：2026-09-09。改造前基线：`ce91877`；分支：`codex/ui-evidence-refinement`。
 
 ## 1. 判断框架
