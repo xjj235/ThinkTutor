@@ -1,47 +1,52 @@
-/* ThinkTutor-owned tokens. Research attribution: docs/GitHub-参照与可搬运规则.md. */
+/* shadcn/ui new-york-v4, adapted for Chinese learning. See THIRD_PARTY_NOTICES.md. */
 :root {
   color-scheme: light;
-  --canvas: #fafbfc;
-  --paper: #fdfefe;
-  --paper-subtle: #f1f3f5;
-  --ink: #252a31;
-  --ink-soft: #525e6b;
-  --ink-faint: #5e6976;
-  --line: #dce1e6;
-  --line-strong: #858f9b;
-  --teal: #16776a;
-  --teal-strong: #105b51;
-  --teal-soft: #eaf5f0;
-  --on-accent: #fdfefe;
-  --focus: var(--teal);
-  --blue: #4266a8;
-  --blue-soft: #eef3fb;
-  --amber: #916014;
-  --amber-soft: #fff6e7;
-  --danger: #a83227;
-  --danger-strong: #81251e;
-  --danger-soft: #f9e9e6;
-  --danger-line: #c4847c;
-  --success-line: #99bfb2;
-  --disabled-bg: #e8ecef;
-  --disabled-ink: #596470;
-  --scroll-thumb: #858f9b;
-  --shadow-subtle: 0 1px 2px #252a310a;
-  --shadow-popover: 0 4px 12px #252a3114;
+  --background: #fafafa;
+  --foreground: #171717;
+  --card: #fdfdfd;
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: #262626;
+  --primary-hover: #404040;
+  --primary-foreground: #fafafa;
+  --secondary: #f5f5f5;
+  --secondary-foreground: var(--foreground);
+  --muted: #f5f5f5;
+  --muted-foreground: #666666;
+  --accent: #ededed;
+  --accent-foreground: var(--foreground);
+  --border: #e5e5e5;
+  --input: #888888;
+  --ring: #16776a;
+  --brand: #16776a;
+  --brand-hover: #105b51;
+  --brand-subtle: #eaf5f0;
+  --destructive: #b42318;
+  --destructive-hover: #912018;
+  --destructive-foreground: #fafafa;
+  --destructive-subtle: #fff1ef;
+  --destructive-border: #c77b73;
+  --warning: #865e11;
+  --warning-subtle: #fff6e5;
+  --disabled: #ededed;
+  --disabled-foreground: #737373;
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 5%);
+  --shadow-overlay: 0 8px 24px rgb(0 0 0 / 10%);
 
-  --font-ui: "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "PingFang SC", ui-sans-serif, system-ui, sans-serif;
-  --font-numeric: "Segoe UI", Arial, sans-serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-numeric: var(--font-ui);
   --text-caption: 14px;
-  --text-small: 15px;
+  --text-small: var(--text-caption);
   --text-body: 16px;
   --text-reading: 18px;
-  --text-subheading: 18px;
+  --text-subheading: var(--text-reading);
   --text-section: 20px;
   --text-title: 32px;
-  --text-title-mobile: 28px;
+  --text-title-mobile: var(--text-title);
   --leading-body: 1.75;
   --leading-reading: 1.777778;
-  --leading-heading: 1.4;
+  --leading-heading: 1.25;
   --reading-measure: 44em;
 
   --space-1: 4px;
@@ -53,26 +58,81 @@
   --space-7: 40px;
   --space-8: 48px;
   --space-9: 64px;
-  --space-row: 20px;
-  --space-reading: 28px;
-  --radius-tag: 4px;
+  --space-row: var(--space-4);
+  --space-reading: var(--space-5);
   --radius-control: 6px;
   --radius-surface: 8px;
+  --radius-tag: var(--radius-control);
   --control-height: 48px;
   --icon-target: 44px;
-  --workspace-width: 1320px;
-  --learning-width: 1160px;
-  --task-width: 1080px;
+  --workspace-width: 1280px;
+  --learning-width: var(--workspace-width);
+  --task-width: var(--workspace-width);
   --page-gutter: 32px;
   --motion-fast: 180ms;
   --motion-normal: 220ms;
-  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Compatibility names used by existing charts and non-visual consumers. */
+  --canvas: var(--background);
+  --paper: var(--card);
+  --paper-subtle: var(--muted);
+  --ink: var(--foreground);
+  --ink-soft: var(--muted-foreground);
+  --ink-faint: var(--muted-foreground);
+  --line: var(--border);
+  --line-strong: var(--input);
+  --teal: var(--brand);
+  --teal-strong: var(--brand-hover);
+  --teal-soft: var(--brand-subtle);
+  --on-accent: var(--primary-foreground);
+  --focus: var(--ring);
+  --blue: var(--muted-foreground);
+  --blue-soft: var(--muted);
+  --amber: var(--warning);
+  --amber-soft: var(--warning-subtle);
+  --danger: var(--destructive);
+  --danger-strong: var(--destructive-hover);
+  --danger-soft: var(--destructive-subtle);
+  --danger-line: var(--destructive-border);
+  --success-line: var(--border);
+  --disabled-bg: var(--disabled);
+  --disabled-ink: var(--disabled-foreground);
+  --scroll-thumb: var(--input);
+  --shadow-subtle: var(--shadow-xs);
+  --shadow-popover: var(--shadow-overlay);
 }
 
-@media (max-width: 1180px) {
-  :root { --page-gutter: 24px; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #171717;
+  --primary: #e5e5e5;
+  --primary-hover: #d4d4d4;
+  --primary-foreground: #171717;
+  --secondary: #262626;
+  --muted: #262626;
+  --muted-foreground: #b0b0b0;
+  --accent: #333333;
+  --border: #383838;
+  --input: #808080;
+  --ring: #79d4bf;
+  --brand: #79d4bf;
+  --brand-hover: #a3e4d5;
+  --brand-subtle: #173a32;
+  --destructive: #ffb4aa;
+  --destructive-hover: #ffc9c2;
+  --destructive-foreground: #28100c;
+  --destructive-subtle: #321d1a;
+  --destructive-border: #b76e64;
+  --warning: #f0cd85;
+  --warning-subtle: #362a13;
+  --disabled: #262626;
+  --disabled-foreground: #a3a3a3;
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 20%);
+  --shadow-overlay: 0 8px 24px rgb(0 0 0 / 30%);
 }
 
-@media (max-width: 700px) {
-  :root { --page-gutter: 16px; }
-}
+@media (max-width: 960px) { :root { --page-gutter: 24px; } }
+@media (max-width: 700px) { :root { --page-gutter: 16px; } }
