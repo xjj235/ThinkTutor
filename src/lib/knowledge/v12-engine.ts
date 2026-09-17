@@ -4,6 +4,7 @@ import type { KnowledgeManifest } from "./schemas";
 import { type EvidenceRule, type TurnAssessment, type V12State, type EvidenceRef, turnAssessmentSchema, v12StateSchema } from "./v12-schema";
 import type { KnowledgeAction } from "./orchestrator";
 import { applicablePedagogyRules } from "./pedagogy";
+import { targetVerificationRules } from "./coaching-rules";
 
 export function initialV12State(): V12State {
   return v12StateSchema.parse({ schemaVersion: "1.2", pedagogicalStage: "DIAGNOSIS", activityType: "DIAGNOSTIC_QUESTION", diagnosticLevel: null, diagnosticMessageIds: [], currentGroupId: null, currentCaseId: null, currentCaseUnseen: false, unitStates: {}, misconceptionStates: {}, gapStates: {}, observations: [], assessments: {}, noProgressCounts: {}, usedGroupIds: [], caseLastUsedAt: {}, ownCaseExposureCounts: {}, lastResult: null, transferPassed: false, finalTransferMessageId: null, finalFeynmanMessageId: null, finalRevisionMessageId: null, reflectionTargetId: null, needsTeacherReview: false, experienceLimitReached: false, migrationLog: [] });
@@ -91,6 +92,7 @@ export function applyV12Assessment(manifest: KnowledgeManifest, runtime: Knowled
   const reliable = assessment.modelAssessmentConfidence >= 0.75 && independent && !conflicting;
   s.assessments[message.id] = assessment;
   s.lastAssessmentMessageId = message.id;
+  s.lastAssessmentContext = { targetId: runtime.currentTargetId, questionId: runtime.currentQuestionId, stage: s.pedagogicalStage };
   s.answerFingerprints[message.id] = fingerprint;
   // Keep raw model confidence in assessments; contradictory evidence cannot support a score.
   for (const [evidenceId, ref] of refs) s.observations.push({ evidenceId, ref, independent, confidence: conflicting ? Math.min(0.49, assessment.modelAssessmentConfidence) : assessment.modelAssessmentConfidence });
@@ -113,7 +115,7 @@ export function applyV12Assessment(manifest: KnowledgeManifest, runtime: Knowled
     const evidenceRefs = [...refs].filter(([e]) => [...r.requiredAll, ...r.requiredAny, ...r.prohibited].includes(e)).map(([, ref]) => ref);
     const newIndependent = reliable && outcome === "PASS" && !old?.questionIds.includes(questionKey);
     const count = (old?.independentEvidenceCount ?? 0) + Number(newIndependent);
-    const conditionVerified = !["C_SR_001", "M_SR_003"].includes(id) || refs.has("condition_revision");
+    const conditionVerified = targetVerificationRules(config.coachingPolicy, id).every((rule) => rule.requiredAll.every((evidenceId) => refs.has(evidenceId)));
     const verificationCount = (old?.verificationCount ?? 0) + Number(newIndependent && count >= 2 && conditionVerified);
     s.unitStates[id] = { status: outcome === "PASS" ? (reliable && count >= 2 && conditionVerified ? "MASTERED" : old?.status === "MASTERED" ? "MASTERED" : "PARTIAL") : outcome === "PARTIAL" ? "PARTIAL" : "GAP", independentEvidenceCount: count, verificationCount, evidenceRefs: [...(old?.evidenceRefs ?? []), ...evidenceRefs], questionIds: newIndependent ? [...(old?.questionIds ?? []), questionKey] : old?.questionIds ?? [], lastUpdatedAt: now };
   }

@@ -8,12 +8,12 @@ import {
   DimensionKey,
   LearningReportDTO,
   LearningSessionDTO,
-  ReportGap,
   SessionPayload,
   dimensionKeys,
   dimensionLabels,
   isApiFailure,
 } from "@/lib/contracts";
+import { gapStatusLabels } from "@/lib/display-labels";
 import { SafeMarkdown } from "./safe-markdown";
 import { WorkspaceState } from "./workspace-state";
 import { ArrowLeft, RotateCcw } from "lucide-react";
@@ -48,11 +48,13 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [retryableError, setRetryableError] = useState(false);
   const retryRequestId = useRef<string | null>(null);
 
   const loadReport = useCallback(async () => {
     setLoading(true);
     setError("");
+    setRetryableError(false);
     try {
       setPayload(await fetchReportPayload(sessionId));
     } catch (cause) {
@@ -90,12 +92,13 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   async function retrySession() {
-    if (pending) {
+    if (pending || !payload?.report.gaps.some((gap) => gap.status === "OPEN") || (error && !retryableError)) {
       return;
     }
 
     setPending(true);
     setError("");
+    setRetryableError(false);
     const clientRequestId = retryRequestId.current ?? makeRequestId();
     retryRequestId.current = clientRequestId;
     try {
@@ -107,12 +110,15 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
       const result = (await response.json()) as ApiResponse<SessionPayload>;
       if (isApiFailure(result)) {
         setError(result.error.message);
+        setRetryableError(result.error.retryable);
+        if (!result.error.retryable) retryRequestId.current = null;
         return;
       }
       retryRequestId.current = null;
       router.push(`/session/${result.data.session.id}`);
     } catch {
       setError("创建再练会话失败，请重试。");
+      setRetryableError(true);
     } finally {
       setPending(false);
     }
@@ -161,6 +167,8 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
   }
 
   const { session, report } = payload;
+  const hasOpenGaps = report.gaps.some((gap) => gap.status === "OPEN");
+  const hasStartedGaps = report.gaps.some((gap) => gap.status === "IN_PROGRESS");
 
   return (
     <main
@@ -175,10 +183,10 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
         <button
           type="button"
           onClick={retrySession}
-          disabled={pending || report.gaps.length === 0}
+          disabled={pending || !hasOpenGaps || Boolean(error && !retryableError)}
           className="button"
         >
-          <RotateCcw size={15} aria-hidden="true" />{pending ? "正在创建..." : report.gaps.length === 0 ? "暂无待巩固要点" : "开启定向巩固"}
+          <RotateCcw size={15} aria-hidden="true" />{pending ? "正在创建..." : hasOpenGaps ? "开启定向巩固" : hasStartedGaps ? "巩固已开始" : "暂无待巩固要点"}
         </button>
       </div>
 
@@ -202,7 +210,7 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
       </section>
 
       <div aria-live="polite" className="min-h-6 text-sm text-muted-foreground">
-        {pending ? "正在创建定向巩固任务..." : ""}
+        {pending ? "正在创建定向巩固任务..." : !hasOpenGaps && hasStartedGaps ? "这些要点已开始定向巩固，可在学习记录中继续。" : ""}
       </div>
 
       {error ? (
@@ -213,11 +221,11 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
           <span>{error}</span>
           <button
             type="button"
-            onClick={retrySession}
+            onClick={retryableError ? retrySession : loadReport}
             disabled={pending}
             className="button button-secondary"
           >
-            重试创建
+            {retryableError ? "重试创建" : "重新加载报告"}
           </button>
         </div>
       ) : null}
@@ -357,7 +365,7 @@ function ListBlock({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function GapBlock({ items }: { items: ReportGap[] }) {
+function GapBlock({ items }: { items: LearningReportDTO["gaps"] }) {
   const sortedItems = [...items].sort((left, right) => right.priority - left.priority);
 
   return (
@@ -377,7 +385,7 @@ function GapBlock({ items }: { items: ReportGap[] }) {
                   {gap.title}
                 </h3>
                 <span className="shrink-0 rounded-md border border-border bg-brand-subtle px-2 py-0.5 text-xs font-medium text-brand">
-                  优先级 {gap.priority}
+                  {gapStatusLabels[gap.status]} · 优先级 {gap.priority}
                 </span>
               </div>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">

@@ -27,11 +27,39 @@ function assertValidSnapshot(session: SessionStateSnapshot): void {
   if (session.socraticTurns > session.maxTurns) throw new Error("socraticTurns exceeds maxTurns.");
 }
 
-const unknownPatterns = ["不知道", "不清楚", "不会", "没思路", "没有思路", "不懂", "idk", "i don't know", "i do not know", "no idea"];
+const unknownStatement = /^(?:(?:我|我们|这题|这道题|这里|目前|暂时|还|也|完全|真的|确实|实在|还是)\s*)*(?:不知道|不清楚|不懂|不太懂|不明白|不会|没思路|没有思路)(?:(?:该|要|应该)?(?:怎么|如何)(?:回答|解释|分析|做|说)(?:这个问题|这道题)?|这个(?:概念|问题|知识点)|这道题)?[啊呀呢哦了吧]*$/u;
+const unknownEnglishStatement = /^(?:(?:i|we)\s+)?(?:(?:do\s+not|don't|dont)\s+(?:know|understand)|have\s+no\s+idea|no\s+idea|idk|unsure)(?:\s+(?:yet|how\s+to\s+(?:answer|explain|start)))?$/u;
+const helpRequest = /^(?:(?:请|能|可以|能否|可否)\s*)?(?:(?:给|提供)(?:我)?(?:个|一点|一些)?(?:提示|线索|帮助)|提示一下)(?:吗|么|吧)?$/u;
 
 export function isLowInformationAnswer(answer: string): boolean {
-  const normalized = answer.trim().toLowerCase();
-  return normalized.length < 6 || unknownPatterns.some((pattern) => normalized.includes(pattern));
+  const normalized = answer.normalize("NFKC").trim().toLowerCase().replace(/’/gu, "'");
+  if (!/[\p{L}\p{N}]/u.test(normalized)) return true;
+  const clauses = normalized.split(/[，,。.!！?？;；\r\n]+/u).map((clause) => clause.trim()).filter(Boolean);
+  // A short concept or a sentence containing “不会” can be substantive. Only
+  // explicit unknown/help statements qualify; a mixed answer retains evidence.
+  return clauses.length > 0 && clauses.every((clause) => unknownStatement.test(clause) || unknownEnglishStatement.test(clause) || helpRequest.test(clause));
+}
+
+export interface LearningEvidenceMessage {
+  role: string;
+  phase: LearningPhase;
+  content: string;
+  questionType: QuestionType | null;
+}
+
+export function answeredSocraticQuestionTypes(messages: readonly LearningEvidenceMessage[]): QuestionType[] {
+  const answered: QuestionType[] = [];
+  let pending: QuestionType | null = null;
+  for (const message of messages) {
+    if (message.phase !== "SOCRATIC") continue;
+    if (message.role === "ASSISTANT" && message.questionType && message.questionType !== "SCAFFOLDED_HINT") {
+      pending = message.questionType;
+    } else if (message.role === "USER" && pending && !isLowInformationAnswer(message.content)) {
+      answered.push(pending);
+      pending = null;
+    }
+  }
+  return answered;
 }
 
 export function computeUnknownStreak(answer: string, previousStreak: number): number {

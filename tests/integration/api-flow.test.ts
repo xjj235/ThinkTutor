@@ -141,10 +141,11 @@ describe("ThinkTutor API flow", () => {
     const answered = await postAnswer(id, text, `length-answer-${id}`);
     expect(answered.status).toBe(200);
     expect((await parseSessionResponse(answered)).data.messages.some((m) => m.content === text)).toBe(true);
-    for (let i = 0; i < 3; i++) {
-      expect((await postAnswer(id, "因为机构关联，所以风险会传导并放大。", `length-turn-${id}-${i}`)).status).toBe(200);
+    for (let i = 0; i < 4; i++) {
+      const turn = await postAnswer(id, "因为机构关联，所以风险会传导并放大。", `length-turn-${id}-${i}`);
+      expect(turn.status).toBe(200);
+      if (i === 3) expect((await parseSessionResponse(turn)).data.session.phase).toBe("FEYNMAN");
     }
-    expect((await enterFeynmanRoute(jsonRequest(`/api/sessions/${id}/feynman/enter`, { clientRequestId: `length-enter-${id}` }), sessionContext(id))).status).toBe(200);
     const result = await feynmanRoute(jsonRequest(`/api/sessions/${id}/feynman`, { explanation: text, clientRequestId: `length-feynman-${id}` }), sessionContext(id));
     expect(result.status).toBe(200);
     const loaded = await parseSessionResponse(await getSessionRoute(new Request(`http://localhost/api/sessions/${id}`), sessionContext(id)));
@@ -244,8 +245,13 @@ describe("ThinkTutor API flow", () => {
       }),
       sessionContext(sessionId),
     );
-    current = await parseSessionResponse(enterResponse);
+    expect(enterResponse.status).toBe(409);
+    expect(await enterResponse.json()).toMatchObject({ error: { code: "CONFLICT" } });
+    const evidenceAnswer = await postAnswer(sessionId, "机构披露的共同资产持仓和资金流数据可以支持这条传播链，仍需核对是否出现金融服务中断。", "answer-evidence-api-004");
+    expect(evidenceAnswer.status).toBe(200);
+    current = await parseSessionResponse(evidenceAnswer);
     expect(current.data.session.phase).toBe("FEYNMAN");
+    expect(current.data.session.socraticTurns).toBe(4);
 
     const explanation =
       "系统性风险是局部冲击通过关联和流动性扩散成整体风险。例如一家机构抛售会压低资产价格，所以其他机构也会受损。如果迁移到供应链场景，需要检查节点关联和替代条件。";
@@ -333,7 +339,12 @@ describe("ThinkTutor API flow", () => {
     expect(duplicateRetry.data.session.id).toBe(retry.data.session.id);
   });
 
-  it("lets the learner enter Feynman after three rounds and deduplicates the action", async () => {
+  it("allows manual Feynman only after the evidence question is answered and deduplicates the action", async () => {
+    const originalProvider = new MockAIProvider();
+    const originalCoach = originalProvider.createCoachTurn.bind(originalProvider);
+    vi.spyOn(MockAIProvider.prototype, "createCoachTurn").mockImplementation(async (input) => ({
+      ...await originalCoach(input), nextAction: "ASK_QUESTION",
+    }));
     const created = await createSession();
     const sessionId = created.data.session.id;
     await postAnswer(
@@ -350,6 +361,15 @@ describe("ThinkTutor API flow", () => {
     }
 
     const requestBody = { clientRequestId: "manual-enter-feynman-001" };
+    const premature = await enterFeynmanRoute(
+      jsonRequest(`/api/sessions/${sessionId}/feynman/enter`, requestBody),
+      sessionContext(sessionId),
+    );
+    expect(premature.status).toBe(409);
+    const evidenceResponse = await postAnswer(sessionId, "共同持仓数据和机构融资记录是这条传播链的证据，还要检查发生冲击的时间顺序。", "manual-evidence-round-4");
+    expect(evidenceResponse.status).toBe(200);
+    const evidenceAnswered = await parseSessionResponse(evidenceResponse);
+    expect(evidenceAnswered.data.session).toMatchObject({ phase: "SOCRATIC", socraticTurns: 4 });
     const firstResponse = await enterFeynmanRoute(
       jsonRequest(`/api/sessions/${sessionId}/feynman/enter`, requestBody),
       sessionContext(sessionId),
@@ -357,7 +377,7 @@ describe("ThinkTutor API flow", () => {
     expect(firstResponse.status).toBe(200);
     const first = await parseSessionResponse(firstResponse);
     expect(first.data.session.phase).toBe("FEYNMAN");
-    expect(first.data.session.socraticTurns).toBe(3);
+    expect(first.data.session.socraticTurns).toBe(4);
     expect(first.data.duplicate).toBe(false);
 
     const duplicateResponse = await enterFeynmanRoute(

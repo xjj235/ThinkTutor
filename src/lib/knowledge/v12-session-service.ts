@@ -86,8 +86,8 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
     }));
     try { runtime = applyV12Assessment(manifest, runtime, assessment, { id: messageId, content: text }, now); }
     catch { throw new AppError("AI_INVALID_OUTPUT", "证据引用未通过校验，请重试。", 502, true); }
-    feedback = buildV12TurnFeedback(manifest, answeredRuntime, runtime, messageId);
     profile = diagnoseCoaching(manifest, runtime, session.learnerLevel);
+    feedback = buildV12TurnFeedback(manifest, answeredRuntime, runtime, messageId, profile.ruleDecision?.supportedGap);
     const s = runtime.v12!;
     const resume = s.resumeVerification;
     if (resume) {

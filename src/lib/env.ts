@@ -16,7 +16,8 @@ const booleanString = z
 const serverEnvSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-    DEPLOYMENT_ENV: z.enum(["development", "test", "production"]).default("development"),
+    DEPLOYMENT_ENV: z.enum(["development", "test", "competition", "production"]).default("development"),
+    LOCAL_PREVIEW: booleanString,
     ALLOW_DRAFT_KNOWLEDGE: booleanString,
     APP_URL: z.url().default("http://127.0.0.1:3000"),
     AUTH_SECRET: optionalString,
@@ -62,6 +63,23 @@ const serverEnvSchema = z
     DEEPSEEK_LIVE_TEST: booleanString,
   })
   .superRefine((env, context) => {
+    if (["competition", "production"].includes(env.DEPLOYMENT_ENV) && env.LOCAL_PREVIEW) {
+      context.addIssue({ code: "custom", path: ["LOCAL_PREVIEW"], message: "Public deployments must not enable local preview accounts." });
+    }
+    if (env.DEPLOYMENT_ENV === "competition") {
+      if (!env.APP_URL.startsWith("https://")) {
+        context.addIssue({ code: "custom", path: ["APP_URL"], message: "Competition deployment requires an HTTPS APP_URL." });
+      }
+      if (!env.AUTH_COOKIE_SECURE) {
+        context.addIssue({ code: "custom", path: ["AUTH_COOKIE_SECURE"], message: "Competition deployment requires secure cookies." });
+      }
+      if (!env.AUTH_SECRET || env.AUTH_SECRET.length < 32) {
+        context.addIssue({ code: "custom", path: ["AUTH_SECRET"], message: "Competition deployment requires an AUTH_SECRET of at least 32 characters." });
+      }
+      if (!env.AI_PSEUDONYM_SECRET || env.AI_PSEUDONYM_SECRET.length < 32) {
+        context.addIssue({ code: "custom", path: ["AI_PSEUDONYM_SECRET"], message: "Competition deployment requires an AI_PSEUDONYM_SECRET of at least 32 characters." });
+      }
+    }
     if (env.DEPLOYMENT_ENV === "production" && env.ALLOW_DRAFT_KNOWLEDGE) {
       context.addIssue({ code: "custom", path: ["ALLOW_DRAFT_KNOWLEDGE"], message: "Production must not enable draft knowledge." });
     }

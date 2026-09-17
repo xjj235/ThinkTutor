@@ -210,6 +210,18 @@ export function validateKnowledgeManifests(rawManifests: unknown[]): KnowledgeVa
       };
       if (v.coachingPolicy) {
         const policy = v.coachingPolicy;
+        for (const route of policy.routingRules) register(route.id, "coachingRoute");
+        for (const rule of policy.confidenceRouting?.rules ?? []) {
+          register(rule.id, "coachingConfidence");
+          checkRule(rule.id, { requiredAll: rule.requiredAll, requiredAny: [], prohibited: rule.absentAll });
+          if (!v.unitRules[rule.targetId] || !v.unitRules[rule.gapTargetId] || v.gaps[rule.gapId] !== rule.gapTargetId) errors.push(`${rule.id}: gap must belong to its declared target`);
+          if (new Set([...rule.requiredAll, ...rule.absentAll]).size !== rule.requiredAll.length + rule.absentAll.length) errors.push(`${rule.id}: evidence conditions must be unique and disjoint`);
+          const targetRule = v.unitRules[rule.targetId];
+          if (targetRule && rule.requiredAll.some((id) => targetRule.prohibited.includes(id))) errors.push(`${rule.id}: supporting evidence cannot be prohibited`);
+          const requirements = (id: string) => [...(v.unitRules[id]?.requiredAll ?? []), ...(v.unitRules[id]?.requiredAny ?? [])];
+          if (!rule.requiredAll.some((id) => requirements(rule.targetId).includes(id)) || !rule.absentAll.some((id) => requirements(rule.targetId).includes(id)) || !rule.absentAll.some((id) => requirements(rule.gapTargetId).includes(id))) errors.push(`${rule.id}: coaching target and gap must share relevant evidence requirements`);
+          for (const id of rule.absentAll) if (!Object.values(policy.dimensions).some((dimension) => dimension.evidenceIds.includes(id))) errors.push(`${rule.id}: missing evidence lacks a coaching dimension: ${id}`);
+        }
         if (new Set(policy.dimensionPriority).size !== 5) errors.push("Coaching dimension priorities must be unique");
         for (const [dimension, config] of Object.entries(policy.dimensions)) {
           checkRule(dimension, { requiredAll: config.evidenceIds, requiredAny: [], prohibited: [] });
@@ -224,6 +236,16 @@ export function validateKnowledgeManifests(rawManifests: unknown[]): KnowledgeVa
           if (frame.template.split("{content}").length !== 2 || /\{(?!content\})/u.test(frame.template)) errors.push(`${frame.id}: must preserve exactly one locked content slot`);
         }
         for (const [dimension, tiers] of Object.entries(policy.scoreCriteria)) for (const tier of tiers) checkRule(dimension, { requiredAll: tier, requiredAny: [], prohibited: [] });
+        for (const rule of policy.verificationRules ?? []) {
+          register(rule.id, "coachingVerification");
+          checkRule(rule.id, { requiredAll: rule.requiredAll, requiredAny: [], prohibited: [] });
+          if (new Set(rule.requiredAll).size !== rule.requiredAll.length || new Set(rule.targetIds).size !== rule.targetIds.length) errors.push(`${rule.id}: verification requirements and targets must be unique`);
+          for (const targetId of rule.targetIds) {
+            if (!v.unitRules[targetId]) errors.push(`${rule.id}: unknown verification target ${targetId}`);
+            if (rule.requiredAll.some((id) => v.unitRules[targetId]?.prohibited.includes(id))) errors.push(`${rule.id}: verification requires prohibited evidence`);
+          }
+          for (const id of rule.requiredAll) if (!Object.values(policy.dimensions).some((dimension) => dimension.evidenceIds.includes(id))) errors.push(`${rule.id}: verification evidence lacks a coaching dimension: ${id}`);
+        }
       }
       for (const [id, rule] of Object.entries(v.unitRules)) { if (!targetIds.has(id)) errors.push(`${id}: unknown mastery target`); checkRule(id, rule); }
       for (const [id, rule] of Object.entries(v.relationRules)) { if (!relationIds.has(id)) errors.push(`${id}: unknown relation rule`); checkRule(id, rule); }

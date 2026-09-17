@@ -3,7 +3,7 @@ import { z } from "zod";
 import { knowledgeRuntimeSchema, sessionVersionsSchema } from "./knowledge/runtime-schemas";
 import { reportEvidenceLinksSchema } from "./knowledge/report-evidence";
 import { v12StateSchema } from "./knowledge/v12-schema";
-import { canEnterFeynmanVoluntarily, canRequestHint } from "./state-machine";
+import { answeredSocraticQuestionTypes, canEnterFeynmanVoluntarily, canRequestHint } from "./state-machine";
 import {
   type LearningReportDTO,
   type LearningSessionDTO,
@@ -22,7 +22,7 @@ export const reportRelations = {
 } satisfies Prisma.LearningReportInclude;
 
 export const sessionRelations = {
-  messages: { orderBy: { createdAt: "asc" as const } },
+  messages: { orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }] },
   report: { include: reportRelations },
 } satisfies Prisma.LearningSessionInclude;
 
@@ -101,7 +101,7 @@ export function serializeReport(report: ReportRecord): LearningReportDTO {
     overallLevel: report.overallLevel,
     dimensions: z.object({ conceptCompleteness: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), logicCompleteness: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), expressionClarity: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), exampleAbility: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), transferAbility: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }) }).parse(dimensions),
     strengths: report.strengths.map(({ title, evidence }) => ({ title, evidence })),
-    gaps: report.gaps.map(({ title, evidence, repairTask, priority }) => ({ title, evidence, repairTask, priority })),
+    gaps: report.gaps.map(({ title, evidence, repairTask, priority, status }) => ({ title, evidence, repairTask, priority, status })),
     nextSteps: report.nextSteps.map((step) => step.description),
     disclaimer: report.disclaimer,
     createdAt: report.createdAt.toISOString(),
@@ -114,7 +114,7 @@ export function serializePayload(session: SessionRecord): SessionPayload {
   const canHint = runtime?.v12?.pedagogicalStage !== "GOAL_PRESENTATION" && !runtime?.v12?.resumeVerification && canRequestHint(session) && (!runtime || Boolean(runtime.currentTargetId && (runtime.hintLevels[runtime.currentTargetId] ?? 0) < 2));
   const canEnter = !runtime?.v12 && !runtime?.flags.includes("FLAG_NEED_VERIFY") && canEnterFeynmanVoluntarily(session, {
     learnerState: learner.success ? learner.data : null,
-    answeredQuestionTypes: session.messages.filter((message) => message.role === "ASSISTANT" && message.phase === "SOCRATIC" && message.questionType).map((message) => message.questionType!),
+    answeredQuestionTypes: answeredSocraticQuestionTypes(session.messages),
   });
   return {
     availableActions: { canRequestHint: canHint, canEnterFeynman: canEnter },

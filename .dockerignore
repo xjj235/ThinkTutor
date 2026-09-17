@@ -6,6 +6,7 @@ node_modules
 !.env.production.example
 .data
 .embedded-postgres
+.local-preview
 backups
 test-results
 playwright-report

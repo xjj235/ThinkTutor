@@ -31,6 +31,7 @@ describe("transactional knowledge-bounded teaching selection", () => {
     const runtime = knowledgeRuntimeSchema.parse(saved.knowledgeRuntime);
     expect(runtime.v12!.coachingHistory).toHaveLength(spy.mock.calls.length);
     expect(runtime.v12!.coachingHistory.every((entry) => entry.provider === "mock")).toBe(true);
+    expect(runtime.v12!.coachingHistory.every((entry) => entry.decisionBasis?.policyVersion === "1.2")).toBe(true);
     expect(runtime.v12!.coachingPrompt?.text).not.toContain("原文依据");
   });
 
@@ -39,6 +40,34 @@ describe("transactional knowledge-bounded teaching selection", () => {
     vi.spyOn(MockAIProvider.prototype, "selectTeachingMove").mockRejectedValueOnce(new AIProviderError("AI_TIMEOUT", "test timeout", 503, true));
     await expect(createLearningSession(student.id, task)).rejects.toMatchObject({ code: "AI_TIMEOUT" });
     expect(await prisma.learningSession.count({ where: { userId: student.id } })).toBe(0);
+  });
+
+  it("persists supported-gap routing without promoting uncertain mastery and keeps retries idempotent", async () => {
+    const student = await createTestUser("coaching-supported-gap");
+    const initial = await createLearningSession(student.id, task);
+    const id = initial.session.id;
+    await submitV12SessionEvent(id, { action: "GOAL_CONFIRMED", clientRequestId: `${id}-goal` });
+    const scopeAnswer = "系统性风险的研究对象是整个金融体系，不是单家银行的经营损失。目前我只说明了研究范围，还没有说明金融服务受到什么影响。";
+    vi.spyOn(MockAIProvider.prototype, "assessLearningTurn").mockImplementationOnce(async (input) => ({
+      evidence: [{ evidenceId: "financial_system_scope", messageId: input.message.id, extractedText: "系统性风险的研究对象是整个金融体系，不是单家银行的经营损失。" }],
+      candidateMastery: [{ unitId: "C_SR_001", modelConfidence: 0.5 }], candidateGaps: [{ id: "GAP_DEFINITION_ONLY", modelConfidence: 0.9 }],
+      candidateMisconceptions: [], modelAssessmentConfidence: 0.5, contradictions: [], recommendTransition: false,
+    }));
+    await submitLearningAnswer(id, { answer: scopeAnswer, clientRequestId: `${id}-gap` });
+    const saved = await prisma.learningSession.findUniqueOrThrow({ where: { id }, include: { messages: { orderBy: { createdAt: "asc" } } } });
+    const runtime = knowledgeRuntimeSchema.parse(saved.knowledgeRuntime);
+    const trace = runtime.v12!.coachingHistory.at(-1)!;
+    expect(trace.profile.dimension).toBe("MECHANISM");
+    expect(trace.decisionBasis!.assessment).toMatchObject({ confidence: 0.5, minimumConfidence: 0.75, supportedGap: { confidence: 0.9 } });
+    expect(runtime.v12!.lastResult).toBe("NEED_VERIFY");
+    expect(runtime.flags).toContain("FLAG_NEED_VERIFY");
+    expect(runtime.v12!.pedagogicalStage).toBe("DIAGNOSIS");
+    expect(runtime.v12!.unitStates.C_SR_001.independentEvidenceCount).toBe(0);
+    expect(saved.messages.at(-1)!.content).toContain("尚不足以确认整体掌握");
+    expect(saved.messages.at(-1)!.content).toContain(trace.followUp!.question);
+    const duplicate = await submitLearningAnswer(id, { answer: scopeAnswer, clientRequestId: `${id}-gap` });
+    expect(duplicate.duplicate).toBe(true);
+    expect((await prisma.learningSession.findUniqueOrThrow({ where: { id } })).knowledgeRuntime).toEqual(saved.knowledgeRuntime);
   });
 
   it("rolls back evidence and phase changes when model selection is invalid", async () => {
@@ -86,6 +115,22 @@ describe("transactional knowledge-bounded teaching selection", () => {
     expect(generated).toBeDefined();
     expect(runtime.v12!.coachingPrompt?.text).toBe(generated!.question);
     expect(saved.messages.at(-1)?.content).toContain(generated!.question);
+    const basis = runtime.v12!.coachingHistory.at(-1)!.decisionBasis!;
+    const studentMessage = saved.messages.find((message) => message.id === basis.basisMessageId)!;
+    expect(studentMessage.role).toBe("USER");
+    expect(basis.contentHash).toBe(runtime.versions.contentHash);
+    expect(basis.assessedTargetId).toBe("C_SR_001");
+    expect(basis.selectedRuleId).toBe("COACH_FILL_GAP");
+    expect(basis.matchedRuleIds).toContain("VERIFY_SYSTEMIC_CONDITION");
+    expect(basis.questionRequirements).toEqual(runtime.v12!.coachingPrompt!.rule);
+    expect(basis.evidence.length).toBeGreaterThan(0);
+    for (const ref of basis.evidence) {
+      expect(ref.messageId).toBe(studentMessage.id);
+      expect(studentMessage.content.slice(ref.startOffset, ref.endOffset)).toBe(ref.extractedText);
+    }
+    const duplicate = await submitLearningAnswer(id, { answer, clientRequestId: `${id}-first` });
+    expect(duplicate.duplicate).toBe(true);
+    expect((await prisma.learningSession.findUniqueOrThrow({ where: { id } })).knowledgeRuntime).toEqual(saved.knowledgeRuntime);
     const before = await getSessionPayload(id);
     spy.mockImplementationOnce(async (input) => ({ choiceId: input.choices[0].id, openingId: input.openings[0].id }));
     await expect(submitLearningAnswer(id, { answer: "我暂时还不能说明条件变化后会如何修正，只有金融体系功能这个判断范围。", clientRequestId: `${id}-missing-question` })).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });

@@ -1,3 +1,4 @@
+import { knowledgeSelectionSchema } from "./knowledge/student-catalog-schema";
 import { z } from "zod";
 
 export const learningPhaseValues = [
@@ -92,6 +93,7 @@ const optionalTrimmed = (max: number, label: string) =>
 
 export const createSessionInputSchema = z
   .object({
+    knowledgeSelection: knowledgeSelectionSchema.optional(),
     assignmentId: z.string().trim().min(10).max(40).optional(),
     courseId: z.string().trim().min(10).max(40).optional(),
     chapterId: z.string().trim().min(10).max(40).optional(),
@@ -270,6 +272,8 @@ export const reportGapSchema = z
   })
   .strict();
 export const reportGapsSchema = z.array(reportGapSchema).max(5);
+export const reportGapStatusSchema = z.enum(["OPEN", "IN_PROGRESS", "RESOLVED", "DISMISSED"]);
+export const reportGapDtoSchema = reportGapSchema.extend({ status: reportGapStatusSchema }).strict();
 export const nextStepsSchema = z.array(z.string().trim().min(1).max(220)).max(3);
 
 export const reportDisclaimer =
@@ -303,6 +307,7 @@ export type ReportDimension = z.infer<typeof reportDimensionSchema>;
 export type ReportDimensions = z.infer<typeof reportDimensionsSchema>;
 export type Strengths = z.infer<typeof strengthsSchema>;
 export type ReportGap = z.infer<typeof reportGapSchema>;
+export type ReportGapDTO = z.infer<typeof reportGapDtoSchema>;
 export type ReportGaps = z.infer<typeof reportGapsSchema>;
 export type NextSteps = z.infer<typeof nextStepsSchema>;
 export type LearningReportDraft = z.infer<typeof learningReportDraftSchema>;
@@ -347,7 +352,7 @@ export interface LearningReportDTO {
   overallLevel: string;
   dimensions: ReportDimensions;
   strengths: Strengths;
-  gaps: ReportGaps;
+  gaps: ReportGapDTO[];
   nextSteps: NextSteps;
   disclaimer: string;
   createdAt: string;

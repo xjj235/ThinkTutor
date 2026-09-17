@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { writeFile } from "node:fs/promises";
 import { knowledgeRuntimeSchema } from "../src/lib/knowledge/runtime-schemas";
 import { buildV12Manifest } from "../src/lib/knowledge/v12-resources";
+import type { TurnAssessment } from "../src/lib/knowledge/v12-schema";
 
 const scenarios = [
   { id: "scope-only", dimension: "MECHANISM", answer: "系统性风险的研究对象是整个金融体系，不是单家银行的经营损失。目前我只说明了研究范围，还没有说明金融服务受到什么影响。", subject: /金融|服务|影响/u },
@@ -23,7 +24,7 @@ test("real model asks different evidence-bounded questions for different HTML an
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: database.href, max: 2 }) });
   const email = `live-grounded-${crypto.randomUUID()}@example.test`;
   const calls: number[] = [];
-  const records: Array<{ scenario: string; answer: string; history: NonNullable<ReturnType<typeof knowledgeRuntimeSchema.parse>["v12"]>["coachingHistory"]; question: string }> = [];
+  const records: Array<{ scenario: string; answer: string; history: NonNullable<ReturnType<typeof knowledgeRuntimeSchema.parse>["v12"]>["coachingHistory"]; question: string; assessment: TurnAssessment | null; result: string | null }> = [];
   async function submit(name: string, endpoint: string, cost: number) {
     while (calls.filter((time) => Date.now() - time < 65_000).length + cost > 9) await page.waitForTimeout(5_000);
     for (let i = 0; i < cost; i++) calls.push(Date.now());
@@ -56,14 +57,41 @@ test("real model asks different evidence-bounded questions for different HTML an
       const history = runtime.v12!.coachingHistory;
       const last = history.at(-1)!;
       const generated = last.followUp;
+      // Failed semantic expectations must still retain the actual model evidence and decision.
+      records.push({ scenario: scenario.id, answer: scenario.answer, history, question: generated?.question ?? "", assessment: runtime.v12!.assessments[runtime.v12!.lastAssessmentMessageId ?? ""] ?? null, result: runtime.v12!.lastResult });
+      const basis = last.decisionBasis!;
+      expect(basis.policyVersion).toBe("1.2");
+      expect(basis.contentHash).toBe(runtime.versions.contentHash);
+      expect(basis.assessment?.confidence).toBe(records.at(-1)!.assessment!.modelAssessmentConfidence);
+      expect(basis.assessment?.result).toBe(runtime.v12!.lastResult);
+      expect(basis.assessedTargetId).toBe("C_SR_001");
+      expect(basis.assessedStage).toBe("DIAGNOSIS");
+      expect(basis.selectedRuleId).toBe(runtime.v12!.lastResult === "NEED_VERIFY" && !basis.assessment?.supportedGap ? "COACH_VERIFY_EVIDENCE" : "COACH_FILL_GAP");
+      if (basis.assessment?.supportedGap) {
+        expect(basis.assessment.confidence).toBeLessThan(basis.assessment.minimumConfidence);
+        expect(basis.assessment.supportedGap.confidence).toBeGreaterThanOrEqual(basis.assessment.minimumConfidence);
+        expect(basis.matchedRuleIds).toContain(basis.assessment.supportedGap.ruleId);
+        expect(runtime.v12!.lastResult).toBe("NEED_VERIFY");
+        expect(runtime.v12!.unitStates.C_SR_001.status).not.toBe("MASTERED");
+        expect(runtime.v12!.unitStates.C_SR_001.independentEvidenceCount).toBe(0);
+        await expect(page.getByText("当前回答可支持针对缺项继续追问", { exact: false })).toBeVisible();
+      }
+      expect(basis.reason).toContain("追问维度");
+      expect(basis.questionRequirements).toEqual(runtime.v12!.coachingPrompt!.rule);
+      expect(basis.evidence.length).toBeGreaterThan(0);
+      for (const ref of basis.evidence) {
+        expect(ref.messageId).toBe(basis.basisMessageId);
+        expect(scenario.answer.slice(ref.startOffset, ref.endOffset)).toBe(ref.extractedText);
+      }
+      if (last.profile.dimension === "CONDITION") expect(basis.matchedRuleIds).toContain("VERIFY_SYSTEMIC_CONDITION");
       expect(generated, "A template selection alone is not an adaptive followup.").toBeDefined();
-      expect(last.profile.dimension).toBe(scenario.dimension);
+      expect.soft(last.profile.dimension, `Semantic calibration: ${scenario.id}`).toBe(scenario.dimension);
       expect(scenario.answer).toContain(generated!.studentAnchor);
       expect(generated!.question).toContain(generated!.studentAnchor);
       expect(generated!.question).toMatch(scenario.subject);
       expect((generated!.question.match(/[?？]/gu) ?? []).length).toBe(1);
       expect(runtime.v12!.coachingPrompt?.text).toBe(generated!.question);
-      if (scenario.dimension === "CONDITION") expect(runtime.v12!.coachingPrompt?.rule.requiredAll).toEqual(["condition_revision"]);
+      if (scenario.dimension === "CONDITION") expect.soft(runtime.v12!.coachingPrompt?.rule.requiredAll, `Semantic calibration scope: ${scenario.id}`).toEqual(["condition_revision"]);
       for (const form of buildV12Manifest().v12!.coachingPolicy!.forms) {
         expect(generated!.question).not.toContain(form.template.replace("{target}", "系统性风险"));
       }
@@ -72,7 +100,6 @@ test("real model asks different evidence-bounded questions for different HTML an
       const usage = await prisma.aIUsage.findMany({ where: { requestId: { in: [last.requestId, `${last.requestId}:review`] }, status: "SUCCESS" } });
       expect(usage.map((u) => u.operation)).toEqual(expect.arrayContaining(["teaching_selection", "teaching_review"]));
       expect(usage.every((u) => u.provider === "deepseek" && (u.promptTokens ?? 0) > 0 && (u.completionTokens ?? 0) > 0)).toBe(true);
-      records.push({ scenario: scenario.id, answer: scenario.answer, history, question: generated!.question });
       console.log(JSON.stringify({ scenario: scenario.id, dimension: last.profile.dimension, question: generated!.question, model: usage[0]?.model }));
       await page.screenshot({ path: testInfo.outputPath(`${scenario.id}.png`), fullPage: true });
     }

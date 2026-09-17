@@ -1,3 +1,4 @@
+import { resolveKnowledgeSelection, isStudentKnowledgeTaskTopic } from "./knowledge/student-catalog";
 import "server-only";
 
 import { Prisma, type QuestionType } from "@prisma/client";
@@ -36,6 +37,7 @@ import { recordCoaching } from "./knowledge/coaching";
 import type { SourcedDiagnosticQuestion } from "./ai/types";
 import { reportRelations, serializePayload, serializeReport, sessionRelations } from "./serializers";
 import {
+  answeredSocraticQuestionTypes,
   canEnterFeynmanVoluntarily,
   canRequestHint,
   canRetrySession,
@@ -97,6 +99,11 @@ async function findDuplicate(sessionId: string, clientRequestId: string): Promis
   return true;
 }
 
+// Database timestamps can tie inside a transaction; preserve the causal message order.
+function nextMessageCreatedAt(messages: ReadonlyArray<{ createdAt: Date }>): Date {
+  return new Date(messages.reduce((next, message) => Math.max(next, message.createdAt.getTime() + 1), Date.now()));
+}
+
 function recentUnknownStreak(messages: Array<{ role: string; content: string }>): number {
   let streak = 0;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -106,6 +113,16 @@ function recentUnknownStreak(messages: Array<{ role: string; content: string }>)
     streak += 1;
   }
   return Math.min(streak, 4);
+}
+
+function nextHintLevel(messages: Array<{ role: string; content: string; questionType: QuestionType | null }>): number {
+  let consecutiveHints = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role === "USER") break;
+    if (message.role === "ASSISTANT" && message.questionType === "SCAFFOLDED_HINT") consecutiveHints += 1;
+  }
+  return Math.min(3, Math.max(1, recentUnknownStreak(messages)) + consecutiveHints);
 }
 
 function assertMessageCapacity(currentCount: number, additionalMessages: number): void {
@@ -128,12 +145,12 @@ function buildTaskInput(session: { courseId: string | null; chapterId: string | 
   });
 }
 
-function readinessEvidence(session: Awaited<ReturnType<typeof getRequiredSessionRecord>>, learnerState = session.learnerState): FeynmanReadinessEvidence {
-  const answeredQuestionTypes = session.messages
-    .filter((message) => message.role === "ASSISTANT" && message.phase === "SOCRATIC" && message.questionType)
-    .map((message) => message.questionType as QuestionType);
+function readinessEvidence(session: Awaited<ReturnType<typeof getRequiredSessionRecord>>, learnerState = session.learnerState, pendingAnswer?: string): FeynmanReadinessEvidence {
+  const messages = pendingAnswer === undefined ? session.messages : [
+    ...session.messages, { role: "USER", phase: session.phase, content: pendingAnswer, questionType: null },
+  ];
   return {
-    answeredQuestionTypes,
+    answeredQuestionTypes: answeredSocraticQuestionTypes(messages),
     learnerState: learnerState === null ? null : learnerStateSchema.parse(learnerState),
   };
 }
@@ -151,6 +168,13 @@ async function findExistingCreateRequest(userId: string, clientRequestId: string
 }
 
 async function resolveTaskForUser(userId: string, input: CreateSessionInput): Promise<{ task: CreateSessionInput; source: "SELF_DIRECTED" | "ASSIGNMENT"; assignmentId?: string; existingSessionId?: string }> {
+  if (input.knowledgeSelection) {
+    if (input.assignmentId || input.courseId || input.chapterId || input.learningGoalId) {
+      throw new AppError("VALIDATION_ERROR", "知识库自主研习不能同时绑定班级课程或作业，请选择一种学习方式。", 400);
+    }
+    const task = resolveKnowledgeSelection(input.knowledgeSelection);
+    return { source: "SELF_DIRECTED", task: createSessionInputSchema.parse({ ...input, ...task, knowledgeSelection: undefined }) };
+  }
   if (!input.assignmentId) {
     if (!input.courseId) {
       if (input.chapterId || input.learningGoalId) throw new AppError("VALIDATION_ERROR", "选择章节或学习目标前必须先选择课程。", 400);
@@ -264,7 +288,7 @@ export async function createLearningSession(userId: string, input: CreateSession
     if ((resolved.task.referenceText?.length ?? 0) > getServerEnv().MAX_REFERENCE_TEXT_LENGTH) throw new AppError("VALIDATION_ERROR", "参考材料超过允许长度。", 400);
     const requestId = options?.clientRequestId ?? `ai_${crypto.randomUUID()}`;
     const protectionKey = resolved.assignmentId ? `assignment-start:${userId}:${resolved.assignmentId}` : `create:${requestId}`;
-    const manifest = await findKnowledgeManifest(resolved.task.topic, resolved.task);
+    const manifest = await findKnowledgeManifest(resolved.task.topic, isStudentKnowledgeTaskTopic(resolved.task.topic) ? {} : resolved.task);
     let runtime = manifest ? initialKnowledgeRuntime(createVersionSnapshot(manifest)) : null;
     const context = await buildLearningContext({
       courseId: resolved.task.courseId,
@@ -385,7 +409,7 @@ export async function submitLearningAnswer(sessionId: string, input: { answer: s
     coach.knowledgePolicy = "COURSE_KNOWLEDGE_FIRST";
     coach.webSources = [];
   }
-  const evidence = readinessEvidence(session, coach.learnerState);
+  const evidence = readinessEvidence(session, coach.learnerState, input.answer);
   const transition = session.phase === "DIAGNOSIS" ? nextAfterDiagnosisAnswer(session) : nextAfterSocraticAnswer(session, coach.nextAction, evidence);
   const enteringFeynman = transition.phase === "FEYNMAN";
   const nextRuntime = answeredRuntime && manifest && action ? (enteringFeynman ? answeredRuntime : recordKnowledgeAction(answeredRuntime, action, manifest, coach.learnerState)) : null;
@@ -403,8 +427,9 @@ export async function submitLearningAnswer(sessionId: string, input: { answer: s
         data: { phase: transition.phase, socraticTurns: transition.socraticTurns, learnerState: asJson(coach.learnerState), ...(nextRuntime ? { knowledgeRuntime: asJson(nextRuntime) } : {}), version: { increment: 1 } },
       });
       if (changed.count !== 1) throw new AppError("CONFLICT", "会话状态已变化，请刷新后重试。", 409, true);
-      await tx.message.create({ data: { sessionId, role: "USER", phase: session.phase, content: input.answer, clientRequestId: input.clientRequestId } });
-      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase: transition.phase, content: instruction ? feynmanContent(instruction) : coach.assistantMessage, questionType: instruction ? null : coach.questionType, metadata: asJson(metadataFromCoach(coach)) } });
+      const answerCreatedAt = nextMessageCreatedAt(session.messages);
+      await tx.message.create({ data: { sessionId, role: "USER", phase: session.phase, content: input.answer, clientRequestId: input.clientRequestId, createdAt: answerCreatedAt } });
+      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase: transition.phase, content: instruction ? feynmanContent(instruction) : coach.assistantMessage, questionType: instruction ? null : coach.questionType, metadata: asJson(metadataFromCoach(coach)), createdAt: new Date(answerCreatedAt.getTime() + 1) } });
       return "created" as const;
     }, { isolationLevel: "ReadCommitted" });
     if (result === "duplicate") return { ...(await getSessionPayload(sessionId)), duplicate: true };
@@ -431,7 +456,7 @@ export async function requestHint(sessionId: string, input: { clientRequestId: s
   const context = await buildLearningContext({ courseId: session.courseId, chapterId: session.chapterId, topic: session.topic, objective: session.objective, contextSummary: session.contextSummary, phase: session.phase, learnerState, knowledgeRuntime: runtime, selectedAction: action, messages: toAiMessages(session.messages) });
   const hint = await withAIRequestProtection(session.userId, sessionId, () => getAIProvider().createCoachTurn({
     task: buildTaskInput(session), userId: session.userId, sessionId, requestId: input.clientRequestId, phase: session.phase,
-    socraticTurns: session.socraticTurns, maxTurns: session.maxTurns, unknownStreak: Math.max(1, recentUnknownStreak(session.messages)),
+    socraticTurns: session.socraticTurns, maxTurns: session.maxTurns, unknownStreak: nextHintLevel(session.messages),
     learnerState, messages: context.recentMessages, contextSummary: context.contextSummary, retrievedContext: context.retrievedContext, isHintRequest: true,
     knowledgePolicy: context.knowledgePolicy,
     selectedAction: action ?? undefined,
@@ -447,7 +472,7 @@ export async function requestHint(sessionId: string, input: { clientRequestId: s
     await prisma.$transaction(async (tx) => {
       const changed = await tx.learningSession.updateMany({ where: { id: sessionId, version: session.version, phase: session.phase }, data: { ...(nextRuntime ? { knowledgeRuntime: asJson(nextRuntime) } : {}), version: { increment: 1 } } });
       if (changed.count !== 1) throw new AppError("CONFLICT", "会话状态已变化，请刷新后重试。", 409, true);
-      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase: session.phase, content: hint.assistantMessage, questionType: "SCAFFOLDED_HINT", clientRequestId: input.clientRequestId, metadata: asJson(metadataFromCoach(hint)) } });
+      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase: session.phase, content: hint.assistantMessage, questionType: "SCAFFOLDED_HINT", clientRequestId: input.clientRequestId, metadata: asJson(metadataFromCoach(hint)), createdAt: nextMessageCreatedAt(session.messages) } });
     }, { isolationLevel: "ReadCommitted" });
   } catch (error) {
     if (await findDuplicate(sessionId, input.clientRequestId)) return { ...(await getSessionPayload(sessionId)), duplicate: true };
@@ -473,7 +498,7 @@ export async function enterLearningFeynman(sessionId: string, input: { clientReq
     await prisma.$transaction(async (tx) => {
       const changed = await tx.learningSession.updateMany({ where: { id: sessionId, version: session.version, phase: session.phase }, data: { phase: transition.phase, ...(runtime ? { knowledgeRuntime: asJson({ ...runtime, pedagogicalStage: "FEYNMAN" }) } : {}), version: { increment: 1 } } });
       if (changed.count !== 1) throw new AppError("CONFLICT", "会话状态已变化，请刷新后重试。", 409, true);
-      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase: "FEYNMAN", content: feynmanContent(instruction), clientRequestId: input.clientRequestId } });
+      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase: "FEYNMAN", content: feynmanContent(instruction), clientRequestId: input.clientRequestId, createdAt: nextMessageCreatedAt(session.messages) } });
     }, { isolationLevel: "ReadCommitted" });
   } catch (error) {
     if (await findDuplicate(sessionId, input.clientRequestId)) return { ...(await getSessionPayload(sessionId)), duplicate: true };
@@ -524,7 +549,7 @@ export async function submitFeynmanExplanation(sessionId: string, input: { expla
     await prisma.$transaction(async (tx) => {
       const changed = await tx.learningSession.updateMany({ where: { id: sessionId, version: session.version, phase: "FEYNMAN" }, data: { phase: "REPORTING", version: { increment: 1 } } });
       if (changed.count !== 1) throw new AppError("CONFLICT", "会话状态已变化，请刷新后重试。", 409, true);
-      await tx.message.create({ data: { id: explanationMessageId, sessionId, role: "USER", phase: "FEYNMAN", content: input.explanation, clientRequestId: input.clientRequestId } });
+      await tx.message.create({ data: { id: explanationMessageId, sessionId, role: "USER", phase: "FEYNMAN", content: input.explanation, clientRequestId: input.clientRequestId, createdAt: nextMessageCreatedAt(session.messages) } });
       const createdReport = await tx.learningReport.create({
         data: {
           sessionId, summary: report.summary, overallScore: report.overallScore, overallLevel: report.overallLevel, disclaimer: report.disclaimer,
@@ -578,10 +603,14 @@ export async function createRetrySession(sessionId: string, input: { clientReque
   const gap = await prisma.learningGap.findFirst({ where: { reportId: session.report.id, status: "OPEN" }, orderBy: [{ priority: "desc" }, { createdAt: "asc" }, { id: "asc" }] });
   if (!gap) throw new AppError("CONFLICT", "没有待修复的学习漏洞。", 409);
   const task = buildTaskInput(session);
-  const manifest = await findKnowledgeManifest(task.topic, task);
+  const manifest = await findKnowledgeManifest(task.topic, isStudentKnowledgeTaskTopic(task.topic) ? {} : task);
   const retryTask = manifest?.v12 ? { topic: task.topic, objective: `围绕“${gap.title}”开展定向巩固：${gap.repairTask}` } : await withAIRequestProtection(session.userId, sessionId, () => getAIProvider().createRetryTask({ task, gap: { title: gap.title, evidence: gap.evidence, repairTask: gap.repairTask, priority: gap.priority }, userId: session.userId, sessionId, requestId: input.clientRequestId }));
-  const childTask = createSessionInputSchema.parse({ ...task, topic: retryTask.topic, objective: retryTask.objective, assignmentId: undefined });
-  const diagnostic = manifest?.v12 ? initialCuratedDiagnostic() : await withAIRequestProtection(session.userId, `${sessionId}:retry`, () => getAIProvider().createDiagnosticQuestion({ task: childTask, userId: session.userId, requestId: `${input.clientRequestId}:diagnostic` }));
+  const childTask = createSessionInputSchema.parse({ ...task, topic: isStudentKnowledgeTaskTopic(task.topic) ? task.topic : retryTask.topic, objective: retryTask.objective, assignmentId: undefined });
+  const retryContext = isStudentKnowledgeTaskTopic(task.topic) ? await buildLearningContext({
+    courseId: childTask.courseId, chapterId: childTask.chapterId, topic: childTask.topic,
+    objective: childTask.objective, phase: "DIAGNOSIS", messages: [],
+  }) : undefined;
+  const diagnostic = manifest?.v12 ? initialCuratedDiagnostic() : await withAIRequestProtection(session.userId, `${sessionId}:retry`, () => getAIProvider().createDiagnosticQuestion({ task: childTask, userId: session.userId, requestId: `${input.clientRequestId}:diagnostic`, retrievedContext: retryContext?.retrievedContext, knowledgePolicy: retryContext?.knowledgePolicy }));
   let runtime = manifest ? initialKnowledgeRuntime(createVersionSnapshot(manifest)) : null;
   if (runtime && manifest) {
     const previous = session.knowledgeRuntime ? knowledgeRuntimeSchema.parse(session.knowledgeRuntime) : null;
@@ -614,6 +643,8 @@ export async function createRetrySession(sessionId: string, input: { clientReque
   }
   try {
     const childId = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.learningGap.updateMany({ where: { id: gap.id, status: "OPEN" }, data: { status: "IN_PROGRESS" } });
+      if (claimed.count !== 1) throw new AppError("CONFLICT", "该学习漏洞已开始巩固，请继续已有的再练会话。", 409);
       const child = await tx.learningSession.create({
         data: {
           userId: session.userId, courseId: session.courseId, chapterId: session.chapterId, learningGoalId: session.learningGoalId,
@@ -624,16 +655,15 @@ export async function createRetrySession(sessionId: string, input: { clientReque
           messages: { create: { role: "ASSISTANT", phase: "DIAGNOSIS", content: diagnostic.assistantMessage, questionType: diagnostic.questionType, metadata: asJson(metadataFromCoach(diagnostic)) } },
         },
       });
-      await tx.learningGap.update({ where: { id: gap.id }, data: { status: "IN_PROGRESS" } });
-      await tx.message.create({ data: { sessionId, role: "SYSTEM", phase: "COMPLETED", content: "已创建针对最高优先级漏洞的再练会话。", clientRequestId: input.clientRequestId, metadata: asJson({ retrySessionId: child.id }) } });
+      await tx.message.create({ data: { sessionId, role: "SYSTEM", phase: "COMPLETED", content: "已创建针对最高优先级漏洞的再练会话。", clientRequestId: input.clientRequestId, metadata: asJson({ retrySessionId: child.id }), createdAt: nextMessageCreatedAt(session.messages) } });
       await tx.auditLog.create({ data: { actorId: session.userId, action: "SESSION_CREATED", targetType: "LearningSession", targetId: child.id, requestId: input.clientRequestId, metadata: { parentSessionId: sessionId } } });
       return child.id;
     }, { isolationLevel: "ReadCommitted" });
     return { ...(await getSessionPayload(childId)), duplicate: false };
   } catch (error) {
-    if (!isUniqueConstraintError(error)) throw error;
+    if (!isUniqueConstraintError(error) && !(error instanceof AppError && error.code === "CONFLICT")) throw error;
     const marker = await prisma.message.findUnique({ where: { clientRequestId: input.clientRequestId } });
-    const retryId = marker?.metadata ? messageMetadataSchema.parse(marker.metadata).retrySessionId : undefined;
+    const retryId = marker?.sessionId === sessionId && marker.metadata ? messageMetadataSchema.parse(marker.metadata).retrySessionId : undefined;
     if (!retryId) throw error;
     return { ...(await getSessionPayload(retryId)), duplicate: true };
   }
