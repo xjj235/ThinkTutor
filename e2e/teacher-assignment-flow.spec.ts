@@ -41,11 +41,12 @@ test("teacher publishes an assignment, student completes it, and teacher sees th
     "关键概念是证据是否与主张相关，并且能够排除其他解释。",
     "因为孤立事实不能自动推出结论，所以需要说明中间推理关系。",
     "这条判断的证据可以是可复核数据，并要说明数据如何支持结论。",
+    "例如保留同一测验的前后测原始成绩和学习时长记录，比较成绩变化并核查投入时间，才能检验学习方法是否有效。",
   ];
   for (const [index, answer] of answers.entries()) {
-    await data(await studentContext.post(`/api/sessions/${sessionId}/answers`, { data: { answer, clientRequestId: `${marker}-answer-${index}` } }));
+    const answered = await data<{ session: { phase: string } }>(await studentContext.post(`/api/sessions/${sessionId}/answers`, { data: { answer, clientRequestId: `${marker}-answer-${index}` } }));
+    expect(answered.session.phase).toBe(index === answers.length - 1 ? "FEYNMAN" : "SOCRATIC");
   }
-  await data(await studentContext.post(`/api/sessions/${sessionId}/feynman/enter`, { data: { clientRequestId: `${marker}-enter` } }));
   await data(await studentContext.post(`/api/sessions/${sessionId}/feynman`, { data: { explanation: "一条可靠证据链先提出可以检验的主张，再给出与主张相关且可复核的证据，然后解释证据为什么支持结论。例如判断一种学习方法有效，要比较数据并排除时间投入差异。如果迁移到新闻核查，也要检查来源与替代解释。", clientRequestId: `${marker}-feynman` } }));
 
   await page.goto("/login");
