@@ -44,7 +44,7 @@ Neon Free 当前每项目 0.5 GB 存储、100 CU-hours/月。免费套餐有额�
 Build command：
 
 ```sh
-corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm prisma:generate && node scripts/render-build.mjs
+corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm prisma:generate && node scripts/render-build.mjs
 ```
 
 Start command：

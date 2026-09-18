@@ -8,7 +8,7 @@ services:
     region: singapore
     branch: codex/free-competition-20260918
     autoDeployTrigger: off
-    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm prisma:generate && node scripts/render-build.mjs
+    buildCommand: corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm prisma:generate && node scripts/render-build.mjs
     startCommand: node scripts/render-start.mjs
     healthCheckPath: /api/health/live
     envVars:
