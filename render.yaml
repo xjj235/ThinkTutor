@@ -2,6 +2,7 @@
 services:
   - type: web
     name: thinktutor-competition
+    repo: https://github.com/xjj235/ThinkTutor
     runtime: node
     plan: free
     region: singapore
