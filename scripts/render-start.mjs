@@ -14,6 +14,15 @@ const result = z.object({
   DEPLOYMENT_ENV: z.literal("competition"),
   APP_URL: z.url().refine((value) => new URL(value).protocol === "https:"),
   DATABASE_URL: z.string().startsWith("postgresql://"),
+  DIRECT_DATABASE_URL: z.url().refine((value) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === "postgresql:" && url.hostname.length > 0
+        && !(url.hostname.endsWith(".neon.tech") && url.hostname.includes("-pooler"));
+    } catch {
+      return false;
+    }
+  }, "Migrations require a direct PostgreSQL connection."),
   AUTH_COOKIE_SECURE: z.literal("true"),
   LOCAL_PREVIEW: z.literal("false").optional(),
   AUTH_SECRET: z.string().min(32),
@@ -41,16 +50,20 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     child?.kill(signal);
   });
 }
-function run(script, args = []) {
+function run(script, args = [], childEnv = env) {
   return new Promise((accept, reject) => {
-    child = spawn(process.execPath, [resolve(script), ...args], { env, stdio: "inherit" });
+    child = spawn(process.execPath, [resolve(script), ...args], { env: childEnv, stdio: "inherit" });
     child.once("error", reject);
     child.once("exit", (code) => accept(code ?? 1));
   });
 }
 // Free Render has no pre-deploy job. Migrate once at startup; never seed demo accounts.
 try {
-  const migration = await run("node_modules/prisma/build/index.js", ["migrate", "deploy"]);
+  // Session-level migration locks must not use Neon's transaction pooler.
+  const migration = await run("node_modules/prisma/build/index.js", ["migrate", "deploy"], {
+    ...env,
+    DATABASE_URL: result.data.DIRECT_DATABASE_URL,
+  });
   if (migration !== 0 || stopping) process.exit(migration || 1);
   process.exit(await run(".next/standalone/server.js"));
 } catch {

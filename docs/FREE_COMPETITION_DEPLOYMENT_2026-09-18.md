@@ -39,7 +39,7 @@ Neon Free 当前每项目 0.5 GB 存储、100 CU-hours/月。免费套餐有额�
 
 - 根目录 `render.yaml`：明确 `plan: free`、新加坡、Node 24、手动发布，避免默认进入付费套餐。
 - `scripts/render-build.mjs`：用 Mock 构建；复制 standalone 缺省未包含的 `public` 和 `.next/static`。
-- `scripts/render-start.mjs`：从 Render 实际外部地址设置 `APP_URL`，先运行 Prisma migrations，再启动原 Next.js standalone 网站。失败时不启动；不执行开发 seed。
+- `scripts/render-start.mjs`：从 Render 实际外部地址设置 `APP_URL`，先通过数据库直连运行 Prisma migrations，再启动原 Next.js standalone 网站。失败时不启动；不执行开发 seed。仅迁移子进程使用 `DIRECT_DATABASE_URL` 覆盖其 `DATABASE_URL`，网站子进程仍使用原池连接；不改变通用 Prisma、本地预览或测试配置。
 
 Build command：
 
@@ -60,11 +60,13 @@ node scripts/render-start.mjs
 1. 在 Neon Free 新建独立比赛数据库，选择新加坡。启用数据库休眠，使用小计算规格。与本机学习数据库分开，不迁移个人历史数据。
 2. 用 GitHub 授权 Render 访问私有 `xjj235/ThinkTutor` 仓库的比赛分支；仓库保持私有。
 3. 使用 `render.yaml` 或对应 CLI 创建一个 Free Web Service。不要添加收费磁盘、Worker 或付费数据库。
-4. 仅在服务器秘密环境变量中设置 `DATABASE_URL` 和现有 `DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`。模型配置应沿用当前有效配置，不把密钥写入源码或聊天。三种签名/认证密钥使用不同随机值。
+4. 仅在服务器秘密环境变量中设置 `DATABASE_URL`（Neon 池连接）、`DIRECT_DATABASE_URL`（同一数据库的直连地址，主机名不含 `-pooler`），以及现有 `DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`。启动脚本在迁移前校验直连变量存在、使用 PostgreSQL 协议且不是 Neon 池地址；错误只显示变量名。模型配置应沿用当前有效配置，不把密钥写入源码或聊天。三种签名/认证密钥使用不同随机值。
 5. 新数据库不使用开发 seed。学生通过网页注册，首个管理员可用已有 `pnpm admin:create` 安全初始化，之后普通账号与教学管理仍在网页完成。参赛测试账号只提供学生权限，教师/管理员账号不公开。
 6. 发布后检查 HTTPS、网页与静态资源、数据库、登录 Cookie、真实 AI 以及一次完整学习闭环；再用独立手机网络访问，检验休眠唤醒后的链接。
 
 GitHub、Render、Neon 登录及私有仓库连接已完成。Render 的 GitHub App 仅授予 ThinkTutor 仓库权限。平台登录、数据库连接和服务器密钥存于仓库之外，不写入源码；没有绑定银行卡或启用付费服务。
+
+迁移直连用于保留 Prisma 会话级 advisory lock 的语义，网站继续通过连接池访问数据库。Neon 事务池不支持会话级锁；若此前存在残留迁移锁，应先检查锁持有会话，不能通过禁用 Prisma 迁移锁跳过并发保护。参考 [Neon 连接池限制](https://neon.com/docs/connect/connection-pooling)及 [Prisma 迁移锁说明](https://docs.prisma.io/docs/orm/v7/prisma-migrate/workflows/development-and-production)。
 
 ## 本轮验证与上线状态
 
