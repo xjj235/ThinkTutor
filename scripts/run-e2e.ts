@@ -78,7 +78,7 @@ const serverEnv: NodeJS.ProcessEnv = {
 
 const requestedTests = process.argv.slice(2);
 const curatedPattern = "curated knowledge|v1.2 eight-case";
-const explicitCurated = requestedTests.some((arg) => /knowledge-runtime|v12-case/u.test(arg));
+const explicitCurated = requestedTests.some((arg) => /knowledge-runtime|v12-case|spec-completion-feynman/u.test(arg));
 const explicitFile = requestedTests.some((arg) => arg.endsWith(".spec.ts"));
 const modes = explicitCurated ? [true] : explicitFile ? [false] : [false, true];
 for (const curated of modes) {

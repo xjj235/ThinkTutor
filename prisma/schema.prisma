@@ -461,6 +461,7 @@ model Message {
 
 model LearningReport {
   evidenceAudit Json?
+  retryReview   Json?
   id           String   @id @default(cuid())
   sessionId    String   @unique
   summary      String

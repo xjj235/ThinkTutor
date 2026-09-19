@@ -3,6 +3,7 @@ import { z } from "zod";
 import { knowledgeRuntimeSchema, sessionVersionsSchema } from "./knowledge/runtime-schemas";
 import { reportEvidenceLinksSchema } from "./knowledge/report-evidence";
 import { v12StateSchema } from "./knowledge/v12-schema";
+import { retryReviewSchema } from "./retry-review";
 import { answeredSocraticQuestionTypes, canEnterFeynmanVoluntarily, canRequestHint } from "./state-machine";
 import {
   type LearningReportDTO,
@@ -17,7 +18,10 @@ import {
 export const reportRelations = {
   dimensions: true,
   strengths: { orderBy: { position: "asc" as const } },
-  gaps: { orderBy: [{ priority: "desc" as const }, { createdAt: "asc" as const }, { id: "asc" as const }] },
+  gaps: {
+    orderBy: [{ priority: "desc" as const }, { createdAt: "asc" as const }, { id: "asc" as const }],
+    include: { retrySessions: { orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }], take: 1, select: { id: true, phase: true } } },
+  },
   nextSteps: { orderBy: { position: "asc" as const } },
 } satisfies Prisma.LearningReportInclude;
 
@@ -91,6 +95,7 @@ export function serializeReport(report: ReportRecord): LearningReportDTO {
     report.dimensions.map((dimension) => [dimensionKeyMap[dimension.key], { score: dimension.score, evidence: dimension.evidence, feedback: dimension.feedback }]),
   );
   return {
+    retryReview: report.retryReview ? retryReviewSchema.parse(report.retryReview) : null,
     sessionVersions: report.sessionVersions ? sessionVersionsSchema.parse(report.sessionVersions) : null,
     evidenceAudit: report.evidenceAudit ? v12StateSchema.parse(report.evidenceAudit) : null,
     evidenceLinks: report.evidenceLinks ? reportEvidenceLinksSchema.parse(report.evidenceLinks) : null,
@@ -101,7 +106,10 @@ export function serializeReport(report: ReportRecord): LearningReportDTO {
     overallLevel: report.overallLevel,
     dimensions: z.object({ conceptCompleteness: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), logicCompleteness: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), expressionClarity: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), exampleAbility: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), transferAbility: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }) }).parse(dimensions),
     strengths: report.strengths.map(({ title, evidence }) => ({ title, evidence })),
-    gaps: report.gaps.map(({ title, evidence, repairTask, priority, status }) => ({ title, evidence, repairTask, priority, status })),
+    gaps: report.gaps.map(({ title, evidence, repairTask, priority, status, retrySessions }) => ({
+      title, evidence, repairTask, priority, status,
+      ...(retrySessions[0] ? { latestRetry: { sessionId: retrySessions[0].id, phase: retrySessions[0].phase } } : {}),
+    })),
     nextSteps: report.nextSteps.map((step) => step.description),
     disclaimer: report.disclaimer,
     createdAt: report.createdAt.toISOString(),

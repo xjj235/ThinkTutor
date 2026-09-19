@@ -76,7 +76,13 @@ describe("course goals reach the structured coaching workflow", () => {
     expect(refreshedReport.gaps.slice(1).every((gap) => gap.status === "OPEN")).toBe(true);
     // Retry progress is mutable; every score, evidence field and original report
     // identity remains exactly as it was before starting focused practice.
-    expect({ ...refreshedReport, gaps: refreshedReport.gaps.map((gap) => ({ ...gap, status: "OPEN" })) }).toEqual(completed.report);
+    expect(refreshedReport.gaps.some((gap) => gap.latestRetry?.sessionId === retry.session.id)).toBe(true);
+    const originalGapContents = refreshedReport.gaps.map((gap) => {
+      const original = { ...gap, status: "OPEN" as const };
+      delete original.latestRetry;
+      return original;
+    });
+    expect({ ...refreshedReport, gaps: originalGapContents }).toEqual(completed.report);
     if (!saved.sourceGapId) throw new Error("Retry must retain the original source gap");
     expect(await prisma.learningGap.findUniqueOrThrow({ where: { id: saved.sourceGapId } })).toMatchObject({ reportId: completed.report.id, status: "IN_PROGRESS" });
     expect((await prisma.learningSession.findUniqueOrThrow({ where: { id: original.session.id } })).knowledgeRuntime).toBeNull();

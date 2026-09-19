@@ -9,6 +9,7 @@ import {
   SessionPayload,
   createSessionInputSchema,
   isApiFailure,
+  textLimits,
 } from "@/lib/contracts";
 import type { KnowledgeSelection, StudentKnowledgeTopic } from "@/lib/knowledge/student-catalog-schema";
 
@@ -259,7 +260,7 @@ export function TaskForm({ courses = [], knowledgeTopics = [], referencePreviewE
         error={fieldErrors.topic}
         onChange={(value) => updateField("topic", value)}
         required
-        maxLength={120}
+        maxLength={textLimits.topic}
         disabled={interactionLocked}
         readOnly={Boolean(knowledgeSelection)}
       />
@@ -303,7 +304,7 @@ export function TaskForm({ courses = [], knowledgeTopics = [], referencePreviewE
           error={fieldErrors.objective}
           onChange={(value) => updateField("objective", value)}
           required
-          maxLength={400}
+          maxLength={textLimits.objective}
           rows={3}
           disabled={interactionLocked}
           readOnly={Boolean(knowledgeSelection)}
@@ -321,7 +322,7 @@ export function TaskForm({ courses = [], knowledgeTopics = [], referencePreviewE
           value={form.course}
           error={fieldErrors.course}
           onChange={(value) => updateField("course", value)}
-          maxLength={80}
+          maxLength={textLimits.course}
           disabled={interactionLocked}
           readOnly={Boolean(form.courseId || knowledgeSelection)}
         />
@@ -331,7 +332,7 @@ export function TaskForm({ courses = [], knowledgeTopics = [], referencePreviewE
           value={form.chapter}
           error={fieldErrors.chapter}
           onChange={(value) => updateField("chapter", value)}
-          maxLength={120}
+          maxLength={textLimits.chapter}
           disabled={interactionLocked}
           readOnly={Boolean(form.chapterId || knowledgeSelection)}
         />
@@ -343,7 +344,7 @@ export function TaskForm({ courses = [], knowledgeTopics = [], referencePreviewE
         value={form.referenceText}
         error={fieldErrors.referenceText}
         onChange={(value) => updateField("referenceText", value)}
-        maxLength={8000}
+        maxLength={textLimits.referenceText}
         rows={4}
         disabled={interactionLocked}
       />

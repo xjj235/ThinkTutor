@@ -1,5 +1,8 @@
 import { knowledgeSelectionSchema } from "./knowledge/student-catalog-schema";
 import { z } from "zod";
+import { textLimits } from "./content-limits";
+
+export { textLimits } from "./content-limits";
 
 export const learningPhaseValues = [
   "DIAGNOSIS",
@@ -72,16 +75,6 @@ export const MAX_MESSAGES_PER_SESSION = 40;
 export const MIN_SOCRATIC_TURNS = 3;
 export const MAX_SOCRATIC_TURNS = 5;
 export const DEFAULT_MAX_TURNS = 5;
-
-export const textLimits = {
-  course: 80,
-  chapter: 120,
-  topic: 120,
-  objective: 400,
-  learnerLevel: 80,
-  referenceText: 8000,
-  clientRequestId: 80,
-} as const;
 
 const optionalTrimmed = (max: number, label: string) =>
   z
@@ -273,7 +266,10 @@ export const reportGapSchema = z
   .strict();
 export const reportGapsSchema = z.array(reportGapSchema).max(5);
 export const reportGapStatusSchema = z.enum(["OPEN", "IN_PROGRESS", "RESOLVED", "DISMISSED"]);
-export const reportGapDtoSchema = reportGapSchema.extend({ status: reportGapStatusSchema }).strict();
+export const reportGapDtoSchema = reportGapSchema.extend({
+  status: reportGapStatusSchema,
+  latestRetry: z.object({ sessionId: z.string(), phase: learningPhaseSchema }).strict().optional(),
+}).strict();
 export const nextStepsSchema = z.array(z.string().trim().min(1).max(220)).max(3);
 
 export const reportDisclaimer =
@@ -342,6 +338,7 @@ export interface LearningSessionDTO {
 }
 
 export interface LearningReportDTO {
+  retryReview?: import("./retry-review").RetryReview | null;
   evidenceAudit?: import("./knowledge/v12-schema").V12State | null;
   evidenceLinks?: import("./knowledge/report-evidence").ReportEvidenceLinks | null;
   sessionVersions?: import("./knowledge/runtime-schemas").SessionVersions | null;

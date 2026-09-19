@@ -245,6 +245,17 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
         <ListBlock title="进阶建议" items={report.nextSteps} />
       </section>
 
+      {report.retryReview ? <section className="space-y-3 border-t border-border pt-4" aria-labelledby="retry-review-heading">
+        <h2 id="retry-review-heading" className="text-xl font-semibold">本次定向巩固复核</h2>
+        <p className="font-medium">{report.retryReview.status === "RESOLVED" ? "本次证据支持原要点已解决" : "原要点仍需巩固"}</p>
+        <p className="break-words text-sm text-muted-foreground">{report.retryReview.rationale}</p>
+        {report.retryReview.evidence.length ? <details>
+          <summary className="cursor-pointer py-2 text-sm font-medium">查看本次作答证据</summary>
+          {report.retryReview.evidence.map((ref, index) => <blockquote key={`${ref.messageId}-${index}`} className="my-2 break-words border-l-2 border-border pl-3 text-sm">{ref.quote}</blockquote>)}
+        </details> : <p className="text-sm text-muted-foreground">本次尚无足够的独立证据确认修复，可继续围绕原要点练习。</p>}
+        {session.parentSessionId ? <Link className="button button-secondary" href={`/report/${session.parentSessionId}`}>查看原要点与继续巩固</Link> : null}
+      </section> : null}
+
       {report.evidenceAudit ? <section className="space-y-3 border-t border-border pt-4">
         <h2 className="text-xl font-semibold">判断与版本记录</h2>
         <p className="text-sm">{report.evidenceAudit.needsTeacherReview ? "存在待教师复核的判断" : "本次证据校验已完成"}</p>
@@ -396,6 +407,9 @@ function GapBlock({ items }: { items: LearningReportDTO["gaps"] }) {
                 <span className="font-medium text-foreground">巩固任务：</span>
                 {gap.repairTask}
               </p>
+              {gap.latestRetry ? <Link className="mt-3 inline-flex text-sm font-medium text-brand" href={gap.latestRetry.phase === "COMPLETED" ? `/report/${gap.latestRetry.sessionId}` : `/session/${gap.latestRetry.sessionId}`}>
+                {gap.latestRetry.phase === "COMPLETED" ? "查看最近巩固报告" : "继续本次巩固"}
+              </Link> : null}
             </li>
           ))}
         </ol>

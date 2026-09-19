@@ -26,6 +26,7 @@ import { getServerEnv } from "./env";
 import { withAIRequestProtection } from "./request-limits";
 import { readSession } from "./session-data-service";
 import { finalizeReportDraft } from "./scoring";
+import { reviewCompletedRetry, saveRetryGapStatus } from "./retry-lifecycle";
 import { createVersionSnapshot, findKnowledgeManifest, resolveRuntimeManifest } from "./knowledge/releases";
 import { knowledgeRuntimeSchema } from "./knowledge/runtime-schemas";
 import { presentV12Goal } from "./state-machine";
@@ -518,6 +519,22 @@ const dimensionKeyMap = {
 
 export async function submitFeynmanExplanation(sessionId: string, input: { explanation: string; clientRequestId: string }): Promise<{ payload: SessionPayload; report: LearningReportDTO | null; duplicate: boolean }> {
   feynmanInputSchema.parse(input);
+  try {
+    return await saveFeynmanExplanation(sessionId, input);
+  } catch (error) {
+    // A concurrent replay may finish its AI work after the first request has
+    // already committed the report and changed the source gap. Return that
+    // exact accepted request, without swallowing conflicts from other requests.
+    const committed = await prisma.message.findUnique({ where: { clientRequestId: input.clientRequestId } });
+    if (committed?.sessionId === sessionId && committed.role === "USER" && committed.phase === "FEYNMAN") {
+      const payload = await getSessionPayload(sessionId);
+      return { payload, report: payload.report, duplicate: true };
+    }
+    throw error;
+  }
+}
+
+async function saveFeynmanExplanation(sessionId: string, input: { explanation: string; clientRequestId: string }): Promise<{ payload: SessionPayload; report: LearningReportDTO | null; duplicate: boolean }> {
   const v12Session = await getRequiredSessionRecord(sessionId);
   if (v12Session.knowledgeRuntime && knowledgeRuntimeSchema.parse(v12Session.knowledgeRuntime).v12) {
     const result = await submitV12Turn(sessionId, input.explanation, input.clientRequestId, true);
@@ -543,6 +560,13 @@ export async function submitFeynmanExplanation(sessionId: string, input: { expla
   }));
   const report = finalizeReportDraft(draft, runtime ?? undefined);
   const explanationMessageId = crypto.randomUUID();
+  const retryReview = await reviewCompletedRetry(session, {
+    messages: [
+      ...session.messages.filter((message) => message.role === "USER").map(({ id, phase, content }) => ({ id, role: "USER" as const, phase, content })),
+      { id: explanationMessageId, role: "USER", phase: "FEYNMAN", content: input.explanation, isIndependentExplanation: true },
+    ],
+    report: { summary: report.summary, gaps: report.gaps },
+  }, input.clientRequestId, runtime);
   const evidenceLinks = linkReportEvidence(report, [...session.messages, { id: explanationMessageId, role: "USER", content: input.explanation }]);
   const completed = nextAfterReportSaved({ ...session, phase: reporting.phase });
   try {
@@ -555,6 +579,7 @@ export async function submitFeynmanExplanation(sessionId: string, input: { expla
           sessionId, summary: report.summary, overallScore: report.overallScore, overallLevel: report.overallLevel, disclaimer: report.disclaimer,
           ...(runtime ? { sessionVersions: asJson(runtime.versions) } : {}),
           evidenceLinks: asJson(evidenceLinks),
+          ...(retryReview ? { retryReview: asJson(retryReview) } : {}),
           dimensions: { create: Object.entries(report.dimensions).map(([key, dimension]) => ({ key: dimensionKeyMap[key as keyof typeof dimensionKeyMap], ...dimension })) },
           strengths: { create: report.strengths.map((strength, position) => ({ ...strength, position })) },
           gaps: { create: report.gaps },
@@ -562,6 +587,7 @@ export async function submitFeynmanExplanation(sessionId: string, input: { expla
         },
       });
       await tx.learningSession.update({ where: { id: sessionId }, data: { phase: completed.phase, ...(runtime ? { knowledgeRuntime: asJson({ ...runtime, pedagogicalStage: "REPORT" }) } : {}), completedAt: new Date(), version: { increment: 1 } } });
+      await saveRetryGapStatus(tx, session, retryReview);
       if (session.assignmentId) await tx.assignmentStudent.updateMany({ where: { assignmentId: session.assignmentId, studentId: session.userId }, data: { progress: "COMPLETED", completedAt: new Date() } });
       await tx.auditLog.createMany({ data: [
         { actorId: session.userId, action: "REPORT_CREATED", targetType: "LearningReport", targetId: createdReport.id, requestId: input.clientRequestId },

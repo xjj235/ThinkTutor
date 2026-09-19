@@ -18,6 +18,7 @@ import { buildV12TurnFeedback } from "./turn-feedback";
 import { tutorResponseSchema } from "./v12-schema";
 import { diagnoseCoaching, recordCoaching } from "./coaching";
 import { selectCoaching } from "./coaching-service";
+import { reviewCompletedRetry, saveRetryGapStatus } from "../retry-lifecycle";
 import type { KnowledgeAction } from "./orchestrator";
 import type { CoachingProfile, CoachingKind } from "./coaching-schema";
 
@@ -122,7 +123,7 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
         assistantMessage = `${s.experienceLimitReached ? "本次练习已达到轮数上限，未完成的验证会保留。\n\n" : ""}${reflectionQuestion(label)}`;
       } else {
         s.activityType = "INDEPENDENT_EXPLANATION";
-        assistantMessage = feynmanQuestion;
+        assistantMessage = `${s.experienceLimitReached ? "本次追问已达到轮数上限，未完成的验证会保留。请先完成独立讲解，再进行反思。\n\n" : ""}${feynmanQuestion}`;
       }
       runtime.currentQuestionId = null;
       s.currentCaseId = null;
@@ -144,6 +145,13 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
   const recentTurns = session.messages.filter((m) => m.role === "USER" || m.role === "ASSISTANT").slice(-6).map((m) => ({ role: m.role as "USER" | "ASSISTANT", content: m.content.slice(0, 2000) }));
   const coaching = await selectCoaching(manifest, presentationRuntime, { kind, content: assistantMessage, learnerLevel: session.learnerLevel, studentContent: hint ? session.messages.filter((m) => m.role === "USER").at(-1)?.content : text, profile, recentTurns }, { userId: session.userId, sessionId, requestId: `${clientRequestId}:teaching` }, sessionId);
   knowledgeRuntimeSchema.parse(runtime);
+  const independentExplanationId = runtime.v12!.finalFeynmanMessageId;
+  const retryReview = built ? await reviewCompletedRetry(session, {
+    messages: [...session.messages, { id: messageId, role: "USER", phase: session.phase, content: text }]
+      .filter((message) => message.role === "USER")
+      .map(({ id, phase: messagePhase, content }) => ({ id, role: "USER" as const, phase: messagePhase, content, isIndependentExplanation: id === independentExplanationId })),
+    report: { summary: built.report.summary, gaps: built.report.gaps },
+  }, clientRequestId, runtime) : null;
   try {
     await prisma.$transaction(async (tx) => {
       if (selectCaseInTransaction) {
@@ -175,10 +183,12 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
         const created = await tx.learningReport.create({ data: {
           sessionId, summary: report.summary, overallScore: report.overallScore, overallLevel: report.overallLevel, disclaimer: report.disclaimer,
           sessionVersions: asJson(runtime.versions), evidenceLinks: asJson(evidenceLinks), evidenceAudit: asJson(runtime.v12!),
+          ...(retryReview ? { retryReview: asJson(retryReview) } : {}),
           dimensions: { create: Object.entries(report.dimensions).map(([key, dimension]) => ({ key: dimensionKeyMap[key as keyof typeof dimensionKeyMap], ...dimension })) },
           strengths: { create: report.strengths.map((strength, position) => ({ ...strength, position })) }, gaps: { create: report.gaps },
           nextSteps: { create: report.nextSteps.map((description, position) => ({ description, position })) },
         } });
+        await saveRetryGapStatus(tx, session, retryReview);
         if (session.assignmentId) await tx.assignmentStudent.updateMany({ where: { assignmentId: session.assignmentId, studentId: session.userId }, data: { progress: "COMPLETED", completedAt: new Date() } });
         await tx.auditLog.create({ data: { actorId: session.userId, action: "REPORT_CREATED", targetType: "LearningReport", targetId: created.id, requestId: clientRequestId } });
       }

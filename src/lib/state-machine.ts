@@ -154,7 +154,8 @@ export function nextV12Transition(session: SessionStateSnapshot, evidence: {
     if (!["KNOWLEDGE_CONSTRUCTION", "CASE_TRANSFER"].includes(stage) || turns >= session.maxTurns) throw new Error("Invalid construction transition");
     turns += 1;
     if (stage === "CASE_TRANSFER" && evidence.transferPassed && turns >= MIN_SOCRATIC_TURNS) { phase = "FEYNMAN"; stage = "FEYNMAN_OUTPUT"; reasonCode = "CASE_PASSED"; }
-    else if (turns >= session.maxTurns) { phase = "FEYNMAN"; stage = "REFLECTION"; experienceLimitReached = true; reasonCode = "EXPERIENCE_LIMIT"; }
+    // The turn budget ends questioning, but still requires an independent explanation.
+    else if (turns >= session.maxTurns) { phase = "FEYNMAN"; stage = "FEYNMAN_OUTPUT"; experienceLimitReached = true; reasonCode = "EXPERIENCE_LIMIT"; }
     else { stage = evidence.constructionReady && (stage !== "CASE_TRANSFER" || evidence.transferPassed) ? "CASE_TRANSFER" : "KNOWLEDGE_CONSTRUCTION"; if (stage !== evidence.stage) reasonCode = stage === "CASE_TRANSFER" ? "CONSTRUCTION_CRITERIA_MET" : "CASE_REPAIR_REQUIRED"; }
   } else if (phase === "FEYNMAN") {
     if (stage === "FEYNMAN_OUTPUT") {

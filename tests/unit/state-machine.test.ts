@@ -9,7 +9,41 @@ import {
   nextAfterFeynman,
   nextAfterReportSaved,
   nextAfterSocraticAnswer,
+  nextV12Transition,
 } from "@/lib/state-machine";
+
+describe("v1.2 required explanation at the experience limit", () => {
+  const evidence = { diagnosisFinished: true, constructionReady: false, transferPassed: false, majorError: false };
+
+  it.each([3, 4, 5])("requires explanation then revision at a %i-turn limit without extending the budget", (maxTurns) => {
+    for (const stage of ["KNOWLEDGE_CONSTRUCTION", "CASE_TRANSFER"] as const) {
+      const explanation = nextV12Transition({ phase: "SOCRATIC", socraticTurns: maxTurns - 1, maxTurns }, { ...evidence, stage });
+      expect(explanation).toMatchObject({ phase: "FEYNMAN", stage: "FEYNMAN_OUTPUT", socraticTurns: maxTurns, experienceLimitReached: true, reasonCode: "EXPERIENCE_LIMIT" });
+      const reflection = nextV12Transition({ ...explanation, maxTurns }, { ...evidence, stage: explanation.stage, majorError: true });
+      expect(reflection).toMatchObject({ phase: "FEYNMAN", stage: "REFLECTION", socraticTurns: maxTurns, reasonCode: "FEYNMAN_COMPLETED" });
+      const report = nextV12Transition({ ...reflection, maxTurns }, { ...evidence, stage: reflection.stage, majorError: true });
+      expect(report).toMatchObject({ phase: "REPORTING", stage: "REPORT", socraticTurns: maxTurns, reasonCode: "REFLECTION_COMPLETED" });
+    }
+  });
+
+  it("keeps low-confidence explanation evidence in the same stage even at the turn limit", () => {
+    expect(nextV12Transition({ phase: "FEYNMAN", socraticTurns: 5, maxTurns: 5 }, {
+      ...evidence, stage: "FEYNMAN_OUTPUT", verificationRequired: true,
+    })).toMatchObject({ phase: "FEYNMAN", stage: "FEYNMAN_OUTPUT", socraticTurns: 5, reasonCode: null });
+  });
+
+  it("allows an existing reflection session to finish without requiring a replacement explanation", () => {
+    expect(nextV12Transition({ phase: "FEYNMAN", socraticTurns: 5, maxTurns: 5 }, {
+      ...evidence, stage: "REFLECTION",
+    })).toMatchObject({ phase: "REPORTING", stage: "REPORT", socraticTurns: 5, reasonCode: "REFLECTION_COMPLETED" });
+  });
+
+  it("still repairs a major error before the turn limit", () => {
+    expect(nextV12Transition({ phase: "FEYNMAN", socraticTurns: 3, maxTurns: 5 }, {
+      ...evidence, stage: "FEYNMAN_OUTPUT", majorError: true,
+    })).toMatchObject({ phase: "SOCRATIC", stage: "KNOWLEDGE_CONSTRUCTION", socraticTurns: 3, reasonCode: "FEYNMAN_MAJOR_BACKTRACK" });
+  });
+});
 
 describe("state machine", () => {
   it("moves from diagnosis to socratic after a diagnosis answer", () => {

@@ -13,9 +13,38 @@ import {
   reportGapsSchema,
   feynmanInputSchema,
   sessionIdSchema,
+  textLimits,
 } from "@/lib/contracts";
+import { assignmentInputSchema, chapterInputSchema, courseInputSchema, goalInputSchema } from "@/lib/domain-schemas";
+import { curriculumTextLimits } from "@/lib/content-limits";
 
 describe("zod schemas", () => {
+  it("keeps every valid teacher goal intact when used as a student task", () => {
+    const course = courseInputSchema.parse({ title: "课".repeat(120) });
+    const chapter = chapterInputSchema.parse({ title: "章".repeat(120), sortOrder: 1 });
+    const goal = goalInputSchema.parse({ title: "题".repeat(160), objective: "目".repeat(2_000), expectedLevel: "阶".repeat(100), sortOrder: 1 });
+    const task = { course: course.title, chapter: chapter.title, topic: goal.title, objective: goal.objective, learnerLevel: goal.expectedLevel };
+    expect(createSessionInputSchema.parse(task)).toEqual(task);
+    expect(goalInputSchema.safeParse({ ...goal, objective: "目".repeat(2_001) }).success).toBe(false);
+  });
+
+  it("accepts a teacher assignment's full instructions when no separate goal is selected", () => {
+    const assignment = assignmentInputSchema.parse({
+      courseId: "course-length-test", classroomId: "classroom-length-test",
+      title: "题".repeat(160), instructions: "学".repeat(4_000), learnerLevel: "阶".repeat(100),
+    });
+    expect(createSessionInputSchema.parse({ topic: assignment.title, objective: assignment.instructions, learnerLevel: assignment.learnerLevel }).objective).toBe(assignment.instructions);
+    expect(assignmentInputSchema.safeParse({ ...assignment, instructions: "学".repeat(4_001) }).success).toBe(false);
+    expect(textLimits.objective).toBeGreaterThanOrEqual(curriculumTextLimits.goalObjective);
+  });
+
+  it.each(["course", "chapter", "topic", "objective", "learnerLevel", "referenceText"] as const)("rejects task %s above its shared boundary", (field) => {
+    const task = { topic: "概念", objective: "解释概念", learnerLevel: "入门", [field]: "长".repeat(textLimits[field] + 1) };
+    const result = createSessionInputSchema.safeParse(task);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues.some((issue) => issue.path[0] === field)).toBe(true);
+  });
+
   it("validates a task creation payload", () => {
     const result = createSessionInputSchema.safeParse({
       course: "",
