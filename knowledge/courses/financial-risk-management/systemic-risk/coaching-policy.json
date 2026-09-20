@@ -1,8 +1,15 @@
 {
-  "version": "1.0",
+  "version": "1.2",
   "basisType": "project_custom",
   "reviewStatus": "draft",
   "minimumConfidence": 0.75,
+  "confidenceRouting": {
+    "mode": "SUPPORTED_GAP_WITHOUT_MASTERY",
+    "description": "追问方向与掌握判定分开：仅当独立原文符合本题缺项规则、缺项候选达到统一置信度门槛，且低置信度仅来自本目标尚未成立的掌握候选时，允许定向追问缺项。原始聚合置信度、掌握状态、分数和阶段门禁不变；冲突、重复、提示依赖、低投入、无证据或其他低置信度候选仍先核验。",
+    "rules": [
+      { "id": "ROUTE_SUPPORTED_DEFINITION_GAP", "targetId": "C_SR_001", "gapId": "GAP_DEFINITION_ONLY", "gapTargetId": "COMP_SR_CAUSAL_CHAIN", "requiredAll": ["financial_system_scope"], "absentAll": ["functional_impairment", "propagation"], "description": "综合因果链中的仅定义缺项可用于本题：已明确金融体系范围，但本题需要的功能损害或传播解释仍缺失；仅定向追问本题尚缺的机制证据，不将综合能力整体确认为缺失或掌握。" }
+    ]
+  },
   "focusedRetryLimit": 2,
   "generation": {
     "mode": "GROUNDED_FOLLOW_UP",
@@ -35,11 +42,15 @@
     "L4": "未见情境迁移通过，并有金融功能或实体经济后果的独立证据；检验反例与条件变化。"
   },
   "routingRules": [
-    { "id": "COACH_VERIFY_EVIDENCE", "signal": "UNRELIABLE", "description": "原文冲突、重复、依赖提示或置信度不足优先核验，不把缺少证据确认为错误。" },
-    { "id": "COACH_REPAIR_BOUNDARY", "signal": "MISCONCEPTION", "description": "当前规则禁止的明确判断优先检验概念边界，重大已确认错误按题图回退。" },
-    { "id": "COACH_FILL_GAP", "signal": "MISSING", "description": "对照当前问题 requiredAll 和 requiredAny 找缺项，按维度优先级追问；不将未询问的整章要求算作本题缺项。" },
-    { "id": "COACH_VERIFY_INDEPENDENT", "signal": "VERIFY", "description": "当前要求已覆盖后提高独立核验要求；知识建构不重复已掌握目标，诊断仍保留规定的广度和独立核验。" },
-    { "id": "COACH_INITIAL_SCOPE", "signal": "INITIAL", "description": "无作答时只能按自报水平调整呈现难度，不能生成掌握或缺陷判断。" }
+    { "id": "COACH_VERIFY_EVIDENCE", "signal": "UNRELIABLE", "execution": { "priority": 500, "dimensionSelection": "FIXED", "dimension": "EVIDENCE" }, "description": "原文冲突、重复、依赖提示或置信度不足优先核验，不把缺少证据确认为错误。" },
+    { "id": "COACH_REPAIR_BOUNDARY", "signal": "MISCONCEPTION", "execution": { "priority": 400, "dimensionSelection": "FIXED", "dimension": "CONCEPT" }, "description": "当前规则禁止的明确判断优先检验概念边界，重大已确认错误按题图回退。" },
+    { "id": "COACH_FILL_GAP", "signal": "MISSING", "execution": { "priority": 300, "dimensionSelection": "MISSING_FIRST", "dimension": "CONCEPT" }, "description": "对照当前问题 requiredAll 和 requiredAny 找缺项，按维度优先级追问；不将未询问的整章要求算作本题缺项。" },
+    { "id": "COACH_VERIFY_INDEPENDENT", "signal": "VERIFY", "execution": { "priority": 200, "dimensionSelection": "MISSING_FIRST", "dimension": "TRANSFER" }, "description": "当前要求已覆盖后提高独立核验要求；知识建构不重复已掌握目标，诊断仍保留规定的广度和独立核验。" },
+    { "id": "COACH_INITIAL_SCOPE", "signal": "INITIAL", "execution": { "priority": 100, "dimensionSelection": "MISSING_FIRST", "dimension": "CONCEPT" }, "description": "无作答时只能按自报水平调整呈现难度，不能生成掌握或缺陷判断。" }
+  ],
+  "verificationRules": [
+    { "id": "VERIFY_SYSTEMIC_CONDITION", "targetIds": ["C_SR_001"], "requiredAll": ["condition_revision"], "description": "核心定义尚未稳定掌握时，基本证据齐备后核验条件变化；局部追问通过不代表整体掌握，需与原目标要求一起完成独立应用核验。" },
+    { "id": "VERIFY_FIRE_SALE_CONDITION", "targetIds": ["M_SR_003"], "requiredAll": ["condition_revision"], "description": "抛售反馈尚未稳定掌握时，基本机制齐备后核验条件变化；局部追问通过不代表整体掌握，需与原机制要求一起完成独立应用核验。" }
   ],
   "forms": [
     { "id": "FORM_CONCEPT_01", "label": "自主界定", "dimension": "CONCEPT", "levels": ["L1", "L2"], "questionType": "CONCEPT_CLARIFICATION", "template": "围绕“{target}”，你会怎样用自己的话界定它的研究对象与判断边界？" },

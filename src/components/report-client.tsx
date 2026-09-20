@@ -8,12 +8,13 @@ import {
   DimensionKey,
   LearningReportDTO,
   LearningSessionDTO,
-  ReportGap,
   SessionPayload,
   dimensionKeys,
   dimensionLabels,
   isApiFailure,
 } from "@/lib/contracts";
+import { gapStatusLabels } from "@/lib/display-labels";
+import { makeClientRequestId } from "@/lib/client-request-id";
 import { SafeMarkdown } from "./safe-markdown";
 import { WorkspaceState } from "./workspace-state";
 import { ArrowLeft, RotateCcw } from "lucide-react";
@@ -23,13 +24,6 @@ type ReportPayload = {
   report: LearningReportDTO;
   messages?: import("@/lib/contracts").MessageDTO[];
 };
-
-function makeRequestId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `retry-${crypto.randomUUID()}`;
-  }
-  return `retry-${Date.now()}`;
-}
 
 async function fetchReportPayload(sessionId: string) {
   const response = await fetch(`/api/reports/${sessionId}`, {
@@ -42,17 +36,20 @@ async function fetchReportPayload(sessionId: string) {
   return result.data;
 }
 
-export function ReportClient({ sessionId }: { sessionId: string }) {
+export function ReportClient({ sessionId, readOnly = false }: { sessionId: string; readOnly?: boolean }) {
   const router = useRouter();
   const [payload, setPayload] = useState<ReportPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [retryableError, setRetryableError] = useState(false);
   const retryRequestId = useRef<string | null>(null);
+  const pendingRef = useRef(false);
 
   const loadReport = useCallback(async () => {
     setLoading(true);
     setError("");
+    setRetryableError(false);
     try {
       setPayload(await fetchReportPayload(sessionId));
     } catch (cause) {
@@ -90,14 +87,17 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   async function retrySession() {
-    if (pending) {
+    if (readOnly || pendingRef.current || !payload?.report.gaps.some((gap) => gap.status === "OPEN") || (error && !retryableError)) {
       return;
     }
 
+    pendingRef.current = true;
     setPending(true);
     setError("");
-    const clientRequestId = retryRequestId.current ?? makeRequestId();
+    setRetryableError(false);
+    const clientRequestId = retryRequestId.current ?? makeClientRequestId("retry");
     retryRequestId.current = clientRequestId;
+    let navigating = false;
     try {
       const response = await fetch(`/api/sessions/${sessionId}/retry`, {
         method: "POST",
@@ -107,14 +107,21 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
       const result = (await response.json()) as ApiResponse<SessionPayload>;
       if (isApiFailure(result)) {
         setError(result.error.message);
+        setRetryableError(result.error.retryable);
+        if (!result.error.retryable) retryRequestId.current = null;
         return;
       }
       retryRequestId.current = null;
       router.push(`/session/${result.data.session.id}`);
+      navigating = true;
     } catch {
       setError("创建再练会话失败，请重试。");
+      setRetryableError(true);
     } finally {
-      setPending(false);
+      if (!navigating) {
+        pendingRef.current = false;
+        setPending(false);
+      }
     }
   }
 
@@ -161,6 +168,8 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
   }
 
   const { session, report } = payload;
+  const hasOpenGaps = report.gaps.some((gap) => gap.status === "OPEN");
+  const hasStartedGaps = report.gaps.some((gap) => gap.status === "IN_PROGRESS");
 
   return (
     <main
@@ -172,14 +181,14 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
         <Link href={`/session/${session.id}`} className="text-sm text-brand">
           <ArrowLeft size={15} aria-hidden="true" />返回研习记录
         </Link>
-        <button
+        {!readOnly ? <button
           type="button"
           onClick={retrySession}
-          disabled={pending || report.gaps.length === 0}
+          disabled={pending || !hasOpenGaps || Boolean(error && !retryableError)}
           className="button"
         >
-          <RotateCcw size={15} aria-hidden="true" />{pending ? "正在创建..." : report.gaps.length === 0 ? "暂无待巩固要点" : "开启定向巩固"}
-        </button>
+          <RotateCcw size={15} aria-hidden="true" />{pending ? "正在创建..." : hasOpenGaps ? "开启定向巩固" : hasStartedGaps ? "巩固已开始" : "暂无待巩固要点"}
+        </button> : <p role="status">正在查看学生的学习报告；定向巩固由学生本人开始。</p>}
       </div>
 
       <section className="report-summary">
@@ -202,7 +211,7 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
       </section>
 
       <div aria-live="polite" className="min-h-6 text-sm text-muted-foreground">
-        {pending ? "正在创建定向巩固任务..." : ""}
+        {pending ? "正在创建定向巩固任务..." : !hasOpenGaps && hasStartedGaps ? "这些要点已开始定向巩固，可在学习记录中继续。" : ""}
       </div>
 
       {error ? (
@@ -213,11 +222,11 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
           <span>{error}</span>
           <button
             type="button"
-            onClick={retrySession}
+            onClick={retryableError ? retrySession : loadReport}
             disabled={pending}
             className="button button-secondary"
           >
-            重试创建
+            {retryableError ? "重试创建" : "重新加载报告"}
           </button>
         </div>
       ) : null}
@@ -236,6 +245,17 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
         <GapBlock items={report.gaps} />
         <ListBlock title="进阶建议" items={report.nextSteps} />
       </section>
+
+      {report.retryReview ? <section className="space-y-3 border-t border-border pt-4" aria-labelledby="retry-review-heading">
+        <h2 id="retry-review-heading" className="text-xl font-semibold">本次定向巩固复核</h2>
+        <p className="font-medium">{report.retryReview.status === "RESOLVED" ? "本次证据支持原要点已解决" : "原要点仍需巩固"}</p>
+        <p className="break-words text-sm text-muted-foreground">{report.retryReview.rationale}</p>
+        {report.retryReview.evidence.length ? <details>
+          <summary className="cursor-pointer py-2 text-sm font-medium">查看本次作答证据</summary>
+          {report.retryReview.evidence.map((ref, index) => <blockquote key={`${ref.messageId}-${index}`} className="my-2 break-words border-l-2 border-border pl-3 text-sm">{ref.quote}</blockquote>)}
+        </details> : <p className="text-sm text-muted-foreground">本次尚无足够的独立证据确认修复，可继续围绕原要点练习。</p>}
+        {session.parentSessionId ? <Link className="button button-secondary" href={`/report/${session.parentSessionId}`}>查看原要点与继续巩固</Link> : null}
+      </section> : null}
 
       {report.evidenceAudit ? <section className="space-y-3 border-t border-border pt-4">
         <h2 className="text-xl font-semibold">判断与版本记录</h2>
@@ -357,7 +377,7 @@ function ListBlock({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function GapBlock({ items }: { items: ReportGap[] }) {
+function GapBlock({ items }: { items: LearningReportDTO["gaps"] }) {
   const sortedItems = [...items].sort((left, right) => right.priority - left.priority);
 
   return (
@@ -377,7 +397,7 @@ function GapBlock({ items }: { items: ReportGap[] }) {
                   {gap.title}
                 </h3>
                 <span className="shrink-0 rounded-md border border-border bg-brand-subtle px-2 py-0.5 text-xs font-medium text-brand">
-                  优先级 {gap.priority}
+                  {gapStatusLabels[gap.status]} · 优先级 {gap.priority}
                 </span>
               </div>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -388,6 +408,9 @@ function GapBlock({ items }: { items: ReportGap[] }) {
                 <span className="font-medium text-foreground">巩固任务：</span>
                 {gap.repairTask}
               </p>
+              {gap.latestRetry ? <Link className="mt-3 inline-flex text-sm font-medium text-brand" href={gap.latestRetry.phase === "COMPLETED" ? `/report/${gap.latestRetry.sessionId}` : `/session/${gap.latestRetry.sessionId}`}>
+                {gap.latestRetry.phase === "COMPLETED" ? "查看最近巩固报告" : "继续本次巩固"}
+              </Link> : null}
             </li>
           ))}
         </ol>

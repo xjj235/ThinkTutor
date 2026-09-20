@@ -38,7 +38,7 @@ export async function getTeacherClassAnalytics(user: AuthUser, classroomId: stri
           status: true,
           dueAt: true,
           students: { select: { progress: true, studentId: true } },
-          sessions: { where: { phase: "COMPLETED" }, select: { userId: true, report: { select: { overallScore: true } } } },
+          sessions: { where: { phase: "COMPLETED", report: { isNot: null } }, orderBy: [{ completedAt: { sort: "desc", nulls: "last" } }, { updatedAt: "desc" }, { id: "desc" }], select: { userId: true, report: { select: { overallScore: true } } } },
         },
       },
     },
@@ -46,7 +46,14 @@ export async function getTeacherClassAnalytics(user: AuthUser, classroomId: stri
   return {
     ...classroom,
     assignments: classroom.assignments.map((assignment) => {
-      const scores = assignment.sessions.flatMap((session) => session.report ? [session.report.overallScore] : []);
+      const latestScores = new Map<string, number>();
+      const assignedStudents = new Set(assignment.students.map((student) => student.studentId));
+      for (const session of assignment.sessions) {
+        if (session.report && assignedStudents.has(session.userId) && !latestScores.has(session.userId)) {
+          latestScores.set(session.userId, session.report.overallScore);
+        }
+      }
+      const scores = [...latestScores.values()];
       return {
         id: assignment.id,
         title: assignment.title,

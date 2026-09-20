@@ -19,16 +19,13 @@ import {
   isApiFailure,
 } from "@/lib/contracts";
 import { PhaseProgress } from "./phase-progress";
+import { makeClientRequestId as makeRequestId } from "@/lib/client-request-id";
 import { SafeMarkdown } from "./safe-markdown";
 import { WorkspaceState } from "./workspace-state";
 import { ArrowLeft, ArrowUpRight, BookOpenCheck, Info as InfoIcon, Lightbulb, SendHorizontal, Play, RotateCcw, UserRound } from "lucide-react";
 
-function makeRequestId(prefix: string) {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `${prefix}-${crypto.randomUUID()}`;
-  }
-  return `${prefix}-${Date.now()}`;
-}
+type SessionEventAction = "GOAL_CONFIRMED" | "SESSION_RESUMED";
+type SessionAction = "answer" | "hint" | "enterFeynman" | "feynman" | SessionEventAction;
 
 async function fetchSessionPayload(sessionId: string) {
   const response = await fetch(`/api/sessions/${sessionId}`, {
@@ -41,7 +38,7 @@ async function fetchSessionPayload(sessionId: string) {
   return result.data;
 }
 
-export function SessionClient({ sessionId }: { sessionId: string }) {
+export function SessionClient({ sessionId, readOnly = false }: { sessionId: string; readOnly?: boolean }) {
   const router = useRouter();
   const [payload, setPayload] = useState<SessionPayload | null>(null);
   const [answer, setAnswer] = useState("");
@@ -50,41 +47,144 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
   const [pending, setPending] = useState(false);
   const [pendingMessage, setPendingMessage] = useState("");
   const [error, setError] = useState("");
-  const [retryAction, setRetryAction] = useState<
-    "load" | "answer" | "hint" | "enterFeynman" | "feynman" | null
-  >(null);
+  const [retryAction, setRetryAction] = useState<"load" | "sync" | SessionAction | null>(null);
+  const [unresolvedAction, setUnresolvedAction] = useState<SessionAction | null>(null);
+  const [preservedDrafts, setPreservedDrafts] = useState<Array<{ id: string; label: string; content: string }>>([]);
+  const pendingRef = useRef(false);
+  const unresolvedActionRef = useRef<SessionAction | null>(null);
   const answerRequestId = useRef<string | null>(null);
   const hintRequestId = useRef<string | null>(null);
   const feynmanRequestId = useRef<string | null>(null);
   const enterFeynmanRequestId = useRef<string | null>(null);
   const recordRef = useRef<HTMLDivElement>(null);
-  const eventRequestId = useRef<string | null>(null);
-  async function submitSessionEvent(action: "GOAL_CONFIRMED" | "SESSION_RESUMED") {
-    if (pending) return;
-    setPending(true); setError("");
-    const clientRequestId = eventRequestId.current ?? makeRequestId("event");
-    eventRequestId.current = clientRequestId;
+  const eventRequestIds = useRef<Partial<Record<SessionEventAction, string>>>({});
+  const interactionLocked = pending || unresolvedAction !== null;
+
+  function beginMutation(action: SessionAction, message: string): boolean {
+    if (readOnly) return false;
+    if (pendingRef.current || (unresolvedActionRef.current && unresolvedActionRef.current !== action)) return false;
+    pendingRef.current = true;
+    setPending(true);
+    setPendingMessage(message);
+    setError("");
+    setRetryAction(null);
+    return true;
+  }
+
+  function completeMutation() {
+    unresolvedActionRef.current = null;
+    setUnresolvedAction(null);
+    setRetryAction(null);
+  }
+
+  function rejectMutation(action: SessionAction, failure: { code: string; message: string; retryable: boolean }, status: number) {
+    if (status === 409) {
+      unresolvedActionRef.current = action;
+      setUnresolvedAction(action);
+      setError(failure.message);
+      setRetryAction("sync");
+      return;
+    }
+    // Unknown server failures may happen after a transaction has committed.
+    if (status >= 500 && !failure.code.startsWith("AI_")) {
+      markUnresolved(action);
+      return;
+    }
+    setError(failure.message);
+    // A failed retry cannot establish whether an earlier disconnected request committed.
+    setRetryAction(unresolvedActionRef.current && status >= 400 && status < 500 && !failure.retryable
+      ? "sync"
+      : unresolvedActionRef.current || failure.retryable ? action : "load");
+  }
+
+  function markUnresolved(action: SessionAction) {
+    unresolvedActionRef.current = action;
+    setUnresolvedAction(action);
+    setError("暂时无法确认操作结果，原内容已保留。请重试本次操作，确认完成后再继续。");
+    setRetryAction(action);
+  }
+
+  function finishMutation() {
+    pendingRef.current = false;
+    setPending(false);
+    setPendingMessage("");
+  }
+
+  async function synchronizeSession() {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true);
+    setPendingMessage("正在同步最新进度...");
+    setError("");
     try {
-      const response = await fetch(`/api/sessions/${sessionId}/events`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, clientRequestId }) });
+      const latest = await fetchSessionPayload(sessionId);
+      const drafts = [
+        { id: answerRequestId.current, label: "上次未确认的回答", content: answer },
+        { id: feynmanRequestId.current, label: "上次未确认的费曼阐释", content: explanation },
+      ].filter((draft) => draft.content.trim()
+        && !latest.messages.some((message) => message.role === "USER" && draft.id && message.clientRequestId === draft.id));
+      // Never turn a draft from the previous question into a new submission automatically.
+      setPreservedDrafts((current) => [...current, ...drafts.map((draft) => ({ ...draft, id: draft.id ?? makeRequestId("draft") }))]);
+      setAnswer("");
+      setExplanation("");
+      setPayload(latest);
+      answerRequestId.current = null;
+      hintRequestId.current = null;
+      feynmanRequestId.current = null;
+      enterFeynmanRequestId.current = null;
+      eventRequestIds.current = {};
+      completeMutation();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "同步最新进度失败，请重试。原内容仍保留在本页。");
+      setRetryAction("sync");
+    } finally {
+      finishMutation();
+    }
+  }
+
+  async function submitSessionEvent(action: SessionEventAction) {
+    if (!payload) return;
+    if (!beginMutation(action, action === "GOAL_CONFIRMED" ? "正在确认研习目标..." : "正在开始恢复核验...")) return;
+    const clientRequestId = eventRequestIds.current[action] ?? makeRequestId("event");
+    eventRequestIds.current[action] = clientRequestId;
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}/events`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, clientRequestId, expectedVersion: payload.session.version }) });
       const result = await response.json() as ApiResponse<SessionPayload>;
-      if (isApiFailure(result)) { setError(result.error.message); return; }
-      setPayload(result.data); eventRequestId.current = null;
-    } catch { setError("操作未完成，请重试。"); } finally { setPending(false); }
+      if (isApiFailure(result)) {
+        rejectMutation(action, result.error, response.status);
+        return;
+      }
+      setPayload(result.data);
+      delete eventRequestIds.current[action];
+      completeMutation();
+    } catch {
+      markUnresolved(action);
+    } finally {
+      finishMutation();
+    }
   }
   useEffect(() => {
     if (recordRef.current) recordRef.current.scrollTop = recordRef.current.scrollHeight;
   }, [payload?.messages.length]);
 
   const loadSession = useCallback(async () => {
+    if (pendingRef.current || unresolvedActionRef.current) return;
+    pendingRef.current = true;
     setLoading(true);
     setError("");
     setRetryAction(null);
     try {
       setPayload(await fetchSessionPayload(sessionId));
+      answerRequestId.current = null;
+      hintRequestId.current = null;
+      feynmanRequestId.current = null;
+      enterFeynmanRequestId.current = null;
+      eventRequestIds.current = {};
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "读取会话失败，请重试。");
       setRetryAction("load");
     } finally {
+      pendingRef.current = false;
       setLoading(false);
     }
   }, [sessionId]);
@@ -118,14 +218,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   async function sendAnswer() {
-    if (!payload || !answer.trim() || pending) {
-      return;
-    }
-
-    setPending(true);
-    setPendingMessage("正在分析学习证据...");
-    setError("");
-    setRetryAction(null);
+    if (!payload || !answer.trim() || !beginMutation("answer", "正在分析学习证据...")) return;
     const clientRequestId =
       answerRequestId.current ?? makeRequestId("answer");
     answerRequestId.current = clientRequestId;
@@ -136,25 +229,24 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
         body: JSON.stringify({
           answer,
           clientRequestId,
+          expectedVersion: payload.session.version,
         }),
       });
       const result = (await response.json()) as ApiResponse<
         SessionPayload & { duplicate: boolean }
       >;
       if (isApiFailure(result)) {
-        setError(result.error.message);
-        setRetryAction(result.error.retryable ? "answer" : "load");
+        rejectMutation("answer", result.error, response.status);
         return;
       }
       setPayload(result.data);
       setAnswer("");
       answerRequestId.current = null;
+      completeMutation();
     } catch {
-      setError("提交失败，请重试。");
-      setRetryAction("answer");
+      markUnresolved("answer");
     } finally {
-      setPending(false);
-      setPendingMessage("");
+      finishMutation();
     }
   }
 
@@ -164,54 +256,34 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
   }
 
   async function requestHint() {
-    if (!payload || pending) {
-      return;
-    }
-
-    setPending(true);
-    setPendingMessage("正在生成提示...");
-    setError("");
-    setRetryAction(null);
+    if (!payload || !beginMutation("hint", "正在生成提示...")) return;
     const clientRequestId = hintRequestId.current ?? makeRequestId("hint");
     hintRequestId.current = clientRequestId;
     try {
       const response = await fetch(`/api/sessions/${sessionId}/hint`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ clientRequestId }),
+        body: JSON.stringify({ clientRequestId, expectedVersion: payload.session.version }),
       });
       const result = (await response.json()) as ApiResponse<
         SessionPayload & { duplicate: boolean }
       >;
       if (isApiFailure(result)) {
-        setError(result.error.message);
-        setRetryAction(result.error.retryable ? "hint" : "load");
+        rejectMutation("hint", result.error, response.status);
         return;
       }
       setPayload(result.data);
       hintRequestId.current = null;
+      completeMutation();
     } catch {
-      setError("提示生成失败，请重试。");
-      setRetryAction("hint");
+      markUnresolved("hint");
     } finally {
-      setPending(false);
-      setPendingMessage("");
+      finishMutation();
     }
   }
 
   async function sendFeynman() {
-    if (
-      !payload ||
-      !explanation.trim() ||
-      pending
-    ) {
-      return;
-    }
-
-    setPending(true);
-    setPendingMessage("正在评估本次阐释...");
-    setError("");
-    setRetryAction(null);
+    if (!payload || !explanation.trim() || !beginMutation("feynman", "正在评估本次阐释...")) return;
     const clientRequestId =
       feynmanRequestId.current ?? makeRequestId("feynman");
     feynmanRequestId.current = clientRequestId;
@@ -222,38 +294,30 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
         body: JSON.stringify({
           explanation,
           clientRequestId,
+          expectedVersion: payload.session.version,
         }),
       });
       const result = (await response.json()) as ApiResponse<{
         payload: SessionPayload;
       }>;
       if (isApiFailure(result)) {
-        setError(result.error.message);
-        setRetryAction(result.error.retryable ? "feynman" : "load");
+        rejectMutation("feynman", result.error, response.status);
         return;
       }
       feynmanRequestId.current = null;
       setPayload(result.data.payload);
       setExplanation("");
+      completeMutation();
       if (result.data.payload.report) router.push(`/report/${sessionId}`);
     } catch {
-      setError("费曼阐释提交失败，请重试。");
-      setRetryAction("feynman");
+      markUnresolved("feynman");
     } finally {
-      setPending(false);
-      setPendingMessage("");
+      finishMutation();
     }
   }
 
   async function enterFeynman() {
-    if (!payload || pending) {
-      return;
-    }
-
-    setPending(true);
-    setPendingMessage("正在进入费曼阐释...");
-    setError("");
-    setRetryAction(null);
+    if (!payload || !beginMutation("enterFeynman", "正在进入费曼阐释...")) return;
     const clientRequestId =
       enterFeynmanRequestId.current ?? makeRequestId("enter-feynman");
     enterFeynmanRequestId.current = clientRequestId;
@@ -263,25 +327,23 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ clientRequestId }),
+          body: JSON.stringify({ clientRequestId, expectedVersion: payload.session.version }),
         },
       );
       const result = (await response.json()) as ApiResponse<
         SessionPayload & { duplicate: boolean }
       >;
       if (isApiFailure(result)) {
-        setError(result.error.message);
-        setRetryAction(result.error.retryable ? "enterFeynman" : "load");
+        rejectMutation("enterFeynman", result.error, response.status);
         return;
       }
       setPayload(result.data);
       enterFeynmanRequestId.current = null;
+      completeMutation();
     } catch {
-      setError("进入费曼阐释失败，请重试。");
-      setRetryAction("enterFeynman");
+      markUnresolved("enterFeynman");
     } finally {
-      setPending(false);
-      setPendingMessage("");
+      finishMutation();
     }
   }
 
@@ -291,7 +353,9 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
   }
 
   function retryLastAction() {
-    if (retryAction === "answer") {
+    if (retryAction === "sync") {
+      void synchronizeSession();
+    } else if (retryAction === "answer") {
       void sendAnswer();
     } else if (retryAction === "hint") {
       void requestHint();
@@ -299,6 +363,10 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
       void enterFeynman();
     } else if (retryAction === "feynman") {
       void sendFeynman();
+    } else if (retryAction === "GOAL_CONFIRMED" || retryAction === "SESSION_RESUMED") {
+      void submitSessionEvent(retryAction);
+    } else if (payload) {
+      void synchronizeSession();
     } else {
       void loadSession();
     }
@@ -384,15 +452,16 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
       </header>
 
       <section className="learning-main space-y-5">
-        {goalPending ? <section className="space-y-4 border-b pb-5" aria-labelledby="goal-heading">
+        {readOnly ? <p role="status">正在查看学生的研习记录；作答与巩固由学生本人完成。</p> : null}
+        {!readOnly && goalPending ? <section className="space-y-4 border-b pb-5" aria-labelledby="goal-heading">
           <h2 id="goal-heading" className="text-xl font-semibold">研习目标确认</h2>
           <p className="leading-7">{session.objective}</p>
           <p className="text-sm text-muted-foreground">预计用时 15–20 分钟</p>
-          <button className="button" disabled={pending} onClick={() => void submitSessionEvent("GOAL_CONFIRMED")}><Play size={16} aria-hidden="true" />确认目标并开始</button>
+          <button className="button" disabled={interactionLocked} onClick={() => void submitSessionEvent("GOAL_CONFIRMED")}><Play size={16} aria-hidden="true" />确认目标并开始</button>
         </section> : null}
-        {!goalPending && session.knowledgeProgress && ["DIAGNOSIS", "SOCRATIC", "FEYNMAN"].includes(session.phase) && !session.knowledgeProgress.resumeVerification ? <div className="flex flex-wrap items-center justify-between gap-3">
+        {!readOnly && !goalPending && session.knowledgeProgress && ["DIAGNOSIS", "SOCRATIC", "FEYNMAN"].includes(session.phase) && !session.knowledgeProgress.resumeVerification ? <div className="flex flex-wrap items-center justify-between gap-3">
           {resumeRequired ? <p>研习已间隔较长时间，需先核验关键理解。</p> : <span className="text-sm text-muted-foreground">当前研习进度已保存</span>}
-          <button className="button button-secondary" disabled={pending} onClick={() => void submitSessionEvent("SESSION_RESUMED")}><RotateCcw size={15} aria-hidden="true" />恢复核验</button>
+          <button className="button button-secondary" disabled={interactionLocked} onClick={() => void submitSessionEvent("SESSION_RESUMED")}><RotateCcw size={15} aria-hidden="true" />恢复核验</button>
         </div> : null}
         {session.knowledgeProgress?.resumeVerification ? <p role="status">恢复核验进行中</p> : null}
         <div className="learning-record">
@@ -431,14 +500,27 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
               disabled={pending}
               className="button button-secondary"
             >
-              {retryAction && retryAction !== "load"
+              {retryAction === "sync" ? "同步最新进度" : retryAction && retryAction !== "load"
                 ? "重试本次操作"
                 : "刷新会话"}
             </button>
           </div>
         ) : null}
 
-        {canAnswer ? (
+        {preservedDrafts.length > 0 ? (
+          <section className="space-y-3 rounded-md border border-border p-4" aria-labelledby="preserved-drafts-heading">
+            <h2 id="preserved-drafts-heading" className="font-medium">上次未确认内容</h2>
+            <p className="text-sm leading-6 text-muted-foreground">最新进度中未确认以下内容已保存。原文保留在本页供复制，请先阅读当前问题，再决定如何作答；离开页面前请自行保存。</p>
+            {preservedDrafts.map((draft) => (
+              <label key={draft.id} className="block text-sm">
+                {draft.label}
+                <textarea aria-label={draft.label} readOnly value={draft.content} rows={4} className="mt-2 w-full resize-y rounded-md border border-input bg-card px-3 py-2" />
+              </label>
+            ))}
+          </section>
+        ) : null}
+
+        {!readOnly && canAnswer ? (
           <form
             onSubmit={submitAnswer}
             className="response-composer"
@@ -454,6 +536,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
               id="answer"
               value={answer}
               onChange={(event) => {
+                if (pendingRef.current || unresolvedActionRef.current) return;
                 setAnswer(event.target.value);
                 answerRequestId.current = null;
                 setError("");
@@ -461,7 +544,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
               }}
               rows={5}
               required
-              disabled={pending}
+              disabled={interactionLocked}
               className="mt-2 w-full resize-y rounded-md border border-input bg-card px-3 py-2"
               placeholder="陈述观点、推理依据与尚待澄清的疑问。"
             />
@@ -470,14 +553,14 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
                 <button
                   type="button"
                   onClick={requestHint}
-                  disabled={!canHint || pending}
+                  disabled={!canHint || interactionLocked}
                   className="button button-secondary"
                 >
                   <Lightbulb size={15} aria-hidden="true" />{canHint ? "申请提示" : "暂无可用提示"}
                 </button>
                 <button
                   type="submit"
-                  disabled={!answer.trim() || pending}
+                  disabled={!answer.trim() || interactionLocked}
                   className="button"
                 >
                   提交回答<SendHorizontal size={15} aria-hidden="true" />
@@ -490,7 +573,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
                 <button
                   type="button"
                   onClick={enterFeynman}
-                  disabled={pending}
+                  disabled={interactionLocked}
                   className="button button-secondary mt-3"
                 >
                   进入费曼阐释
@@ -500,7 +583,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
           </form>
         ) : null}
 
-        {canFeynman ? (
+        {!readOnly && canFeynman ? (
           <form
             onSubmit={submitFeynman}
             className="feynman-composer"
@@ -528,6 +611,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
               id="feynman"
               value={explanation}
               onChange={(event) => {
+                if (pendingRef.current || unresolvedActionRef.current) return;
                 setExplanation(event.target.value);
                 feynmanRequestId.current = null;
                 setError("");
@@ -535,7 +619,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
               }}
               rows={8}
               required
-              disabled={pending}
+              disabled={interactionLocked}
               aria-describedby="feynman-requirements"
               className="mt-3 w-full resize-y rounded-md border border-border bg-card px-3 py-2"
               placeholder="形成完整阐释：概念边界、因果机制、例证与迁移条件。"
@@ -543,7 +627,7 @@ export function SessionClient({ sessionId }: { sessionId: string }) {
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="submit"
-                disabled={!explanation.trim() || pending}
+                disabled={!explanation.trim() || interactionLocked}
                 className="button"
               >
                 {session.knowledgeProgress ? session.knowledgeProgress.pedagogicalStage === "REFLECTION" ? "提交修订并生成报告" : "提交讲解" : "生成学习报告"}<ArrowUpRight size={15} aria-hidden="true" />

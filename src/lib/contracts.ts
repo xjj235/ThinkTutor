@@ -1,4 +1,8 @@
+import { knowledgeSelectionSchema } from "./knowledge/student-catalog-schema";
 import { z } from "zod";
+import { textLimits } from "./content-limits";
+
+export { textLimits } from "./content-limits";
 
 export const learningPhaseValues = [
   "DIAGNOSIS",
@@ -72,16 +76,6 @@ export const MIN_SOCRATIC_TURNS = 3;
 export const MAX_SOCRATIC_TURNS = 5;
 export const DEFAULT_MAX_TURNS = 5;
 
-export const textLimits = {
-  course: 80,
-  chapter: 120,
-  topic: 120,
-  objective: 400,
-  learnerLevel: 80,
-  referenceText: 8000,
-  clientRequestId: 80,
-} as const;
-
 const optionalTrimmed = (max: number, label: string) =>
   z
     .string()
@@ -92,6 +86,7 @@ const optionalTrimmed = (max: number, label: string) =>
 
 export const createSessionInputSchema = z
   .object({
+    knowledgeSelection: knowledgeSelectionSchema.optional(),
     assignmentId: z.string().trim().min(10).max(40).optional(),
     courseId: z.string().trim().min(10).max(40).optional(),
     chapterId: z.string().trim().min(10).max(40).optional(),
@@ -123,12 +118,14 @@ export const answerInputSchema = z
   .object({
     answer: z.string().trim().min(1, "请填写回答。"),
     clientRequestId: z.string().trim().min(8).max(textLimits.clientRequestId),
+    expectedVersion: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   })
   .strict();
 
 export const hintInputSchema = z
   .object({
     clientRequestId: z.string().trim().min(8).max(textLimits.clientRequestId),
+    expectedVersion: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   })
   .strict();
 
@@ -136,6 +133,7 @@ export const feynmanInputSchema = z
   .object({
     explanation: z.string().trim().min(1, "请填写阐释内容。"),
     clientRequestId: z.string().trim().min(8).max(textLimits.clientRequestId),
+    expectedVersion: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   })
   .strict();
 
@@ -148,6 +146,7 @@ export const retryInputSchema = z
 export const enterFeynmanInputSchema = z
   .object({
     clientRequestId: z.string().trim().min(8).max(textLimits.clientRequestId),
+    expectedVersion: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   })
   .strict();
 
@@ -270,6 +269,11 @@ export const reportGapSchema = z
   })
   .strict();
 export const reportGapsSchema = z.array(reportGapSchema).max(5);
+export const reportGapStatusSchema = z.enum(["OPEN", "IN_PROGRESS", "RESOLVED", "DISMISSED"]);
+export const reportGapDtoSchema = reportGapSchema.extend({
+  status: reportGapStatusSchema,
+  latestRetry: z.object({ sessionId: z.string(), phase: learningPhaseSchema }).strict().optional(),
+}).strict();
 export const nextStepsSchema = z.array(z.string().trim().min(1).max(220)).max(3);
 
 export const reportDisclaimer =
@@ -303,6 +307,7 @@ export type ReportDimension = z.infer<typeof reportDimensionSchema>;
 export type ReportDimensions = z.infer<typeof reportDimensionsSchema>;
 export type Strengths = z.infer<typeof strengthsSchema>;
 export type ReportGap = z.infer<typeof reportGapSchema>;
+export type ReportGapDTO = z.infer<typeof reportGapDtoSchema>;
 export type ReportGaps = z.infer<typeof reportGapsSchema>;
 export type NextSteps = z.infer<typeof nextStepsSchema>;
 export type LearningReportDraft = z.infer<typeof learningReportDraftSchema>;
@@ -322,6 +327,7 @@ export interface MessageDTO {
 export interface LearningSessionDTO {
   knowledgeProgress?: { pedagogicalStage: import("./knowledge/v12-schema").V12State["pedagogicalStage"]; diagnosticLevel: string | null; experienceLimitReached: boolean; resumeVerification?: boolean; resumeRequired?: boolean };
   id: string;
+  version: number;
   course: string | null;
   chapter: string | null;
   topic: string;
@@ -337,6 +343,7 @@ export interface LearningSessionDTO {
 }
 
 export interface LearningReportDTO {
+  retryReview?: import("./retry-review").RetryReview | null;
   evidenceAudit?: import("./knowledge/v12-schema").V12State | null;
   evidenceLinks?: import("./knowledge/report-evidence").ReportEvidenceLinks | null;
   sessionVersions?: import("./knowledge/runtime-schemas").SessionVersions | null;
@@ -347,7 +354,7 @@ export interface LearningReportDTO {
   overallLevel: string;
   dimensions: ReportDimensions;
   strengths: Strengths;
-  gaps: ReportGaps;
+  gaps: ReportGapDTO[];
   nextSteps: NextSteps;
   disclaimer: string;
   createdAt: string;

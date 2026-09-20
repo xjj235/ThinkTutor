@@ -11,6 +11,7 @@ import type {
 } from "../contracts";
 import type { FeynmanInstruction, LearningContextSummary, MaterialKeywords, RetryTask } from "./schemas";
 import type { KnowledgePolicy } from "./context-builder";
+import type { RetryReviewCandidate, RetryReviewInput } from "../retry-review";
 
 export interface AIRequestMeta {
   userId?: string;
@@ -61,6 +62,7 @@ export interface TurnAssessmentInput extends AIRequestMeta {
 }
 
 export interface AIProvider {
+  assessGapRepair(input: RetryReviewInput & AIRequestMeta): Promise<RetryReviewCandidate>;
   selectTeachingMove(input: import("./teaching-schema").TeachingSelection & AIRequestMeta): Promise<import("../knowledge/coaching-schema").CoachingDecision>;
   assessLearningTurn(input: TurnAssessmentInput): Promise<import("../knowledge/v12-schema").TurnAssessment>;
   createDiagnosticQuestion(input: DiagnosticInput): Promise<SourcedDiagnosticQuestion>;

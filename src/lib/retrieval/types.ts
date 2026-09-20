@@ -2,6 +2,8 @@ export interface RetrievalQuery {
   courseId: string;
   chapterId?: string;
   query: string;
+  /** Task topic and objective, excluding untrusted student answers. */
+  subject?: string;
   limit: number;
   phase?: import("../contracts").LearningPhase;
   targetConcept?: string;

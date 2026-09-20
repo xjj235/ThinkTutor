@@ -45,6 +45,12 @@ export const uploadUrlSchema = z
 
 export const completeUploadSchema = z.object({ materialId: entityIdSchema }).strict();
 
+function requireMaterialProcessingAvailable(): void {
+  if (getServerEnv().DEPLOYMENT_ENV === "competition") {
+    throw new AppError("MATERIAL_PROCESSING_UNAVAILABLE", "比赛体验环境暂不支持文件上传与处理；已有材料仍可查看。", 503);
+  }
+}
+
 export function validateMaterialFile(fileName: string, mimeType: string, byteSize: number) {
   const extension = fileName.split(".").pop()?.toLowerCase();
   if (!extension || !(extension in allowedFiles)) {
@@ -60,6 +66,7 @@ export function validateMaterialFile(fileName: string, mimeType: string, byteSiz
 
 export async function createMaterialUpload(user: AuthUser, input: z.infer<typeof uploadUrlSchema>) {
   await requireOwnedCourse(user, input.courseId);
+  requireMaterialProcessingAvailable();
   if (input.chapterId) {
     const chapter = await prisma.chapter.findUnique({ where: { id: input.chapterId }, select: { courseId: true } });
     if (!chapter || chapter.courseId !== input.courseId) throw new AppError("VALIDATION_ERROR", "章节与课程不匹配。", 400);
@@ -102,6 +109,7 @@ export async function completeMaterialUpload(user: AuthUser, materialId: string,
   const material = await prisma.material.findUnique({ where: { id: materialId } });
   if (!material) throw new AppError("NOT_FOUND", "课程材料不存在。", 404);
   await requireOwnedCourse(user, material.courseId);
+  requireMaterialProcessingAvailable();
   if (["UPLOADED", "QUEUED", "PROCESSING", "READY"].includes(material.status)) {
     return prisma.material.findUniqueOrThrow({ where: { id: material.id }, select: materialDtoSelect });
   }
@@ -143,6 +151,7 @@ export async function reprocessMaterial(user: AuthUser, materialId: string) {
   const material = await prisma.material.findUnique({ where: { id: materialId } });
   if (!material) throw new AppError("NOT_FOUND", "课程材料不存在。", 404);
   await requireOwnedCourse(user, material.courseId);
+  requireMaterialProcessingAvailable();
   if (!(["FAILED", "READY"] as const).includes(material.status as "FAILED" | "READY")) throw new AppError("CONFLICT", "该材料当前不能重新处理。", 409);
   const claimed = await prisma.material.updateMany({ where: { id: materialId, status: material.status }, data: { status: "UPLOADED", failureCode: null, failureMessage: null } });
   if (claimed.count !== 1) throw new AppError("CONFLICT", "材料状态已变化，请刷新后重试。", 409);

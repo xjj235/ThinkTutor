@@ -66,7 +66,7 @@ async function createAssignedTask(studentId: string, options?: { openAt?: Date; 
 }
 
 describe("learning session integration flow", () => {
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
   beforeEach(async () => {
     await cleanDb();
   });
@@ -116,8 +116,9 @@ describe("learning session integration flow", () => {
     expect(round3.session.phase).toBe("SOCRATIC");
     expect(round3.session.socraticTurns).toBe(3);
 
-    const feynmanPhase = await enterLearningFeynman(created.session.id, {
-      clientRequestId: "enter-feynman-1",
+    const feynmanPhase = await submitLearningAnswer(created.session.id, {
+      answer: "银行之间有共同资产持仓的数据可以支持这个判断。",
+      clientRequestId: "answer-evidence-round-4",
     });
     expect(feynmanPhase.session.phase).toBe("FEYNMAN");
 
@@ -154,6 +155,132 @@ describe("learning session integration flow", () => {
         where: { parentSessionId: created.session.id },
       }),
     ).toBe(1);
+  });
+
+  it("escalates consecutive hints without counting failed or duplicate requests as learning evidence", async () => {
+    vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false");
+    vi.stubEnv("RATE_LIMIT_AI_PER_MINUTE", "100");
+    const user = await createTestUser("hint-escalation");
+    const created = await createLearningSession(user.id, { ...task, topic: "汇率风险" });
+    const before = await prisma.learningSession.findUniqueOrThrow({ where: { id: created.session.id } });
+    const coach = vi.spyOn(MockAIProvider.prototype, "createCoachTurn");
+    const first = await requestHint(created.session.id, { clientRequestId: "hint-escalation-1" });
+    expect((await requestHint(created.session.id, { clientRequestId: "hint-escalation-1" })).duplicate).toBe(true);
+    coach.mockRejectedValueOnce(new AIProviderError("AI_TIMEOUT", "timeout", 503, true));
+    await expect(requestHint(created.session.id, { clientRequestId: "hint-escalation-failed" })).rejects.toMatchObject({ code: "AI_TIMEOUT" });
+    const second = await requestHint(created.session.id, { clientRequestId: "hint-escalation-2" });
+    const third = await requestHint(created.session.id, { clientRequestId: "hint-escalation-3" });
+    await requestHint(created.session.id, { clientRequestId: "hint-escalation-4" });
+    expect(coach.mock.calls.map(([input]) => input.unknownStreak)).toEqual([1, 2, 2, 3, 3]);
+    expect(new Set([first, second, third].map((result) => result.messages.at(-1)?.content)).size).toBe(3);
+    const after = await prisma.learningSession.findUniqueOrThrow({ where: { id: created.session.id } });
+    expect(after.phase).toBe(before.phase);
+    expect(after.socraticTurns).toBe(before.socraticTurns);
+    expect(after.learnerState).toEqual(before.learnerState);
+    await submitLearningAnswer(created.session.id, { answer: "本币升值", clientRequestId: "hint-reset-answer" });
+    await requestHint(created.session.id, { clientRequestId: "hint-reset-next" });
+    expect(coach.mock.calls.at(-1)?.[0].unknownStreak).toBe(1);
+    await submitLearningAnswer(created.session.id, { answer: "不知道", clientRequestId: "hint-after-unknown-answer" });
+    await requestHint(created.session.id, { clientRequestId: "hint-after-automatic-support" });
+    expect(coach.mock.calls.at(-1)?.[0].unknownStreak).toBe(2);
+  });
+
+  it("keeps answers and follow-up questions in causal order even when existing messages are ahead of the clock", async () => {
+    vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false");
+    const user = await createTestUser("message-causal-order");
+    const created = await createLearningSession(user.id, { ...task, topic: "汇率风险" });
+    const ahead = new Date(Date.now() + 60_000);
+    await prisma.message.update({ where: { id: created.messages[0].id }, data: { createdAt: ahead } });
+    const answered = await submitLearningAnswer(created.session.id, { answer: "本币升值会降低外币应收的折算价值。", clientRequestId: "message-order-answer" });
+    expect(answered.messages.map((message) => message.role)).toEqual(["ASSISTANT", "USER", "ASSISTANT"]);
+    const timestamps = answered.messages.map((message) => new Date(message.createdAt).getTime());
+    expect(timestamps[1]).toBeGreaterThan(ahead.getTime());
+    expect(timestamps[2]).toBeGreaterThan(timestamps[1]);
+    const hinted = await requestHint(created.session.id, { clientRequestId: "message-order-hint" });
+    expect(hinted.messages.at(-1)?.questionType).toBe("SCAFFOLDED_HINT");
+    expect(new Date(hinted.messages.at(-1)!.createdAt).getTime()).toBeGreaterThan(timestamps[2]);
+  });
+
+  it("requires an actual answer to the evidence question before entering Feynman", async () => {
+    vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false");
+    const user = await createTestUser("readiness-unanswered");
+    const created = await createLearningSession(user.id, { ...task, topic: "汇率风险" });
+    await submitLearningAnswer(created.session.id, { answer: "外币现金流的折算价值随汇率变化。", clientRequestId: "readiness-diagnosis" });
+    for (let round = 1; round <= 3; round++) {
+      await submitLearningAnswer(created.session.id, { answer: `企业有外币应收时，本币升值会降低折算价值，这是第${round}次机制解释。`, clientRequestId: `readiness-round-${round}` });
+    }
+    const beforeTie = await getSessionPayload(created.session.id);
+    // Existing sessions may have identical millisecond timestamps. Their default
+    // CUID creation order must still pair each answer with its preceding question.
+    await prisma.message.updateMany({ where: { sessionId: created.session.id }, data: { createdAt: new Date() } });
+    const waiting = await getSessionPayload(created.session.id);
+    expect(waiting.messages.map((message) => message.id)).toEqual(beforeTie.messages.map((message) => message.id));
+    expect(waiting.messages.at(-1)?.questionType).toBe("EVIDENCE_PROBE");
+    expect(waiting.availableActions?.canEnterFeynman).toBe(false);
+    await expect(enterLearningFeynman(created.session.id, { clientRequestId: "readiness-too-early" })).rejects.toMatchObject({ code: "CONFLICT" });
+    const answered = await submitLearningAnswer(created.session.id, { answer: "合同约定企业将在月底收取一笔美元货款，这就是外币应收的证据。", clientRequestId: "readiness-evidence-answer" });
+    expect(answered.session.phase).toBe("FEYNMAN");
+  });
+
+  it("does not count an unknown response or a hint as answered evidence", async () => {
+    vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false");
+    const user = await createTestUser("readiness-unknown");
+    const created = await createLearningSession(user.id, { ...task, topic: "汇率风险" });
+    await submitLearningAnswer(created.session.id, { answer: "外币现金流的折算价值随汇率变化。", clientRequestId: "unknown-diagnosis" });
+    for (let round = 1; round <= 3; round++) {
+      await submitLearningAnswer(created.session.id, { answer: `企业持有外币资产时，本币升值会降低其折算价值，这是第${round}次解释。`, clientRequestId: `unknown-round-${round}` });
+    }
+    await requestHint(created.session.id, { clientRequestId: "unknown-evidence-hint" });
+    const unknown = await submitLearningAnswer(created.session.id, { answer: "不知道", clientRequestId: "unknown-evidence-answer" });
+    expect(unknown.session.socraticTurns).toBe(4);
+    expect(unknown.availableActions?.canEnterFeynman).toBe(false);
+    await expect(enterLearningFeynman(created.session.id, { clientRequestId: "unknown-enter" })).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("allows only one concurrent retry to claim an open gap", async () => {
+    vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false");
+    vi.stubEnv("RATE_LIMIT_AI_PER_MINUTE", "100");
+    const user = await createTestUser("retry-gap-race");
+    const keys = ["CONCEPT_COMPLETENESS", "LOGIC_COMPLETENESS", "EXPRESSION_CLARITY", "EXAMPLE_ABILITY", "TRANSFER_ABILITY"] as const;
+    const parent = await prisma.learningSession.create({ data: {
+      userId: user.id, topic: "汇率风险", objective: "判断外币头寸", learnerLevel: "入门", phase: "COMPLETED",
+      report: { create: { summary: "并发重练测试夹具", overallScore: 60, overallLevel: "发展中", disclaimer: "自动化测试",
+        dimensions: { create: keys.map((key) => ({ key, score: 60, evidence: "测试证据", feedback: "继续练习" })) },
+        gaps: { create: [{ title: "外币头寸", evidence: "测试中的方向缺口", repairTask: "根据外币头寸解释损益变化", priority: 5 }] },
+      } },
+    } });
+    const deferred = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((done) => { resolve = done; });
+      return { promise, resolve };
+    };
+    const diagnosticEntered = deferred();
+    const releaseDiagnostic = deferred();
+    const secondRetryEntered = deferred();
+    const releaseSecondRetry = deferred();
+    const diagnosticImpl = MockAIProvider.prototype.createDiagnosticQuestion;
+    const retryImpl = MockAIProvider.prototype.createRetryTask;
+    vi.spyOn(MockAIProvider.prototype, "createDiagnosticQuestion").mockImplementation(async (input) => {
+      if (input.requestId === "retry-race-a:diagnostic") { diagnosticEntered.resolve(); await releaseDiagnostic.promise; }
+      return diagnosticImpl.call(new MockAIProvider(), input);
+    });
+    vi.spyOn(MockAIProvider.prototype, "createRetryTask").mockImplementation(async (input) => {
+      if (input.requestId === "retry-race-b") { secondRetryEntered.resolve(); await releaseSecondRetry.promise; }
+      return retryImpl.call(new MockAIProvider(), input);
+    });
+    const first = createRetrySession(parent.id, { clientRequestId: "retry-race-a" });
+    await diagnosticEntered.promise;
+    const second = createRetrySession(parent.id, { clientRequestId: "retry-race-b" });
+    const secondResult = second.then((result) => ({ result, error: null }), (error: unknown) => ({ result: null, error }));
+    await secondRetryEntered.promise;
+    releaseDiagnostic.resolve();
+    await first;
+    releaseSecondRetry.resolve();
+    const losing = await secondResult;
+    expect(losing.error).toMatchObject({ code: "CONFLICT" });
+    expect(losing.result).toBeNull();
+    expect(await prisma.learningSession.count({ where: { parentSessionId: parent.id } })).toBe(1);
+    expect(await prisma.message.count({ where: { sessionId: parent.id, clientRequestId: { in: ["retry-race-a", "retry-race-b"] } } })).toBe(1);
   });
 
   it("returns the same session for duplicate creation request ids", async () => {
@@ -263,18 +390,21 @@ describe("learning session integration flow", () => {
     const feynman = await prisma.learningSession.findUniqueOrThrow({ where: { id } });
     const runtime = knowledgeRuntimeSchema.parse(feynman.knowledgeRuntime);
     expect(runtime.pedagogicalStage).toBe("FEYNMAN");
-    expect(runtime.v12?.pedagogicalStage).toBe("REFLECTION");
+    expect(runtime.v12?.pedagogicalStage).toBe("FEYNMAN_OUTPUT");
     expect(runtime.v12?.experienceLimitReached).toBe(true);
     expect(runtime.usedCaseIds).toEqual([]);
     expect(new Set(runtime.usedQuestionIds).size).toBe(runtime.usedQuestionIds.length);
-    const result = await submitFeynmanExplanation(id, { explanation: "系统性风险涉及金融体系功能受损。共同资产抛售影响价格，价格下跌增加其他机构损失并收缩信贷，进而影响实体经济。", clientRequestId: "curated-feynman" });
+    const explanation = await submitFeynmanExplanation(id, { explanation: "系统性风险涉及金融体系功能受损。共同资产抛售影响价格，价格下跌增加其他机构损失并收缩信贷，进而影响实体经济。", clientRequestId: "curated-feynman" });
+    expect(explanation.report).toBeNull();
+    expect(explanation.payload.session.knowledgeProgress?.pedagogicalStage).toBe("REFLECTION");
+    const result = await submitFeynmanExplanation(id, { explanation: "我补充修订：例如共同资产价格下跌使风险传播，金融体系的信贷收缩进而影响实体经济；判断仍要检查金融功能是否受损。", clientRequestId: "curated-revision" });
     if (!result.report) throw new Error("Expected reflection report");
     expect(result.report.sessionVersions).toEqual(initialRuntime.versions);
     const userMessageIds = result.payload.messages.filter((message) => message.role === "USER").map((message) => message.id);
     for (const messageId of Object.values(result.report.evidenceLinks ?? {}).flat()) expect(userMessageIds).toContain(messageId);
     expect(Object.values(result.report.dimensions).every((dimension) => [0, 25, 50, 75, 100].includes(dimension.score))).toBe(true);
     expect(result.report.dimensions.conceptCompleteness.score).toBeLessThanOrEqual(75);
-    const duplicate = await submitFeynmanExplanation(id, { explanation: "这个重复提交不应该改变报告，也不应该改变已经保存的版本快照。", clientRequestId: "curated-feynman" });
+    const duplicate = await submitFeynmanExplanation(id, { explanation: "这个重复提交不应该改变报告，也不应该改变已经保存的版本快照。", clientRequestId: "curated-revision" });
     expect(duplicate.report).toEqual(result.report);
     const retry = await createRetrySession(id, { clientRequestId: "curated-retry" });
     const child = await prisma.learningSession.findUniqueOrThrow({ where: { id: retry.session.id } });

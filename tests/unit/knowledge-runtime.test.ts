@@ -23,6 +23,8 @@ describe("knowledge runtime safety", () => {
     expect(releaseAllowed(manifest, "development", false)).toBe(false);
     expect(releaseAllowed(manifest, "development", true)).toBe(true);
     expect(releaseAllowed(manifest, "test", true)).toBe(true);
+    expect(releaseAllowed(manifest, "competition", true)).toBe(true);
+    expect(releaseAllowed(manifest, "competition", false)).toBe(false);
     expect(releaseAllowed(manifest, "production", true)).toBe(false);
     vi.stubEnv("DEPLOYMENT_ENV", "production");
     expect(() => getServerEnv()).toThrow("Production must not enable draft knowledge");

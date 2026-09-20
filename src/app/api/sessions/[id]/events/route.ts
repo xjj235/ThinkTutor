@@ -3,11 +3,11 @@ import { apiOk, createRequestId, handleRouteError, readJson } from "@/lib/api-re
 import { assertSameOrigin } from "@/lib/auth/request-security";
 import { requireUser } from "@/lib/auth/session";
 import { requireStudentSession } from "@/lib/permissions";
-import { sessionIdSchema, retryInputSchema } from "@/lib/contracts";
+import { sessionIdSchema, hintInputSchema } from "@/lib/contracts";
 import { submitV12SessionEvent } from "@/lib/knowledge/v12-session-service";
 
 export const runtime = "nodejs";
-const inputSchema = retryInputSchema.extend({ action: z.enum(["GOAL_CONFIRMED", "SESSION_RESUMED"]) }).strict();
+const inputSchema = hintInputSchema.extend({ action: z.enum(["GOAL_CONFIRMED", "SESSION_RESUMED"]) }).strict();
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const requestId = createRequestId(request);
   try {

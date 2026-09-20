@@ -91,7 +91,7 @@ describe("v1.2 evidence workflow", () => {
   });
   it("separates experience limit from mastery and normal Feynman admission", () => {
     const transition = nextV12Transition({ phase: "SOCRATIC", socraticTurns: 4, maxTurns: 5 }, { stage: "KNOWLEDGE_CONSTRUCTION", diagnosisFinished: true, constructionReady: false, transferPassed: false, majorError: false });
-    expect(transition.stage).toBe("REFLECTION");
+    expect(transition.stage).toBe("FEYNMAN_OUTPUT");
     expect(transition.experienceLimitReached).toBe(true);
     expect(constructionReady(initialV12State())).toBe(false);
   });

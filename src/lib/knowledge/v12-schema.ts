@@ -68,6 +68,7 @@ export const v12StateSchema = z.object({
   coachingHistory: z.array(coachingTraceSchema).max(200).default([]),
   coachingPrompt: coachingPromptSchema.nullable().default(null),
   lastAssessmentMessageId: z.string().nullable().default(null),
+  lastAssessmentContext: z.object({ targetId: z.string().nullable(), questionId: z.string().nullable(), stage: stageSchema }).strict().optional(),
   answerFingerprints: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/u)).default({}),
   schemaVersion: z.literal("1.2"),
   pedagogicalStage: stageSchema,

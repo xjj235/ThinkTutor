@@ -1,0 +1,52 @@
+# Free competition instance; account and database remain separate from production.
+services:
+  - type: web
+    name: thinktutor-competition
+    repo: https://github.com/xjj235/ThinkTutor
+    runtime: node
+    plan: free
+    region: singapore
+    branch: codex/free-competition-20260918
+    autoDeployTrigger: off
+    buildCommand: corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm prisma:generate && node scripts/render-build.mjs
+    startCommand: node scripts/render-start.mjs
+    healthCheckPath: /api/health/live
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: DEPLOYMENT_ENV
+        value: competition
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN
+        value: "false"
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: LOCAL_PREVIEW
+        value: "false"
+      - key: ALLOW_DRAFT_KNOWLEDGE
+        value: "true"
+      - key: AI_PROVIDER
+        value: deepseek
+      - key: DATABASE_POOL_MAX
+        value: "3"
+      - key: STORAGE_PROVIDER
+        value: local
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: AI_PSEUDONYM_SECRET
+        generateValue: true
+      - key: STORAGE_SIGNING_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_DATABASE_URL
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_BASE_URL
+        sync: false
+      - key: DEEPSEEK_MODEL
+        sync: false

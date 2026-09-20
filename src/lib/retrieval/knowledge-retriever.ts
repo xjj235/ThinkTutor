@@ -52,7 +52,8 @@ export class StructuredKnowledgeRetriever implements RetrievalProvider {
     const results: RetrievedChunk[] = [];
     for (const manifest of await getRuntimeManifests(Boolean(input.releaseId))) {
       if (input.releaseId && input.releaseId !== manifest.release.id) continue;
-      if (!input.releaseId && !manifestMatches(manifest, input.query) && !manifest.knowledgeUnits.some((unit) => unit.id === input.targetConcept) && !manifest.misconceptions.some((item) => input.errorTags?.includes(item.id))) continue;
+      if (!input.releaseId && input.subject !== undefined && !manifestMatches(manifest, input.subject)) continue;
+      if (!input.releaseId && !manifestMatches(manifest, input.subject ?? input.query) && !manifest.knowledgeUnits.some((unit) => unit.id === input.targetConcept) && !manifest.misconceptions.some((item) => input.errorTags?.includes(item.id))) continue;
       const exactTarget = input.targetConcept ?? manifest.socraticQuestions.find((question) => question.triggerErrorTags.some((tag) => input.errorTags?.includes(tag)))?.targetUnitId;
       collectManifestResults(results, manifest, input.phase, exactTarget, input.errorTags ?? [], terms);
     }

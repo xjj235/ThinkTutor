@@ -19,7 +19,7 @@ export function releaseAllowed(manifest: KnowledgeManifest, environment: string,
   if (environment === "production" && allowDraft) return false;
   if (manifest.release.status === "archived") return false;
   if (manifest.release.status === "published") return Boolean(manifest.release.verifiedBy && manifest.release.verifiedAt);
-  return ["development", "test"].includes(environment) && allowDraft;
+  return ["development", "test", "competition"].includes(environment) && allowDraft;
 }
 
 export function getActiveManifests(): KnowledgeManifest[] {
@@ -68,7 +68,7 @@ export function createVersionSnapshot(manifest: KnowledgeManifest): SessionVersi
     caseBankVersion: version,
     rubricVersion: manifest.rubric.version,
     promptVersion: manifest.v12 ? `assessment-1.2:${createHash("sha256").update(assessmentV12Prompt).update(JSON.stringify(z.toJSONSchema(modelTurnAssessmentSchema))).update(teachingV12Prompt).update(teachingReviewPrompt).update(JSON.stringify(z.toJSONSchema(coachingDecisionSchema))).digest("hex")}` : `knowledge-orchestration-1:${createHash("sha256").update(tutorSystemPrompt).update(reportSystemPrompt).digest("hex")}`,
-    workflowVersion: manifest.v12 ? "evidence-workflow-1.2.3-grounded-followup" : "runtime-activities-1",
+    workflowVersion: manifest.v12 ? manifest.v12.coachingPolicy?.version === "1.2" ? "evidence-workflow-1.2.5-supported-gap-routing" : manifest.v12.coachingPolicy?.version === "1.1" ? "evidence-workflow-1.2.4-executable-coaching" : "evidence-workflow-1.2.3-grounded-followup" : "runtime-activities-1",
     ...(manifest.v12 ? { schemaVersion: "1.2", pedagogyVersion: "1.2.1" } : {}),
     modelProvider: env.AI_PROVIDER,
     modelName: env.AI_PROVIDER === "mock" ? "deterministic-mock" : env.DEEPSEEK_MODEL,

@@ -3,7 +3,8 @@ import { z } from "zod";
 import { knowledgeRuntimeSchema, sessionVersionsSchema } from "./knowledge/runtime-schemas";
 import { reportEvidenceLinksSchema } from "./knowledge/report-evidence";
 import { v12StateSchema } from "./knowledge/v12-schema";
-import { canEnterFeynmanVoluntarily, canRequestHint } from "./state-machine";
+import { retryReviewSchema } from "./retry-review";
+import { answeredSocraticQuestionTypes, canEnterFeynmanVoluntarily, canRequestHint } from "./state-machine";
 import {
   type LearningReportDTO,
   type LearningSessionDTO,
@@ -17,12 +18,15 @@ import {
 export const reportRelations = {
   dimensions: true,
   strengths: { orderBy: { position: "asc" as const } },
-  gaps: { orderBy: [{ priority: "desc" as const }, { createdAt: "asc" as const }, { id: "asc" as const }] },
+  gaps: {
+    orderBy: [{ priority: "desc" as const }, { createdAt: "asc" as const }, { id: "asc" as const }],
+    include: { retrySessions: { orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }], take: 1, select: { id: true, phase: true } } },
+  },
   nextSteps: { orderBy: { position: "asc" as const } },
 } satisfies Prisma.LearningReportInclude;
 
 export const sessionRelations = {
-  messages: { orderBy: { createdAt: "asc" as const } },
+  messages: { orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }] },
   report: { include: reportRelations },
 } satisfies Prisma.LearningSessionInclude;
 
@@ -47,6 +51,7 @@ export function serializeSession(session: LearningSession): LearningSessionDTO {
   return {
     ...(runtime?.v12 ? { knowledgeProgress: { pedagogicalStage: runtime.v12.pedagogicalStage, diagnosticLevel: runtime.v12.diagnosticLevel, experienceLimitReached: runtime.v12.experienceLimitReached, resumeVerification: Boolean(runtime.v12.resumeVerification), resumeRequired: !runtime.v12.resumeVerification && Object.keys(runtime.v12.assessments).length > 0 && Date.now() - session.updatedAt.getTime() >= 30 * 60_000 } } : {}),
     id: session.id,
+    version: session.version,
     course: session.course,
     chapter: session.chapter,
     topic: session.topic,
@@ -91,6 +96,7 @@ export function serializeReport(report: ReportRecord): LearningReportDTO {
     report.dimensions.map((dimension) => [dimensionKeyMap[dimension.key], { score: dimension.score, evidence: dimension.evidence, feedback: dimension.feedback }]),
   );
   return {
+    retryReview: report.retryReview ? retryReviewSchema.parse(report.retryReview) : null,
     sessionVersions: report.sessionVersions ? sessionVersionsSchema.parse(report.sessionVersions) : null,
     evidenceAudit: report.evidenceAudit ? v12StateSchema.parse(report.evidenceAudit) : null,
     evidenceLinks: report.evidenceLinks ? reportEvidenceLinksSchema.parse(report.evidenceLinks) : null,
@@ -101,7 +107,10 @@ export function serializeReport(report: ReportRecord): LearningReportDTO {
     overallLevel: report.overallLevel,
     dimensions: z.object({ conceptCompleteness: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), logicCompleteness: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), expressionClarity: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), exampleAbility: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }), transferAbility: z.object({ score: z.number(), evidence: z.string(), feedback: z.string() }) }).parse(dimensions),
     strengths: report.strengths.map(({ title, evidence }) => ({ title, evidence })),
-    gaps: report.gaps.map(({ title, evidence, repairTask, priority }) => ({ title, evidence, repairTask, priority })),
+    gaps: report.gaps.map(({ title, evidence, repairTask, priority, status, retrySessions }) => ({
+      title, evidence, repairTask, priority, status,
+      ...(retrySessions[0] ? { latestRetry: { sessionId: retrySessions[0].id, phase: retrySessions[0].phase } } : {}),
+    })),
     nextSteps: report.nextSteps.map((step) => step.description),
     disclaimer: report.disclaimer,
     createdAt: report.createdAt.toISOString(),
@@ -114,7 +123,7 @@ export function serializePayload(session: SessionRecord): SessionPayload {
   const canHint = runtime?.v12?.pedagogicalStage !== "GOAL_PRESENTATION" && !runtime?.v12?.resumeVerification && canRequestHint(session) && (!runtime || Boolean(runtime.currentTargetId && (runtime.hintLevels[runtime.currentTargetId] ?? 0) < 2));
   const canEnter = !runtime?.v12 && !runtime?.flags.includes("FLAG_NEED_VERIFY") && canEnterFeynmanVoluntarily(session, {
     learnerState: learner.success ? learner.data : null,
-    answeredQuestionTypes: session.messages.filter((message) => message.role === "ASSISTANT" && message.phase === "SOCRATIC" && message.questionType).map((message) => message.questionType!),
+    answeredQuestionTypes: answeredSocraticQuestionTypes(session.messages),
   });
   return {
     availableActions: { canRequestHint: canHint, canEnterFeynman: canEnter },

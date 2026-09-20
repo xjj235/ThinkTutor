@@ -4,6 +4,7 @@ import type { AssignmentProgress, AssignmentStatus, GapStatus, LearningPhase, Se
 import { prisma } from "./db";
 import type { AuthUser } from "./auth/session";
 import { requireOwnedClassroom } from "./permissions";
+import { AppError } from "./errors";
 
 function pageMeta(total: number, page: number, pageSize: number) {
   return { total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
@@ -19,7 +20,10 @@ export async function listTeacherAssignments(userId: string, input: { page: numb
 }
 
 export async function listAssignmentStudentProgress(user: AuthUser, input: { assignmentId: string; classroomId: string; page: number; pageSize: number; query?: string; progress?: AssignmentProgress }) {
-  await requireOwnedClassroom(user, input.classroomId);
+  const assignment = await prisma.assignment.findUnique({ where: { id: input.assignmentId }, select: { classroomId: true } });
+  if (!assignment) throw new AppError("NOT_FOUND", "学习任务不存在。", 404);
+  await requireOwnedClassroom(user, assignment.classroomId);
+  if (assignment.classroomId !== input.classroomId) throw new AppError("VALIDATION_ERROR", "任务与班级不匹配。", 400);
   const where = { assignmentId: input.assignmentId, ...(input.progress ? { progress: input.progress } : {}), ...(input.query ? { student: { OR: [{ name: { contains: input.query, mode: "insensitive" as const } }, { email: { contains: input.query, mode: "insensitive" as const } }] } } : {}) };
   const [items, total] = await prisma.$transaction([
     prisma.assignmentStudent.findMany({ where, select: { id: true, studentId: true, progress: true, startedAt: true, completedAt: true, updatedAt: true, student: { select: { name: true, email: true } } }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }),

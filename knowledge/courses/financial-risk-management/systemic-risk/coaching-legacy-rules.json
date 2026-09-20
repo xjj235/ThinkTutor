@@ -1,0 +1,12 @@
+{
+  "routing": {
+    "UNRELIABLE": { "priority": 500, "dimensionSelection": "FIXED", "dimension": "EVIDENCE" },
+    "MISCONCEPTION": { "priority": 400, "dimensionSelection": "FIXED", "dimension": "CONCEPT" },
+    "MISSING": { "priority": 300, "dimensionSelection": "MISSING_FIRST", "dimension": "CONCEPT" },
+    "VERIFY": { "priority": 200, "dimensionSelection": "MISSING_FIRST", "dimension": "TRANSFER" },
+    "INITIAL": { "priority": 100, "dimensionSelection": "MISSING_FIRST", "dimension": "CONCEPT" }
+  },
+  "verification": [
+    { "id": "LEGACY_VERIFY_CONDITION", "targetIds": ["C_SR_001", "M_SR_003"], "requiredAll": ["condition_revision"], "description": "冻结的1.0兼容条件核验，不用于新版知识包配置。" }
+  ]
+}

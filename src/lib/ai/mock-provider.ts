@@ -9,10 +9,12 @@ import {
   learningReportDraftSchema,
 } from "../contracts";
 import { isLowInformationAnswer } from "../state-machine";
+import { retryReviewCandidateSchema, retryReviewInputSchema, type RetryReviewInput } from "../retry-review";
 import { mockAssessLearningTurn } from "./mock-assessment-v12";
 import type { TurnAssessmentInput } from "./types";
 import type {
   AIProvider,
+  AIRequestMeta,
   CoachTurnInput,
   ContextSummaryInput,
   DiagnosticInput,
@@ -80,6 +82,15 @@ function supportQuestion(input: CoachTurnInput): CoachTurn {
 }
 
 export class MockAIProvider implements AIProvider {
+  async assessGapRepair(input: RetryReviewInput & AIRequestMeta) {
+    retryReviewInputSchema.parse({ sourceGap: input.sourceGap, messages: input.messages, report: input.report, resolutionBlockedReason: input.resolutionBlockedReason });
+    return retryReviewCandidateSchema.parse({
+      verdict: "INSUFFICIENT_EVIDENCE",
+      confidence: 0,
+      rationale: "演示模型未进行针对原知识漏洞的实质复核，暂不能确认修复；请继续补充独立讲解与迁移证据。",
+      evidence: [],
+    });
+  }
   async selectTeachingMove(input: import("./teaching-schema").TeachingSelection) {
     const studentAnchor = input.studentContent.match(/[^?？\r\n]{1,30}/u)?.[0].trim() ?? "";
     return { choiceId: input.choices[0].id, openingId: input.openings[0].id, ...(input.grounding ? { followUp: {

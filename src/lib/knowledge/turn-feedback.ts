@@ -1,6 +1,7 @@
 import type { KnowledgeManifest } from "./schemas";
 import type { KnowledgeRuntime } from "./runtime-schemas";
 import { activeRule } from "./v12-engine";
+import type { SupportedGapRouting } from "./coaching-schema";
 
 function quote(text: string): string {
   const excerpt = text.trim().slice(0, 100).replace(/\s+/gu, " ");
@@ -8,7 +9,7 @@ function quote(text: string): string {
   return `「${escaped}${text.trim().length > 100 ? "…" : ""}」`;
 }
 
-export function buildV12TurnFeedback(manifest: KnowledgeManifest, answered: KnowledgeRuntime, assessed: KnowledgeRuntime, messageId: string): string {
+export function buildV12TurnFeedback(manifest: KnowledgeManifest, answered: KnowledgeRuntime, assessed: KnowledgeRuntime, messageId: string, supportedGap?: SupportedGapRouting): string {
   const state = assessed.v12;
   const assessment = state?.assessments[messageId];
   if (!state || !assessment || !manifest.v12) return "";
@@ -23,10 +24,12 @@ export function buildV12TurnFeedback(manifest: KnowledgeManifest, answered: Know
   const positive = observations.filter((item) => !rule.prohibited.includes(item.evidenceId));
 
   if (state.lastResult === "NEED_VERIFY") {
-    lines.push(assessment.contradictions.length
+    lines.push(supportedGap
+      ? "当前回答可支持针对缺项继续追问，但尚不足以确认整体掌握；下一问将聚焦未说明的环节。"
+      : assessment.contradictions.length
       ? "本轮回答存在需要澄清的冲突，暂不确认掌握。"
       : "本轮证据仍需核验，暂不确认掌握，也不将表述不足直接判为概念错误。");
-    if (positive[0]) lines.push(`待核验的表述：${quote(positive[0].ref.extractedText)}`);
+    if (positive[0]) lines.push(`${supportedGap ? "本轮表述" : "待核验的表述"}：${quote(positive[0].ref.extractedText)}`);
   } else {
     if (positive.length) {
       const covered = [...new Set(positive.map((item) => item.evidenceId))].slice(0, 2).map(definition);

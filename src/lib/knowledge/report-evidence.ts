@@ -14,7 +14,7 @@ export type ReportEvidenceLinks = z.infer<typeof reportEvidenceLinksSchema>;
 export function linkReportEvidence(draft: Pick<LearningReportDraft, "dimensions">, messages: Array<{ id: string; role: string; content: string }>): ReportEvidenceLinks {
   const links: ReportEvidenceLinks = { conceptCompleteness: [], logicCompleteness: [], expressionClarity: [], exampleAbility: [], transferAbility: [] };
   for (const key of Object.keys(links) as Array<keyof ReportEvidenceLinks>) {
-    const quotes = [...draft.dimensions[key].evidence.matchAll(/[“「"]([^”」"\r\n]{6,600})[”」"]/gu)].map((match) => match[1]);
+    const quotes = [...draft.dimensions[key].evidence.matchAll(/[“「"]([^”」"\r\n]{2,600})[”」"]/gu)].map((match) => match[1]);
     links[key] = messages.filter((message) => message.role === "USER" && quotes.some((quote) => message.content.includes(quote))).map((message) => message.id);
   }
   return reportEvidenceLinksSchema.parse(links);

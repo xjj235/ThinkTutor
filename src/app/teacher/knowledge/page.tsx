@@ -33,7 +33,7 @@ export default async function KnowledgeReviewPage() {
     {sources.map((source) => <div className="review-source" key={source.unitId}><strong>{source.title}</strong><span>{source.author} · {source.year} · {source.location}</span><small className="break-all">{source.unitId} · {source.checksum} · {source.verifiedBy} · {source.verifiedAt}</small></div>)}
     {samples.map((sample) => <details className="review-sample" key={sample.id}><summary>{units.find((unit) => unit.id === sample.targetId)?.title ?? sample.targetId} / {sample.expectedLevel}</summary><p className="break-words">{sample.studentAnswer}</p>{editable ? <KnowledgeReviewForm kind="REMOVE_GOLDEN" version={record.version} sampleId={sample.id} /> : null}</details>)}
   </section>;
-  return <PageShell title="系统性风险知识审核" description="知识溯源、教师校准与版本发布。" actions={<Link className="button button-secondary" href="/teacher/knowledge/claims">学生判断复核<ArrowUpRight size={15} aria-hidden="true" /></Link>}>
+  return <PageShell title="系统性风险知识审核" description="知识溯源、教师校准与版本发布。" actions={<><Link className="button button-secondary" href="/teacher/knowledge/library">知识资料库</Link><Link className="button button-secondary" href="/teacher/knowledge/claims">学生判断复核<ArrowUpRight size={15} aria-hidden="true" /></Link></>}>
     <div className="release-summary"><div><span>版本状态</span><strong>{({ DRAFT: "待审核", FROZEN: "候选已冻结", REVIEWED: "审核通过", PUBLISHED: "已发布", ARCHIVED: "已归档" })[record?.status ?? "DRAFT"]}</strong></div><div><span>来源确认</span><strong>{sources.length} / 13</strong></div><div><span>教师校准样例</span><strong>{samples.length} / 20</strong></div></div>
     <ReviewTabs tabs={[
       { id: "overview", label: "版本概览", content: overview },

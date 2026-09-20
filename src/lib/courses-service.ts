@@ -5,7 +5,7 @@ import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import type { AuthUser } from "./auth/session";
 import { prisma } from "./db";
-import type { assignmentInputSchema, courseInputSchema, goalInputSchema } from "./domain-schemas";
+import type { assignmentInputSchema, assignmentPatchSchema, courseInputSchema, goalInputSchema } from "./domain-schemas";
 import { AppError } from "./errors";
 import { assertTeacherOrAdmin, requireOwnedClassroom, requireOwnedCourse } from "./permissions";
 
@@ -40,7 +40,7 @@ export async function listCourses(user: AuthUser) {
     return prisma.course.findMany({ where: { ownerId: user.id }, select: courseSelect, orderBy: { updatedAt: "desc" } });
   }
   return prisma.course.findMany({
-    where: { status: "PUBLISHED", classrooms: { some: { enrollments: { some: { userId: user.id, status: "ACTIVE" } } } } },
+    where: { status: "PUBLISHED", classrooms: { some: { status: "ACTIVE", enrollments: { some: { userId: user.id, status: "ACTIVE" } } } } },
     select: courseSelect,
     orderBy: { updatedAt: "desc" },
   });
@@ -59,7 +59,7 @@ export async function getCourse(user: AuthUser, courseId: string) {
   const accessRecord = await prisma.course.findUnique({ where: { id: courseId }, select: { ownerId: true, status: true } });
   if (!accessRecord) throw new AppError("NOT_FOUND", "课程不存在。", 404);
   if (accessRecord.ownerId !== user.id && user.role !== "ADMIN") {
-    const enrolled = await prisma.enrollment.findFirst({ where: { userId: user.id, status: "ACTIVE", classroom: { courseId } } });
+    const enrolled = await prisma.enrollment.findFirst({ where: { userId: user.id, status: "ACTIVE", classroom: { courseId, status: "ACTIVE" } } });
     if (!enrolled || accessRecord.status !== "PUBLISHED") throw new AppError("FORBIDDEN", "你无权访问该课程。", 403);
   }
   const course = await prisma.course.findUnique({ where: { id: courseId }, select: courseSelect });
@@ -170,20 +170,26 @@ export async function getClassroom(user: AuthUser, classroomId: string) {
     joinCode: null,
     course: classroom.course,
     enrollments: [],
-    assignments: classroom.assignments.filter((assignment) => assignment.status === "PUBLISHED"),
+    assignments: classroom.status === "ACTIVE" ? classroom.assignments.filter((assignment) => assignment.status === "PUBLISHED") : [],
   };
 }
 
 export async function joinClassroom(user: AuthUser, classroomId: string, code: string, requestId: string) {
-  const classroom = await prisma.classroom.findUnique({ where: { id: classroomId } });
-  if (!classroom || classroom.joinCode !== code) throw new AppError("NOT_FOUND", "班级或加入码不正确。", 404);
-  if (classroom.status !== "ACTIVE" || !classroom.joinEnabled) throw new AppError("CONFLICT", "该班级当前不接受加入。", 409);
   return prisma.$transaction(async (tx) => {
+    // Share the classroom lock with publication so neither transaction misses a new member or task.
+    await tx.$queryRaw`SELECT id FROM "Classroom" WHERE id = ${classroomId} FOR UPDATE`;
+    const classroom = await tx.classroom.findUnique({ where: { id: classroomId } });
+    if (!classroom || classroom.joinCode !== code) throw new AppError("NOT_FOUND", "班级或加入码不正确。", 404);
+    if (classroom.status !== "ACTIVE" || !classroom.joinEnabled) throw new AppError("CONFLICT", "该班级当前不接受加入。", 409);
     const enrollment = await tx.enrollment.upsert({
       where: { classroomId_userId: { classroomId, userId: user.id } },
       create: { classroomId, userId: user.id },
       update: { status: "ACTIVE" },
     });
+    const assignments = await tx.assignment.findMany({ where: { classroomId, status: "PUBLISHED" }, select: { id: true } });
+    if (assignments.length) {
+      await tx.assignmentStudent.createMany({ data: assignments.map(({ id }) => ({ assignmentId: id, studentId: user.id })), skipDuplicates: true });
+    }
     await tx.auditLog.create({ data: { actorId: user.id, action: "ENROLLMENT_CHANGED", targetType: "Classroom", targetId: classroomId, requestId, metadata: { status: "ACTIVE" } } });
     return { classroomId: enrollment.classroomId, status: enrollment.status, joinedAt: enrollment.joinedAt };
   });
@@ -197,7 +203,7 @@ export async function leaveClassroom(user: AuthUser, classroomId: string, reques
   });
 }
 
-export async function createAssignment(user: AuthUser, input: z.infer<typeof assignmentInputSchema>) {
+async function validateAssignmentHierarchy(user: AuthUser, input: Pick<z.infer<typeof assignmentInputSchema>, "classroomId" | "courseId" | "chapterId" | "learningGoalId">) {
   const classroom = await requireOwnedClassroom(user, input.classroomId);
   if (classroom.courseId !== input.courseId) throw new AppError("VALIDATION_ERROR", "班级与课程不匹配。", 400);
   if (input.chapterId) {
@@ -212,15 +218,32 @@ export async function createAssignment(user: AuthUser, input: z.infer<typeof ass
     if (!goal) throw new AppError("VALIDATION_ERROR", "所选学习目标不属于该课程。", 400);
     if (input.chapterId && goal.chapterId !== input.chapterId) throw new AppError("VALIDATION_ERROR", "所选学习目标不属于该章节。", 400);
   }
+}
+
+export async function createAssignment(user: AuthUser, input: z.infer<typeof assignmentInputSchema>) {
+  await validateAssignmentHierarchy(user, input);
   return prisma.assignment.create({ data: { ...input, createdById: user.id, status: "DRAFT" } });
 }
 
-export async function updateAssignment(user: AuthUser, assignmentId: string, data: Prisma.AssignmentUpdateInput) {
+export async function updateAssignment(user: AuthUser, assignmentId: string, data: z.infer<typeof assignmentPatchSchema>) {
   const assignment = await prisma.assignment.findUnique({ where: { id: assignmentId } });
   if (!assignment) throw new AppError("NOT_FOUND", "学习任务不存在。", 404);
   await requireOwnedClassroom(user, assignment.classroomId);
   if (assignment.status !== "DRAFT") throw new AppError("CONFLICT", "已发布任务的核心内容不能静默修改。", 409);
-  return prisma.assignment.update({ where: { id: assignmentId }, data: { ...data, version: { increment: 1 } } });
+  await validateAssignmentHierarchy(user, {
+    classroomId: data.classroomId ?? assignment.classroomId,
+    courseId: data.courseId ?? assignment.courseId,
+    chapterId: data.chapterId ?? assignment.chapterId ?? undefined,
+    learningGoalId: data.learningGoalId ?? assignment.learningGoalId ?? undefined,
+  });
+  const openAt = data.openAt ?? assignment.openAt;
+  const dueAt = data.dueAt ?? assignment.dueAt;
+  if (openAt && dueAt && openAt >= dueAt) throw new AppError("VALIDATION_ERROR", "截止时间必须晚于开放时间。", 400);
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.assignment.updateMany({ where: { id: assignmentId, status: "DRAFT", version: assignment.version }, data: { ...data, version: { increment: 1 } } });
+    if (updated.count !== 1) throw new AppError("CONFLICT", "任务已被更新或发布，请刷新后重试。", 409, true);
+    return tx.assignment.findUniqueOrThrow({ where: { id: assignmentId } });
+  });
 }
 
 export async function publishAssignment(user: AuthUser, assignmentId: string, requestId: string) {
@@ -228,9 +251,12 @@ export async function publishAssignment(user: AuthUser, assignmentId: string, re
   if (!assignment) throw new AppError("NOT_FOUND", "学习任务不存在。", 404);
   await requireOwnedClassroom(user, assignment.classroomId);
   if (assignment.status !== "DRAFT") throw new AppError("CONFLICT", "只有草稿任务可以发布。", 409);
-  const enrollments = await prisma.enrollment.findMany({ where: { classroomId: assignment.classroomId, status: "ACTIVE" }, select: { userId: true } });
   return prisma.$transaction(async (tx) => {
-    const published = await tx.assignment.update({ where: { id: assignmentId }, data: { status: "PUBLISHED", publishedAt: new Date() } });
+    await tx.$queryRaw`SELECT id FROM "Classroom" WHERE id = ${assignment.classroomId} FOR UPDATE`;
+    const updated = await tx.assignment.updateMany({ where: { id: assignmentId, status: "DRAFT", version: assignment.version }, data: { status: "PUBLISHED", publishedAt: new Date(), version: { increment: 1 } } });
+    if (updated.count !== 1) throw new AppError("CONFLICT", "任务已被更新或发布，请刷新后重试。", 409, true);
+    const published = await tx.assignment.findUniqueOrThrow({ where: { id: assignmentId } });
+    const enrollments = await tx.enrollment.findMany({ where: { classroomId: assignment.classroomId, status: "ACTIVE" }, select: { userId: true } });
     if (enrollments.length) {
       await tx.assignmentStudent.createMany({ data: enrollments.map(({ userId }) => ({ assignmentId, studentId: userId })), skipDuplicates: true });
     }
@@ -244,7 +270,8 @@ export async function getAssignment(user: AuthUser, assignmentId: string) {
   if (!assignment) throw new AppError("NOT_FOUND", "学习任务不存在。", 404);
   if (user.role !== "ADMIN" && assignment.createdById !== user.id) {
     const progress = await prisma.assignmentStudent.findUnique({ where: { assignmentId_studentId: { assignmentId, studentId: user.id } }, select: { id: true } });
-    if (!progress || assignment.status !== "PUBLISHED") throw new AppError("FORBIDDEN", "你无权访问该学习任务。", 403);
+    const enrolled = await prisma.enrollment.findFirst({ where: { classroomId: assignment.classroomId, userId: user.id, status: "ACTIVE" }, select: { id: true } });
+    if (!progress || !enrolled || assignment.status !== "PUBLISHED" || assignment.classroom.status !== "ACTIVE") throw new AppError("FORBIDDEN", "你无权访问该学习任务。", 403);
   }
   return {
     id: assignment.id,
