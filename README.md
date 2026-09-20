@@ -1,5 +1,9 @@
 # 问思学伴 ThinkTutor
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+[GitHub 源代码](https://github.com/xjj235/ThinkTutor) · [许可证适用范围](LICENSE_SCOPE.md)
+
 ThinkTutor 是面向学生、教师与平台管理员的 AI 自主学习系统。核心闭环保持为：任务创建 → 知识诊断 → 3～6 轮苏格拉底追问（最多 8 轮可配置）→ 费曼讲解 → 五维形成性报告 → 从最高优先级漏洞再练。
 
 ## 技术架构
@@ -55,6 +59,8 @@ http://127.0.0.1:3100
 | 学生 | `student@example.test` | `ThinkTutor-Preview-2026!` |
 | 教师 | `teacher@example.test` | `ThinkTutor-Preview-2026!` |
 | 管理员 | `admin@example.test` | `ThinkTutor-Preview-2026!` |
+
+以上账号仅由本地预览创建，不是线上服务的登录凭据。
 
 预览数据保存在 `.local-preview/`，按 `Ctrl+C` 停止后仍会保留。该模式固定使用 Mock AI 和本地存储，不产生模型费用。它不是单独的静态演示站：页面、API、Prisma 模型、认证和状态机均与阿里云部署共用；生产环境只替换为 RDS、Tair、OSS 和 DeepSeek 配置。
 
@@ -154,6 +160,10 @@ docker compose -f docker-compose.production.yml up -d
 ## 已知边界
 
 形成性报告不代表正式成绩或标准化能力测评。当前不实现支付、排行榜、社交、直播、小程序、原生 App、家长端、心理或医学诊断。向量检索保留接口，当前生产可用确定性的 PostgreSQL 词法检索回退。
+
+## 许可证与资料范围
+
+原创应用代码、配置、脚本、测试和项目开发文档采用 [MIT License](LICENSE)。教学原文、导入参考资料及品牌和非代码视觉素材的许可范围见 [LICENSE_SCOPE.md](LICENSE_SCOPE.md)。第三方软件与图标保留原许可证，参见 [第三方声明](THIRD_PARTY_NOTICES.md) 和 [UI 第三方声明](docs/UI_THIRD_PARTY_NOTICES.md)。
 
 ## 常见问题
 
