@@ -9,6 +9,7 @@ import { resetServerEnvForTests } from "@/lib/env";
 import { coachConditionalCheckSchema } from "@/lib/ai/coach-feedback";
 import { coachTurnSchema } from "@/lib/contracts";
 import boundaryReplays from "./coach-boundary-replays.json";
+import conditionPreservationReplay from "./coach-condition-preservation-replay.json";
 
 config({ path: [".env.local", ".env"], quiet: true });
 const enabled = process.env.RUN_DEEPSEEK_LIVE_TEST === "true" && Boolean(process.env.DEEPSEEK_API_KEY);
@@ -77,6 +78,16 @@ async function observedFetch(origin: EvidenceOrigin, scenario: string, url: Para
 }
 const fixtureReviewSchema = z.object({
   minimumAnswer: z.string(), studentRuleAnswer: z.string().nullable(), distinguishingEvidence: z.string().nullable(),
+  counterfactualEvidence: z.object({
+    studentClaimQuote: z.string(), wholeClaimIncluded: z.boolean(),
+    conditions: z.array(z.object({ studentQuote: z.string(), status: z.enum(["SATISFIED", "NOT_SATISFIED", "UNKNOWN"]), questionQuote: z.string().nullable() })),
+    usesOnlyGivenConditions: z.boolean(),
+    studentOutcome: z.object({ kind: z.enum(["AFFIRM", "DENY", "INSUFFICIENT", "VALUE"]), value: z.string().nullable() }),
+    correctOutcome: z.object({ kind: z.enum(["AFFIRM", "DENY", "INSUFFICIENT", "VALUE"]), value: z.string().nullable() }),
+    comparison: z.enum(["DIFFERENT_RESULT", "REQUIRED_REASON", "NONE"]),
+    requiredReasonScope: z.enum(["SPECIFIC", "OPEN"]).nullable(), requiredReasonQuote: z.string().nullable(),
+    studentReasonStillSufficient: z.boolean(),
+  }).nullable(),
   answerLeakQuote: z.string().nullable(), diagnosticRationale: z.string(),
   latestAnswerGrounded: z.boolean(), feedbackQuestionAligned: z.boolean(), meaningfulExplanation: z.boolean(),
   progressGrounded: z.boolean(), noAnswerLeak: z.boolean(), questionAnswerable: z.boolean(),
@@ -537,6 +548,75 @@ describe.skipIf(!enabled)("DeepSeek live coaching feedback", () => {
         expect(record.contentReview?.minimumAnswer).toMatch(/不(?:能|可)|未满足|不满足/u);
         expect(record.contentReview?.minimumAnswer).not.toMatch(/平方和不等|平方和不可能|等式(?:必然|一定)?不成立/u);
       }
+    }
+  }, 150_000);
+
+  it.each([false, true])("condition-preservation real review: student's other condition supplied=%s", async (twoKnownSides) => {
+    const observed = conditionPreservationReplay.studentVisibleTurn;
+    // The API artifact exposes the complete student-visible question/feedback,
+    // not the provider's internal learner state. The empty state below is only
+    // a schema adapter; it must not be represented as observed model output.
+    const candidate = coachTurnSchema.parse({
+      ...observed,
+      assistantMessage: twoKnownSides
+        ? observed.assistantMessage.replace("已知其中一条边长是6", "已知其中两条边的长度").replace("求其他边长", "求第三条边")
+        : observed.assistantMessage,
+      learnerState: { masteryEstimate: 0, confirmedPoints: [], gaps: [], misconceptions: [] },
+      nextAction: "ASK_QUESTION", transitionReason: "固定学生可见输出的审核适配，不代表真实内部评估",
+    });
+    const record = await reviewFixedCandidate(
+      twoKnownSides ? "condition-preservation-complete-premises" : "condition-preservation-observed-one-side",
+      twoKnownSides ? "accept" : "reject", candidate, conditionPreservationReplay.answer,
+      [{ role: "ASSISTANT", phase: "DIAGNOSIS", content: conditionPreservationReplay.previousQuestion, questionType: "CONCEPT_CLARIFICATION" }],
+      { course: undefined, chapter: undefined, ...conditionPreservationReplay.task },
+      {
+        sourceArtifact: conditionPreservationReplay.sourceArtifact, sourceScenario: "answered:first-assistant",
+        changedFields: ["learnerState (unobserved schema adapter)", "nextAction (schema adapter)", "transitionReason (schema adapter)", ...(twoKnownSides ? ["assistantMessage: supply two known sides and ask for the third"] : [])],
+        objective: twoKnownSides ? "Positive control: satisfy the student's own two-side premise so angle applicability genuinely distinguishes the beliefs." : "Replay every student-visible field unchanged: one side leaves the student's own two-side premise unsatisfied.",
+      },
+    );
+    // An unrelated content rejection does not demonstrate the pedagogical fix.
+    expect(record.contentReview?.verdict).toBe("PASS");
+    expect(record.realReviewCalls).toBe(2);
+    expect(record.review).not.toBeNull();
+    expect(record.review?.studentRuleAnswer).toBeTruthy();
+    const counterfactual = record.review?.counterfactualEvidence;
+    expect(conditionPreservationReplay.answer).toContain(counterfactual?.studentClaimQuote);
+    expect(counterfactual?.studentClaimQuote).toMatch(/所有三角形/u);
+    expect(counterfactual?.studentClaimQuote).toMatch(/知道两条边/u);
+    expect(counterfactual?.wholeClaimIncluded).toBe(true);
+    const twoSidePremise = counterfactual?.conditions.find((condition) => /两条边|两边/u.test(condition.studentQuote));
+    expect(twoSidePremise).toBeDefined();
+    for (const condition of counterfactual?.conditions ?? []) {
+      expect(conditionPreservationReplay.answer).toContain(condition.studentQuote);
+      if (condition.questionQuote !== null) expect(candidate.assistantMessage).toContain(condition.questionQuote);
+    }
+    expect(counterfactual?.correctOutcome).toEqual({ kind: "DENY", value: null });
+    if (twoKnownSides) {
+      expect(record.review?.diagnosticValue).toBe(true);
+      expect(counterfactual?.usesOnlyGivenConditions).toBe(true);
+      expect(twoSidePremise?.status).toBe("SATISFIED");
+      expect(record.review?.studentRuleAnswer).toMatch(/能|可以|可直接/u);
+      expect(record.review?.studentRuleAnswer).not.toMatch(/不能|不可以|无法/u);
+      expect(record.review?.studentRuleAnswer).toMatch(/两条边|两边/u);
+      expect(record.review?.distinguishingEvidence).toMatch(/角|50|60|70/u);
+      expect(counterfactual?.studentOutcome.kind).toBe("AFFIRM");
+      expect(counterfactual?.correctOutcome.kind).toBe("DENY");
+      expect(counterfactual?.comparison).toBe("DIFFERENT_RESULT");
+      expect(counterfactual?.studentReasonStillSufficient).toBe(false);
+    } else {
+      // 08:25 correctly failed closed despite the model still claiming
+      // diagnosticValue=true. Require the actual unmet two-side premise and a
+      // corresponding hard-gate reason, not an unrelated schema rejection.
+      expect(["NOT_SATISFIED", "UNKNOWN"]).toContain(twoSidePremise?.status);
+      expect(twoSidePremise?.questionQuote).toMatch(/一条边|一边/u);
+      expect(record.accepted).toBe(false);
+      const unsupportedAffirmative = counterfactual?.studentOutcome.kind === "AFFIRM";
+      const sufficientExistingAnswer = counterfactual?.studentReasonStillSufficient === true;
+      const sameResult = counterfactual?.studentOutcome.kind === "DENY" && counterfactual?.studentOutcome.value === null
+        && counterfactual?.comparison !== "REQUIRED_REASON";
+      const extraAssumption = counterfactual?.usesOnlyGivenConditions === false;
+      expect(unsupportedAffirmative || sufficientExistingAnswer || sameResult || extraAssumption).toBe(true);
     }
   }, 150_000);
 

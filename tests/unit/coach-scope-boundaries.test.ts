@@ -21,6 +21,7 @@ const teachingPass = {
   minimumAnswer: "待核对的具体答案",
   studentRuleAnswer: null,
   distinguishingEvidence: null,
+  counterfactualEvidence: null,
   answerLeakQuote: null,
   missingInformationQuote: null,
   diagnosticRationale: "题目使用明确给定的整体范围，要求学生完成一个尚未展示的计算。",

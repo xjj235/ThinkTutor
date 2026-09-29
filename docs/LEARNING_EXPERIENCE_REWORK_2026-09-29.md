@@ -1,8 +1,60 @@
 # 首页与苏格拉底追问体验整改验收记录
 
-本文记录首页与追问体验整改的实现、发布和验收证据。最新状态以文首为准；后文保留各历史阶段的结果，不用早期通过数量覆盖后续发现的问题。
+本文记录首页与追问体验整改的实现、发布和验收证据。准确发布提交、Render 状态及发布后浏览器复查以[本轮最终发布记录](../.data/release-validation/release-final.json)为准；后文保留各历史阶段的结果，不用早期通过数量覆盖后续发现的问题。
 
-## 补充修复与验证结果（2026-09-29）
+## 本轮实现：先收集自述，作答后再诊断（2026-09-29）
+
+前一个补充版本为 `5d91df7dccc8b744cf1aa572a10c30ba348492ef`，Render 部署 `dep-datmujpsrm7s739bm1mg` 于 **2026-09-29 07:59:49 UTC** 生效。随后线上复查再次发现实质问题：初诊题用“两直角边”等术语提前透露正在询问的适用条件；第一次追问只给一条边，未保持学生错误主张中的“已知两条边”前提，不能据此确认题目能区分该主张。[发布与语义问题记录](../.data/release-validation/release-followup.json)
+
+该次浏览器运行还因定位器要求完全匹配不含标签的进步文本而报错；页面实际含有加粗标签，测试定位器已在本地修正。这一工具误失败与上述教学语义缺陷分别记录，不能相互抵消，也不能将整次线上复查写为通过。[线上完整记录](../.data/release-validation/live-smoke-2026-09-29T08-00-15-870Z-22bf8850-c803-4dc9-8da5-767e6584feb4.json)
+
+当前候选对普通、未绑定专项运行清单的任务改为由服务端生成中性自述问题，允许学生说“不知道”；开场不调用诊断模型，不引用参考资料、不预告学科条件，也不认定学生已经掌握或存在错误。页面仍展示任务主题与目标。学生首次作答后，才把实际回答、任务及相关课程上下文交给 AI 诊断，形成回答关联的解释与追问。再练仍先生成针对原缺口的任务目标，再收集新自述，保留父子会话关联及原历史记录。
+
+下表记录自述开场接线版本的检查，早于下述 **08:29 UTC** 的结构化审核冻结；不能用这些数量代替新审核版本的最终全量、构建或浏览器验收。
+
+| 本次候选检查 | 已取得的结果 | 证据 |
+| --- | --- | --- |
+| 全量自动测试 | **894 通过、44 跳过**；包含本地开场、创建保护、再练事务及首答上下文回归 | [tests-self-explanation-final](../.data/release-validation/tests-self-explanation-final.log) |
+| 生产构建 | `pnpm build` 通过 | [build-self-explanation-final](../.data/release-validation/build-self-explanation-final.log) |
+| 普通核心浏览器流程 | **10 通过**，使用 Mock，覆盖桌面与手机完整学习流程 | [browser-self-explanation](../.data/release-validation/browser-self-explanation.log) |
+
+### 结构化追问检查：保持学生原话中的条件
+
+08:09 与 08:12 UTC 的固定重放进一步确认：只写提示规则和自由文本理由仍会误放。第一次审核删掉了学生“知道两条边”的条件；第二次已经承认学生按原主张也可回答“只给一边，不能求”，却自行补成“即使再给一条边”来宣称有区分力。两次错误证据继续保留：[08:09 重放](../.data/coaching-live/recheck-2026-09-29T08-09-48-301Z.json)、[08:12 重放](../.data/coaching-live/recheck-2026-09-29T08-12-47-416Z.json)。
+
+现有教学审核新增请求内的 `counterfactualEvidence`，记录沿用当前学生主张时，在**原题实际条件下**会得到什么结果。没有新增模型调用层，也未修改推理档位、输出预算或既有有界重试次数：
+
+- `studentClaimQuote` 连续摘取本题检验的完整主张，最多 1200 字，保留相关对象、量词及前提，不复制整份长回答或无关段落；`wholeClaimIncluded=false` 时不放行。各 `conditions` 保存学生条件原文、题面依据及 `SATISFIED`／`NOT_SATISFIED`／`UNKNOWN` 状态。
+- 条件状态暂且站在学生规则内部，只检查题目实例是否属于其对象范围、是否具备其要求的输入，不能用该错误规律在科学上为假来否定对象条件。例如非直角三角形仍属于“三角形”；“所有三角形”的范围条件与“所有三角形都能使用定理”的规律真假须分开。条件摘录不连带“就能……”的结论。
+- `studentOutcome` 与 `correctOutcome` 使用 `AFFIRM`／`DENY`／`INSUFFICIENT`／`VALUE` 表示同一道题的结果。服务端拒绝条件未满足或未知却预测无条件肯定，也拒绝把相同结果标成 `DIFFERENT_RESULT`。只有题干明确要求某个具体推理环节时，才能走 `REQUIRED_REASON`，并给出该题原文及 `SPECIFIC` 范围；泛问“为什么／依据是什么”不能冒充这一要求。
+- 若仍持错误主张的学生已经有足够回答原题的正确判断或理由，`studentReasonStillSufficient=true` 会触发拒绝；若必须另加条件或要求学生多答未问的问题才有区分力，`usesOnlyGivenConditions=false` 会触发拒绝。学生和题面引用不匹配、相关字段缺失或互相矛盾也不放行，即使模型同时返回 `diagnosticValue=true`。
+- 当前已经修正、正确但不完整或回答“不知道”时，`studentRuleAnswer`、`distinguishingEvidence`、`counterfactualEvidence` 均为 `null`，继续检查真实应用、补缺或较小支架任务，不强迫新问题区分已放弃的误解。
+
+这些字段使已声明的条件、结果与审核结论可以由服务端交叉检查；**引用存在不等于引用在语义上支持该条件，模型也仍可能漏抽条件或判错其状态**。因此这里记录的是结构化防线及有限对照结果，不把它称为完整的逻辑证明或模型教学判断完全正确。审核证据不写入学生学习记录；失败仍沿既有事务边界处理，不保存作答、不增加轮次、不推进阶段。
+
+| 本次结构化审核证据（UTC） | 实际结果与边界 | 证据 |
+| --- | --- | --- |
+| 08:25 固定正反对照 | 自动测试 **0／2 通过**。负控已被服务端硬拒，但旧断言仍要求模型的 `diagnosticValue=false`，因此测试失败；正控则因模型把“所有三角形”的规律真假误作对象条件，标为 `NOT_SATISFIED` 而误拒。不能将该批写为全通过。 | [实际审核](../.data/coaching-live/recheck-2026-09-29T08-25-17-209Z.json) |
+| 08:27 自然生成与纠偏 | **2 项通过、2 项失败**。不知道及修正前后共 3 份实际输出有效；错误条件场景发生内容审核截断，后续完整草稿又被条件状态误判拦下，未产生可交付输出。纠偏的最终 `content_review` 在约 8000 token 处截断，JSON 不可解析，`output=null`。修正后场景也曾中途截断，随后有界重试得到有效输出；不能忽略这些中间失败或把纠偏写成完成。 | [实际输出与传输状态](../.data/coaching-live/recheck-2026-09-29T08-27-53-589Z.json) |
+| 08:30 同一组固定正反对照 | **2／2 产品判定通过**，四次 HTTP 均为 200、`finishReason=stop` 且 JSON 完整。负控仍被模型自报为 `diagnosticValue=true`，但它将学生要求的“两条边”标为 `NOT_SATISFIED`、引用题面“一条边”，同时预测 `AFFIRM`，由服务端确定性拒绝。正控的两个条件均为 `SATISFIED`，学生预测 `AFFIRM`、正确结果 `DENY`，实际放行。这证明本次结构化防线拦住了模型误判，不能表述为模型的全部教学理由正确。 | [正反对照与实际审核](../.data/coaching-live/recheck-2026-09-29T08-30-06-271Z.json) |
+| 08:30 错误理解自然生成 | **1 项自动通过**。学生可见问题给定两边 3、4 及夹角 60°，反馈引用原话、解释需核验的条件并留下判断。内部审核却仅从一个 60° 角概括整个三角形非直角；这个完整数字案例实际不是直角三角形，但该审核理由本身不充分。因此本行不称全部语义正确，也不证明已消除局部推整体的审核局限。 | [日志](../.data/release-validation/live-generation-premise-final.log)、[实际输出与审核](../.data/coaching-live/recheck-2026-09-29T08-30-21-666Z.json) |
+| 08:32 定向纠偏 | **1 项通过**。首份泄漏草稿为人工注入，其后 1 次真实生成、3 次真实审核全部完成；四次 HTTP 均为 200、`stop` 且 JSON 完整。最终题目完整给出三个角 50°／60°／70°及已知两边，反馈未预告判断，原话、关注点与问题一致，经人工及独立复核未发现学生可见的实质阻断。 | [日志](../.data/release-validation/live-repair-premise-final.log)、[真实纠偏输出](../.data/coaching-live/recheck-2026-09-29T08-32-01-582Z.json) |
+
+上述条件状态规则于 **2026-09-29 08:29 UTC（北京时间 16:29）** 冻结。不知道及修正前后的三个有效学生可见输出沿用 08:27 的实际记录，只用于确认这些分支的内容表现；不把该批整体改写为通过。当前真实证据来自分别标明时间、版本和范围的批次，不拼成一批从未执行的“全绿”结果。
+
+| 冻结后工程检查 | 实际结果 | 证据 |
+| --- | --- | --- |
+| 全量自动测试 | **913 通过、44 跳过**，跳过项不作为真实模型证据 | [tests-shipping-final](../.data/release-validation/tests-shipping-final.log) |
+| 普通核心浏览器流程 | **10 通过**，使用 Mock | [browser-shipping-core](../.data/release-validation/browser-shipping-core.log) |
+| 专项知识库浏览器流程 | **6 通过**，使用 Mock；与普通核心按各自配置分开执行 | [browser-shipping-curated](../.data/release-validation/browser-shipping-curated.log) |
+| 静态检查及最终构建 | `pnpm lint`、`pnpm typecheck`、`pnpm build` 通过 | [lint](../.data/release-validation/lint-shipping-final.log)、[typecheck](../.data/release-validation/typecheck-shipping-final.log)、[build](../.data/release-validation/build-shipping-final.log) |
+| 精确提交发布与真实线上浏览器复查 | 独立记录实际状态、执行时间、合成账号的两次真实回答及人工审阅，不以本地通过代替上线 | [本轮最终发布记录](../.data/release-validation/release-final.json) |
+
+普通与专项浏览器曾被错误合并到同一条命令，运行器将整批切到专项模式，造成普通用例两项失败；分开执行后的 10 项和 6 项均通过，未放宽断言或修改产品来回避失败。两项固定对照和上述有限自然样例不证明所有模型审核可靠，也不抹去前述失败。发布与线上状态只以最终发布记录中的实际结果为准。下节初诊模型自然生成 3 项和固定审核 5 项属于旧实现证据，不能用于证明当前服务端自述开场。
+
+## 历史阶段：5d91 补充版本发布前验证（2026-09-29）
+
+本节保留该版本发布前的实现说明、通过样例和失败记录；其中“当前”“最终”只指该阶段，最新未完成项见上节。
 
 基础改造最初以 `514fff7d8986c2299c7c1697af40e2a0e64b60e5` 发布至 [ThinkTutor 线上网站](https://thinktutor-competition.onrender.com)。Render 部署 `dep-datknemgekts73b7hijg` 于 **2026-09-29 05:28:01 UTC** 生效，包含下文首页、回答关联反馈及学习轨迹改造。[首次发布记录](../.data/release-validation/release-result.json)。补充修复的准确提交、部署状态和线上复查结果另记于[补充发布记录](../.data/release-validation/release-followup.json)，不以本地测试代替部署确认。
 

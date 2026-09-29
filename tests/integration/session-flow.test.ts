@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 import { MockAIProvider } from "@/lib/ai/mock-provider";
 import { prisma } from "@/lib/db";
 import { AIProviderError } from "@/lib/errors";
+import * as requestLimits from "@/lib/request-limits";
 import { createTestUser } from "../factories";
 import { knowledgeRuntimeSchema } from "@/lib/knowledge/runtime-schemas";
 import { learningJourneySteps } from "@/lib/learning-journey";
@@ -81,7 +82,9 @@ describe("learning session integration flow", () => {
     const user = await createTestUser("flow-complete");
     const created = await createLearningSession(user.id, task);
     expect(created.session.phase).toBe("DIAGNOSIS");
-    expect(created.messages[0]?.content).toContain("系统性风险");
+    expect(created.session.topic).toBe(task.topic);
+    expect(created.messages[0]?.content).toContain("用自己的话");
+    expect(created.messages[0]?.content).toContain("不知道");
 
     const afterDiagnosis = await submitLearningAnswer(created.session.id, {
       answer: "我认为系统性风险是单个机构问题扩散到整个市场。",
@@ -279,33 +282,38 @@ describe("learning session integration flow", () => {
       const promise = new Promise<void>((done) => { resolve = done; });
       return { promise, resolve };
     };
-    const diagnosticEntered = deferred();
-    const releaseDiagnostic = deferred();
+    const firstRetryEntered = deferred();
+    const releaseFirstRetry = deferred();
     const secondRetryEntered = deferred();
     const releaseSecondRetry = deferred();
-    const diagnosticImpl = MockAIProvider.prototype.createDiagnosticQuestion;
     const retryImpl = MockAIProvider.prototype.createRetryTask;
-    vi.spyOn(MockAIProvider.prototype, "createDiagnosticQuestion").mockImplementation(async (input) => {
-      if (input.requestId === "retry-race-a:diagnostic") { diagnosticEntered.resolve(); await releaseDiagnostic.promise; }
-      return diagnosticImpl.call(new MockAIProvider(), input);
-    });
-    vi.spyOn(MockAIProvider.prototype, "createRetryTask").mockImplementation(async (input) => {
+    // Simulate overlapping workers or an expired lease so the transaction must
+    // arbitrate two requests that have both read the same OPEN gap.
+    vi.spyOn(requestLimits, "withAIRequestProtection").mockImplementation(async (_user, _key, operation) => operation());
+    const retry = vi.spyOn(MockAIProvider.prototype, "createRetryTask").mockImplementation(async (input) => {
+      if (input.requestId === "retry-race-a") { firstRetryEntered.resolve(); await releaseFirstRetry.promise; }
       if (input.requestId === "retry-race-b") { secondRetryEntered.resolve(); await releaseSecondRetry.promise; }
       return retryImpl.call(new MockAIProvider(), input);
     });
     const first = createRetrySession(parent.id, { clientRequestId: "retry-race-a" });
-    await diagnosticEntered.promise;
+    await firstRetryEntered.promise;
     const second = createRetrySession(parent.id, { clientRequestId: "retry-race-b" });
     const secondResult = second.then((result) => ({ result, error: null }), (error: unknown) => ({ result: null, error }));
     await secondRetryEntered.promise;
-    releaseDiagnostic.resolve();
-    await first;
+    expect(retry).toHaveBeenCalledTimes(2);
+    expect(await prisma.learningSession.count({ where: { parentSessionId: parent.id } })).toBe(0);
+    releaseFirstRetry.resolve();
+    const winner = await first;
+    expect(await prisma.learningSession.count({ where: { parentSessionId: parent.id } })).toBe(1);
     releaseSecondRetry.resolve();
     const losing = await secondResult;
     expect(losing.error).toMatchObject({ code: "CONFLICT" });
     expect(losing.result).toBeNull();
+    expect(await prisma.learningGap.findFirstOrThrow({ where: { report: { sessionId: parent.id } } })).toMatchObject({ status: "IN_PROGRESS" });
     expect(await prisma.learningSession.count({ where: { parentSessionId: parent.id } })).toBe(1);
     expect(await prisma.message.count({ where: { sessionId: parent.id, clientRequestId: { in: ["retry-race-a", "retry-race-b"] } } })).toBe(1);
+    expect(await prisma.message.findUniqueOrThrow({ where: { clientRequestId: "retry-race-a" } })).toMatchObject({ metadata: { retrySessionId: winner.session.id } });
+    expect(await prisma.message.findUnique({ where: { clientRequestId: "retry-race-b" } })).toBeNull();
   });
 
   it("returns the same session for duplicate creation request ids", async () => {

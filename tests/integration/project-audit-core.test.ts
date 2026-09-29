@@ -44,22 +44,22 @@ describe("2026-09-20 core learning audit regressions", () => {
     expect(Date.parse(persisted.messages.at(-2)!.createdAt)).toBeLessThan(Date.parse(persisted.messages.at(-1)!.createdAt));
   });
 
-  it("creates one active assignment attempt when distinct requests finish AI work together", async () => {
+  it("creates one active assignment attempt when distinct creation requests reach the save boundary together", async () => {
     vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false");
     const student = await createTestUser("audit-assignment-concurrent");
     const assignment = await assignedTask(student.id);
-    // Database correctness must survive multiple workers or an expired AI lease.
-    vi.spyOn(requestLimits, "withAIRequestProtection").mockImplementation(async (_user, _key, operation) => operation());
-    const original = MockAIProvider.prototype.createDiagnosticQuestion;
+    // Database correctness must survive multiple workers or an expired creation lease.
     let entered = 0;
     let release!: () => void;
     const bothEntered = new Promise<void>((resolve) => { release = resolve; });
-    vi.spyOn(MockAIProvider.prototype, "createDiagnosticQuestion").mockImplementation(async function (input) {
+    const protection = vi.spyOn(requestLimits, "withAIRequestProtection").mockImplementation(async (_user, _key, operation) => {
       if (++entered === 2) release();
       await bothEntered;
-      return original.call(new MockAIProvider(), input);
+      return operation();
     });
     const sessions = await Promise.all([1, 2].map((index) => createLearningSession(student.id, { ...task, assignmentId: assignment.id }, { clientRequestId: `start-${assignment.id}-${index}` })));
+    expect(entered).toBe(2);
+    expect(protection).toHaveBeenCalledTimes(2);
     expect(new Set(sessions.map((session) => session.session.id)).size).toBe(1);
     expect(await prisma.learningSession.count({ where: { userId: student.id, assignmentId: assignment.id } })).toBe(1);
   });
@@ -109,9 +109,9 @@ describe("2026-09-20 core learning audit regressions", () => {
     const assignment = await assignedTask(student.id);
     if (status === "REMOVED") await prisma.enrollment.updateMany({ where: { classroomId: assignment.classroomId, userId: student.id }, data: { status } });
     else await prisma.classroom.update({ where: { id: assignment.classroomId }, data: { status } });
-    const diagnostic = vi.spyOn(MockAIProvider.prototype, "createDiagnosticQuestion");
+    const protection = vi.spyOn(requestLimits, "withAIRequestProtection");
     await expect(createLearningSession(student.id, { ...task, assignmentId: assignment.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(diagnostic).not.toHaveBeenCalled();
+    expect(protection).not.toHaveBeenCalled();
     expect(await prisma.learningSession.count({ where: { assignmentId: assignment.id } })).toBe(0);
   });
 
@@ -130,15 +130,18 @@ describe("2026-09-20 core learning audit regressions", () => {
     expect(await getSessionPayload(id)).toEqual(before);
   });
 
-  it("rechecks assignment membership after model work before saving the new attempt", async () => {
+  it("rechecks assignment membership after protected creation work before saving the new attempt", async () => {
     const student = await createTestUser("audit-assignment-revocation");
     const assignment = await assignedTask(student.id);
-    const original = MockAIProvider.prototype.createDiagnosticQuestion;
-    vi.spyOn(MockAIProvider.prototype, "createDiagnosticQuestion").mockImplementationOnce(async function (input) {
+    const originalProtection = requestLimits.withAIRequestProtection;
+    const protection = vi.spyOn(requestLimits, "withAIRequestProtection").mockImplementationOnce(async (userId, key, operation, calls) => {
+      const result = await originalProtection(userId, key, operation, calls);
       await prisma.enrollment.updateMany({ where: { classroomId: assignment.classroomId, userId: student.id }, data: { status: "REMOVED" } });
-      return original.call(new MockAIProvider(), input);
+      return result;
     });
     await expect(createLearningSession(student.id, { ...task, assignmentId: assignment.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(protection).toHaveBeenCalledTimes(1);
+    expect(await prisma.enrollment.findFirstOrThrow({ where: { classroomId: assignment.classroomId, userId: student.id } })).toMatchObject({ status: "REMOVED" });
     expect(await prisma.learningSession.count({ where: { assignmentId: assignment.id } })).toBe(0);
   });
 });

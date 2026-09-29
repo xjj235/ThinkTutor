@@ -6,7 +6,7 @@ import { buildLearningContext } from "@/lib/ai/context-builder";
 import type { AuthUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 import { getStudentKnowledgeCatalog } from "@/lib/knowledge/student-catalog";
-import { createLearningSession, createRetrySession } from "@/lib/session-service";
+import { createLearningSession, createRetrySession, submitLearningAnswer } from "@/lib/session-service";
 import { createTestUser } from "../factories";
 
 const auth = vi.hoisted(() => ({ user: null as AuthUser | null }));
@@ -87,6 +87,7 @@ describe("student knowledge selections create ordinary learning sessions", () =>
     const topic = getStudentKnowledgeCatalog()[0];
     const unit = topic.units[2];
     const diagnostic = vi.spyOn(MockAIProvider.prototype, "createDiagnosticQuestion");
+    const coach = vi.spyOn(MockAIProvider.prototype, "createCoachTurn");
     const created = await createLearningSession(userId(), {
       ...clientTask, knowledgeSelection: { topicId: topic.id, unitId: unit.id },
     });
@@ -97,7 +98,9 @@ describe("student knowledge selections create ordinary learning sessions", () =>
     expect(saved.chapter).toBe(topic.title);
     expect(saved.knowledgeRuntime).toBeNull();
     expect(saved).not.toHaveProperty("knowledgeSelection");
-    const request = diagnostic.mock.calls.at(-1)?.[0];
+    expect(diagnostic).not.toHaveBeenCalled();
+    await submitLearningAnswer(created.session.id, { answer: "不知道", clientRequestId: crypto.randomUUID() });
+    const request = coach.mock.calls.at(-1)?.[0];
     expect(request?.task.topic).toBe(saved.topic);
     expect(request?.retrievedContext?.[0]).toContain(unit.id);
     expect(request?.knowledgePolicy).toBe("COURSE_KNOWLEDGE_FIRST");
@@ -107,11 +110,14 @@ describe("student knowledge selections create ordinary learning sessions", () =>
     vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false");
     const topic = getStudentKnowledgeCatalog()[0];
     const diagnostic = vi.spyOn(MockAIProvider.prototype, "createDiagnosticQuestion");
+    const coach = vi.spyOn(MockAIProvider.prototype, "createCoachTurn");
     const created = await createLearningSession(userId(), { ...clientTask, knowledgeSelection: { topicId: topic.id } });
     expect(created.session.topic).toBe(topic.title);
     expect(created.session.phase).toBe("DIAGNOSIS");
-    expect(diagnostic.mock.calls.at(-1)?.[0].retrievedContext).toEqual([]);
-    expect(diagnostic.mock.calls.at(-1)?.[0].knowledgePolicy).toBe("MODEL_FALLBACK");
+    expect(diagnostic).not.toHaveBeenCalled();
+    await submitLearningAnswer(created.session.id, { answer: "不知道", clientRequestId: crypto.randomUUID() });
+    expect(coach.mock.calls.at(-1)?.[0].retrievedContext).toEqual([]);
+    expect(coach.mock.calls.at(-1)?.[0].knowledgePolicy).toBe("MODEL_FALLBACK");
   });
 
   it.each([
@@ -167,8 +173,9 @@ describe("student knowledge selections create ordinary learning sessions", () =>
       topic: "系统性风险", objective: repairObjective, rationale: "围绕最高优先级缺口练习。",
     });
     const diagnostic = vi.spyOn(MockAIProvider.prototype, "createDiagnosticQuestion");
+    const coach = vi.spyOn(MockAIProvider.prototype, "createCoachTurn");
     let parentSessionId = original.session.id;
-    for (const attempt of [1, 2]) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
       await completeWithGapFixture(parentSessionId, repairObjective);
       const request = { clientRequestId: crypto.randomUUID() };
       const retry = await createRetrySession(parentSessionId, request);
@@ -177,11 +184,12 @@ describe("student knowledge selections create ordinary learning sessions", () =>
       expect(retry.session.parentSessionId).toBe(parentSessionId);
       const saved = await prisma.learningSession.findUniqueOrThrow({ where: { id: retry.session.id } });
       expect(saved.knowledgeRuntime).toBeNull();
-      expect(diagnostic).toHaveBeenCalledTimes(attempt);
-      const diagnosticInput = diagnostic.mock.calls.at(-1)?.[0];
-      expect(diagnosticInput?.task.topic).toBe(original.session.topic);
-      expect(diagnosticInput?.retrievedContext?.[0]).toContain(unit.id);
-      expect(diagnosticInput?.retrievedContext?.join("\n")).not.toMatch(/(?:C|SQ)_SR_/u);
+      expect(diagnostic).not.toHaveBeenCalled();
+      await submitLearningAnswer(retry.session.id, { answer: "不知道", clientRequestId: crypto.randomUUID() });
+      const coachInput = coach.mock.calls.at(-1)?.[0];
+      expect(coachInput?.task.topic).toBe(original.session.topic);
+      expect(coachInput?.retrievedContext?.[0]).toContain(unit.id);
+      expect(coachInput?.retrievedContext?.join("\n")).not.toMatch(/(?:C|SQ)_SR_/u);
       const duplicate = await createRetrySession(parentSessionId, request);
       expect(duplicate.duplicate).toBe(true);
       expect(duplicate.session.id).toBe(retry.session.id);
@@ -202,6 +210,6 @@ describe("student knowledge selections create ordinary learning sessions", () =>
     expect(duplicatePayload.session.id).toBe(firstPayload.session.id);
     expect(duplicatePayload.session.topic).toBe(firstTopic.title);
     expect(await prisma.learningSession.count({ where: { userId: userId(), clientRequestId } })).toBe(1);
-    expect(diagnostic).toHaveBeenCalledTimes(1);
+    expect(diagnostic).not.toHaveBeenCalled();
   });
 });

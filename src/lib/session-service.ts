@@ -20,6 +20,7 @@ import {
 } from "./contracts";
 import { getAIProvider } from "./ai";
 import { requireAnswerFeedback } from "./ai/coach-feedback";
+import { buildInitialSelfExplanation } from "./initial-question";
 import { buildLearningContext } from "./ai/context-builder";
 import { prisma } from "./db";
 import { AppError } from "./errors";
@@ -297,7 +298,7 @@ export async function createLearningSession(userId: string, input: CreateSession
     const protectionKey = resolved.assignmentId ? `assignment-start:${userId}:${resolved.assignmentId}` : `create:${requestId}`;
     const manifest = await findKnowledgeManifest(resolved.task.topic, isStudentKnowledgeTaskTopic(resolved.task.topic) ? {} : resolved.task);
     let runtime = manifest ? initialKnowledgeRuntime(createVersionSnapshot(manifest)) : null;
-    const context = await buildLearningContext({
+    const context = manifest ? await buildLearningContext({
       courseId: resolved.task.courseId,
       chapterId: resolved.task.chapterId,
       topic: resolved.task.topic,
@@ -305,14 +306,17 @@ export async function createLearningSession(userId: string, input: CreateSession
       phase: "DIAGNOSIS",
       knowledgeRuntime: runtime,
       messages: [],
-    });
-    const diagnostic = runtime?.v12 && manifest ? initialCuratedDiagnostic() : await withAIRequestProtection(userId, protectionKey, () => getAIProvider().createDiagnosticQuestion({
+    }) : undefined;
+    // Before a first answer exists, invite the learner's own understanding.
+    // Keep start-request rate/lock protection, without inventing AI evidence or
+    // spending a model request to restate the reference material as a question.
+    const diagnostic = runtime?.v12 && manifest ? initialCuratedDiagnostic() : await withAIRequestProtection(userId, protectionKey, () => manifest ? getAIProvider().createDiagnosticQuestion({
       task: resolved.task,
       userId,
       requestId,
-      retrievedContext: context.retrievedContext,
-      knowledgePolicy: context.knowledgePolicy,
-    }), 2);
+      retrievedContext: context?.retrievedContext,
+      knowledgePolicy: context?.knowledgePolicy,
+    }) : Promise.resolve(buildInitialSelfExplanation()), manifest ? 2 : 1);
     if (runtime && manifest) {
       const question = manifest.diagnosticQuestions.find((item) => item.status === "published");
       if (!question) throw new AppError("CONFLICT", "当前知识版本没有可用诊断题。", 409);
@@ -655,7 +659,7 @@ export async function createRetrySession(sessionId: string, input: { clientReque
     courseId: childTask.courseId, chapterId: childTask.chapterId, topic: childTask.topic,
     objective: childTask.objective, phase: "DIAGNOSIS", messages: [],
   }) : undefined;
-  const diagnostic = manifest?.v12 ? initialCuratedDiagnostic() : await withAIRequestProtection(session.userId, `${sessionId}:retry`, () => getAIProvider().createDiagnosticQuestion({ task: childTask, userId: session.userId, requestId: `${input.clientRequestId}:diagnostic`, retrievedContext: retryContext?.retrievedContext, knowledgePolicy: retryContext?.knowledgePolicy }), 2);
+  const diagnostic = !manifest ? buildInitialSelfExplanation() : manifest.v12 ? initialCuratedDiagnostic() : await withAIRequestProtection(session.userId, `${sessionId}:retry`, () => getAIProvider().createDiagnosticQuestion({ task: childTask, userId: session.userId, requestId: `${input.clientRequestId}:diagnostic`, retrievedContext: retryContext?.retrievedContext, knowledgePolicy: retryContext?.knowledgePolicy }), 2);
   let runtime = manifest ? initialKnowledgeRuntime(createVersionSnapshot(manifest)) : null;
   if (runtime && manifest) {
     const previous = session.knowledgeRuntime ? knowledgeRuntimeSchema.parse(session.knowledgeRuntime) : null;

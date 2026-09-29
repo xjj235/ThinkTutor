@@ -63,12 +63,13 @@ describe("all forty selected knowledge units complete a persisted grounded learn
     }, { clientRequestId: crypto.randomUUID() });
     const id = created.session.id;
     expect(created.session).toMatchObject({ topic: selected.topic, objective: selected.objective, phase: "DIAGNOSIS", socraticTurns: 0 });
-    expect(created.messages[0].content).toContain(selected.topic);
+    expect(created.messages[0].content).toContain("用自己的话");
     expect(created.messages[0].learningFeedback).toBeUndefined();
-    expectSelectedContext(diagnostic.mock.calls[0]?.[0].retrievedContext, selected.unitId);
-    expect(diagnostic.mock.calls[0]?.[0].knowledgePolicy).toBe("COURSE_KNOWLEDGE_FIRST");
+    expect(diagnostic).not.toHaveBeenCalled();
 
     const uncertain = await submitLearningAnswer(id, { answer: "不知道", clientRequestId: crypto.randomUUID() });
+    expectSelectedContext(coach.mock.calls[0]?.[0].retrievedContext, selected.unitId);
+    expect(coach.mock.calls[0]?.[0].knowledgePolicy).toBe("COURSE_KNOWLEDGE_FIRST");
     expect(uncertain.session).toMatchObject({ phase: "SOCRATIC", socraticTurns: 0 });
     expect(uncertain.messages.at(-1)?.questionType).toBe("SCAFFOLDED_HINT");
     expect(uncertain.messages.at(-1)?.learningFeedback?.answerQuote).toBe("不知道");
@@ -133,9 +134,10 @@ describe("all forty selected knowledge units complete a persisted grounded learn
     const retry = await createRetrySession(id, { clientRequestId: crypto.randomUUID() });
     expect(retry.session).toMatchObject({ topic: selected.topic, phase: "DIAGNOSIS", parentSessionId: id });
     expect(retry.session.objective).not.toBe(selected.objective);
-    expect(retry.messages[0].content).toContain(selected.topic);
-    expect(diagnostic).toHaveBeenCalledTimes(2);
-    expectSelectedContext(diagnostic.mock.calls[1]?.[0].retrievedContext, selected.unitId);
+    expect(retry.messages[0].content).toContain("用自己的话");
+    expect(diagnostic).not.toHaveBeenCalled();
+    await submitLearningAnswer(retry.session.id, { answer: "不知道", clientRequestId: crypto.randomUUID() });
+    expectSelectedContext(coach.mock.calls.at(-1)?.[0].retrievedContext, selected.unitId);
     const savedRetry = await prisma.learningSession.findUniqueOrThrow({ where: { id: retry.session.id } });
     expect(savedRetry).toMatchObject({ source: "RETRY", topic: selected.topic, knowledgeRuntime: null });
     if (!savedRetry.sourceGapId) throw new Error("Retry must link to the selected report gap");
