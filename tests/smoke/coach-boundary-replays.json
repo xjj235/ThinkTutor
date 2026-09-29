@@ -1,0 +1,62 @@
+{
+  "records": [
+    {
+      "origin": "real_generation",
+      "scenario": "incorrect-condition",
+      "answer": "我认为任何三角形都能用勾股定理，只要知道两条边就能求第三边。",
+      "output": {
+        "assistantMessage": "对于两条边的夹角不是直角的三角形，勾股定理能否直接使用，依据是什么？",
+        "questionType": "ASSUMPTION_TEST",
+        "learnerState": {
+          "masteryEstimate": 10,
+          "confirmedPoints": [],
+          "gaps": [
+            "未说明勾股定理的适用条件",
+            "把任意三角形都当作可直接使用勾股定理的情形"
+          ],
+          "misconceptions": [
+            "认为任何三角形都能用勾股定理，只要知道两条边就能求第三边"
+          ]
+        },
+        "nextAction": "ASK_QUESTION",
+        "transitionReason": "当前需检验学生是否把勾股定理误用于非直角三角形，并让其说明适用条件依据。",
+        "learningFeedback": {
+          "answerQuote": "我认为任何三角形都能用勾股定理，只要知道两条边就能求第三边。",
+          "observation": "你刚才提到任何三角形都能用勾股定理，并认为知道两条边就能求第三边；你还没有说明使用它时需要先满足什么条件。",
+          "focus": "接下来先试着说明：当两条边的夹角不是直角时，你能不能仍直接代入勾股定理求第三边，依据是什么。",
+          "whyItMatters": "这一步能帮你判断勾股定理的适用是否受三角形类型限制，而不是只凭已知两边就套用。",
+          "progress": null
+        }
+      }
+    },
+    {
+      "origin": "real_generation",
+      "scenario": "revision-before",
+      "answer": "我原来以为所有三角形都适用这个等式，没有关注角的条件。",
+      "output": {
+        "assistantMessage": "你现在已经注意到角的条件了；判断一个具体三角形能否直接使用“两直角边平方和等于斜边平方”这条规则，需要先确认什么条件，依据是什么？",
+        "questionType": "ASSUMPTION_TEST",
+        "learnerState": {
+          "masteryEstimate": 20,
+          "confirmedPoints": [
+            "意识到并非所有三角形都适用该等式，需要关注角的条件"
+          ],
+          "gaps": [
+            "尚未说明勾股定理成立所要求的具体角条件"
+          ],
+          "misconceptions": []
+        },
+        "nextAction": "ASK_QUESTION",
+        "transitionReason": "学生已修正“所有三角形都适用”的旧想法，但仍未说明具体适用条件，需要检验其能否明确该规则的直接使用前提。",
+        "learningFeedback": {
+          "answerQuote": "我原来以为所有三角形都适用这个等式，没有关注角的条件。",
+          "observation": "你刚才提到原来以为所有三角形都适用这个等式，并且已经意识到自己没有关注角的条件；但你还没有说明具体需要满足什么角的条件。",
+          "focus": "接下来先试着说出这个等式成立所依赖的角条件，并指出哪条边对应斜边。",
+          "whyItMatters": "明确这一点，才能判断一个具体三角形能否直接使用这个等式，而不是把它套到所有三角形上。",
+          "progress": null
+        }
+      }
+    }
+  ],
+  "sourceArtifact": ".data/coaching-live/recheck-2026-09-29T06-56-22-830Z.json"
+}

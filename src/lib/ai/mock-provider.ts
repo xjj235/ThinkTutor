@@ -10,6 +10,7 @@ import {
 } from "../contracts";
 import { isLowInformationAnswer } from "../state-machine";
 import { requireAnswerFeedback } from "./coach-feedback";
+import { normalizeInitialDiagnostic } from "./diagnostic";
 import type { LearningFeedback } from "../learning-feedback";
 import { retryReviewCandidateSchema, retryReviewInputSchema, type RetryReviewInput } from "../retry-review";
 import { mockAssessLearningTurn } from "./mock-assessment-v12";
@@ -98,13 +99,13 @@ export class MockAIProvider implements AIProvider {
     input: DiagnosticInput,
   ): Promise<DiagnosticQuestion> {
     const topic = topicLabel(input.task.topic);
-    return diagnosticQuestionSchema.parse({
+    return normalizeInitialDiagnostic(diagnosticQuestionSchema.parse({
       assistantMessage: `在开始前，你现在如何理解“${topic}”？`,
       questionType: "CONCEPT_CLARIFICATION",
       learnerState: { masteryEstimate: 0, confirmedPoints: [], gaps: [topic], misconceptions: [] },
       nextAction: "ASK_QUESTION",
       transitionReason: "需要先确认学生的当前理解。",
-    });
+    }));
   }
 
   async createCoachTurn(input: CoachTurnInput): Promise<CoachTurn> {

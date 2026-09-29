@@ -312,7 +312,7 @@ export async function createLearningSession(userId: string, input: CreateSession
       requestId,
       retrievedContext: context.retrievedContext,
       knowledgePolicy: context.knowledgePolicy,
-    }));
+    }), 2);
     if (runtime && manifest) {
       const question = manifest.diagnosticQuestions.find((item) => item.status === "published");
       if (!question) throw new AppError("CONFLICT", "当前知识版本没有可用诊断题。", 409);
@@ -655,7 +655,7 @@ export async function createRetrySession(sessionId: string, input: { clientReque
     courseId: childTask.courseId, chapterId: childTask.chapterId, topic: childTask.topic,
     objective: childTask.objective, phase: "DIAGNOSIS", messages: [],
   }) : undefined;
-  const diagnostic = manifest?.v12 ? initialCuratedDiagnostic() : await withAIRequestProtection(session.userId, `${sessionId}:retry`, () => getAIProvider().createDiagnosticQuestion({ task: childTask, userId: session.userId, requestId: `${input.clientRequestId}:diagnostic`, retrievedContext: retryContext?.retrievedContext, knowledgePolicy: retryContext?.knowledgePolicy }));
+  const diagnostic = manifest?.v12 ? initialCuratedDiagnostic() : await withAIRequestProtection(session.userId, `${sessionId}:retry`, () => getAIProvider().createDiagnosticQuestion({ task: childTask, userId: session.userId, requestId: `${input.clientRequestId}:diagnostic`, retrievedContext: retryContext?.retrievedContext, knowledgePolicy: retryContext?.knowledgePolicy }), 2);
   let runtime = manifest ? initialKnowledgeRuntime(createVersionSnapshot(manifest)) : null;
   if (runtime && manifest) {
     const previous = session.knowledgeRuntime ? knowledgeRuntimeSchema.parse(session.knowledgeRuntime) : null;
