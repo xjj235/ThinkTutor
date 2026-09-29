@@ -39,14 +39,15 @@ async function checkPage(page: Page, path: string): Promise<PageMeasure> {
   return { path, ...measured };
 }
 
-test("public pages retain readable text and the real visual asset", async ({ page }, info) => {
+test("public pages retain readable text and a clear learning entry", async ({ page }, info) => {
   test.setTimeout(120_000);
   const measures: PageMeasure[] = [];
   for (const path of ["/", "/login", "/register", "/about", "/privacy", "/terms"]) {
     await page.goto(path);
     measures.push(await checkPage(page, path));
     if (path === "/") {
-      expect(await page.locator(".public-hero-image").evaluate(element => element instanceof HTMLImageElement && element.complete && element.naturalWidth > 0)).toBe(true);
+      await expect(page.getByRole("link", { name: "新建学习任务", exact: true })).toBeInViewport();
+      await expect(page.locator("main .button")).toHaveCount(1);
     }
     await page.screenshot({ path: info.outputPath(`${path.replaceAll("/", "_") || "home"}.png`), fullPage: false });
   }
@@ -112,9 +113,10 @@ for (const { role, entry, routes } of roles) {
       }
     }
     await page.goto(entry);
-    if ((page.viewportSize()?.width ?? 1440) < 960) {
-      await page.getByRole("button", { name: "打开主导航" }).click();
-      const navigation = page.getByRole("navigation", { name: "主导航", exact: true });
+    if (role === "student" || (page.viewportSize()?.width ?? 1440) < 960) {
+      const toggle = page.getByRole("button", { name: role === "student" ? "个人中心" : "打开主导航", exact: true });
+      await toggle.click();
+      const navigation = page.getByRole("navigation", { name: role === "student" ? "个人中心" : "主导航", exact: true });
       await expect(navigation).toBeVisible();
       for (const link of await navigation.getByRole("link").all()) {
         const rect = await link.boundingBox();
@@ -123,7 +125,7 @@ for (const { role, entry, routes } of roles) {
       }
       await page.screenshot({ path: info.outputPath("navigation-expanded.png") });
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("button", { name: "打开主导航" })).toBeFocused();
+      await expect(page.getByRole("button", { name: role === "student" ? "个人中心" : "打开主导航", exact: true })).toBeFocused();
     }
     await writeFile(info.outputPath("readability.json"), JSON.stringify(measures, null, 2));
     console.log(JSON.stringify({ role, viewport: info.project.name, pages: measures.length }));

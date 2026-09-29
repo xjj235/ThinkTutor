@@ -19,6 +19,7 @@ import {
   type SessionPayload,
 } from "./contracts";
 import { getAIProvider } from "./ai";
+import { requireAnswerFeedback } from "./ai/coach-feedback";
 import { buildLearningContext } from "./ai/context-builder";
 import { prisma } from "./db";
 import { AppError } from "./errors";
@@ -74,13 +75,15 @@ function metadataFromCoach(coach: {
   transitionReason: string;
   knowledgePolicy?: MessageMetadata["knowledgePolicy"];
   webSources?: MessageMetadata["webSources"];
-}): MessageMetadata {
+  learningFeedback?: MessageMetadata["learningFeedback"];
+}, feedbackForMessageId?: string): MessageMetadata {
   return {
     learnerState: coach.learnerState,
     nextAction: coach.nextAction,
     transitionReason: coach.transitionReason,
     ...(coach.knowledgePolicy ? { knowledgePolicy: coach.knowledgePolicy } : {}),
     ...(coach.webSources?.length ? { webSources: coach.webSources } : {}),
+    ...(coach.learningFeedback && feedbackForMessageId ? { learningFeedback: coach.learningFeedback, feedbackForMessageId } : {}),
   };
 }
 
@@ -414,7 +417,8 @@ export async function submitLearningAnswer(sessionId: string, input: { answer: s
     retrievedContext: context.retrievedContext,
     knowledgePolicy: context.knowledgePolicy,
     selectedAction: action ?? undefined,
-  }));
+  }), 3);
+  coach.learningFeedback = requireAnswerFeedback(coach.learningFeedback, input.answer, session.messages.filter((message) => message.role === "USER").map((message) => message.content));
   if (action) {
     coach.assistantMessage = action.assistantMessage;
     coach.questionType = action.questionType;
@@ -441,8 +445,8 @@ export async function submitLearningAnswer(sessionId: string, input: { answer: s
       });
       if (changed.count !== 1) throw new AppError("CONFLICT", "会话状态已变化，请刷新后重试。", 409, true);
       const answerCreatedAt = nextMessageCreatedAt(session.messages);
-      await tx.message.create({ data: { sessionId, role: "USER", phase: session.phase, content: input.answer, clientRequestId: input.clientRequestId, createdAt: answerCreatedAt } });
-      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase: transition.phase, content: instruction ? feynmanContent(instruction) : coach.assistantMessage, questionType: instruction ? null : coach.questionType, metadata: asJson(metadataFromCoach(coach)), createdAt: new Date(answerCreatedAt.getTime() + 1) } });
+      const answerMessage = await tx.message.create({ data: { sessionId, role: "USER", phase: session.phase, content: input.answer, clientRequestId: input.clientRequestId, createdAt: answerCreatedAt } });
+      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase: transition.phase, content: instruction ? `接下来用独立讲解检验你目前的理解，并尝试补上刚才指出的关注点；进入这一步不代表已经掌握。\n\n${feynmanContent(instruction)}` : coach.assistantMessage, questionType: instruction ? null : coach.questionType, metadata: asJson(metadataFromCoach(coach, answerMessage.id)), createdAt: new Date(answerCreatedAt.getTime() + 1) } });
       return "created" as const;
     }, { isolationLevel: "ReadCommitted" });
     if (result === "duplicate") return { ...(await getSessionPayload(sessionId)), duplicate: true };

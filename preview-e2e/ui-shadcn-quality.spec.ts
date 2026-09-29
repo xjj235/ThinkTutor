@@ -283,8 +283,8 @@ async function measureStyles(page: Page) {
         };
       });
     });
-    // Opaque primary buttons can be measured directly even over the photographic hero.
-    const heroPrimaryButtons = [...document.querySelectorAll(".public-hero .hero-actions .button:not(.button-secondary)")]
+    // Measure the home screen's single primary learning action in either theme.
+    const heroPrimaryButtons = [...document.querySelectorAll(".learning-entry-action")]
       .filter(element => visible(element) && !disabled(element)).map(element => {
         const style = styleOf(element), rect = element.getBoundingClientRect();
         const background = colorOf(style.backgroundColor);
@@ -459,8 +459,8 @@ for (const surface of surfaces) {
     if (!path) throw new Error(`Missing route for ${surface.name}`);
     await visit(page, path);
     if (surface.name === "public-home") {
-      await expect(page.locator(".public-hero-image")).toBeVisible();
-      await expect.poll(() => page.locator(".public-hero-image").evaluate(element => element instanceof HTMLImageElement && element.complete && element.naturalWidth > 0)).toBe(true);
+      await expect(page.getByRole("link", { name: "新建学习任务", exact: true })).toBeInViewport();
+      await expect(page.locator("main .button")).toHaveCount(1);
     }
     for (const theme of ["light", "dark"] as const) {
       await setTheme(page, theme);
@@ -668,7 +668,7 @@ test("focused: dark home primary hover keeps contrast and size, and data row foc
   test.setTimeout(120_000);
   await visit(page, "/");
   await setTheme(page, "dark");
-  const primary = page.locator(".public-hero .hero-actions .button:not(.button-secondary)");
+  const primary = page.locator(".learning-entry-action");
   await expect(primary).toHaveCount(1);
   await expect(primary).toBeVisible();
   await primary.scrollIntoViewIfNeeded();
@@ -683,13 +683,14 @@ test("focused: dark home primary hover keeps contrast and size, and data row foc
   await attachJSON(info, "dark-home-primary-hover-comparison", { before, after });
   expect.soft(before.hovered, "Baseline must be captured without hover").toBe(false);
   expect.soft(after.hovered).toBe(true);
-  expect.soft(after.ratio, "Opaque primary button colors must be measured despite the hero exclusion").not.toBeNull();
+  expect.soft(after.ratio, "Opaque primary button colors must be measured").not.toBeNull();
   expect.soft(after.ratio ?? 0, "Dark home primary hover text contrast").toBeGreaterThanOrEqual(4.5);
   expect.soft(after.width, "Hover must preserve button width").toBe(before.width);
   expect.soft(after.height, "Hover must preserve button height").toBe(before.height);
 
   await login(page, "student");
   await assertTheme(page, "dark");
+  await visit(page, "/history");
   const row = page.locator("main a.data-row").first();
   await expect(row).toBeVisible();
   await row.scrollIntoViewIfNeeded();

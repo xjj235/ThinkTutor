@@ -7,12 +7,15 @@ import { executableRoutingRules, targetVerificationRules } from "./coaching-rule
 import { supportedGapRouting } from "./coaching-confidence";
 import { createTeachingDecisionSchema, teachingSelectionInputSchema, type TeachingSelection } from "../ai/teaching-schema";
 import type { QuestionType } from "../contracts";
+import type { LearningFeedback } from "../learning-feedback";
+import { buildCoachingFeedback } from "./coaching-feedback";
 
 export interface CoachingOptions {
   kind: CoachingKind;
   content: string;
   learnerLevel: string;
   studentContent?: string;
+  answerMessageId?: string;
   profile?: CoachingProfile;
   recentTurns?: TeachingSelection["recentTurns"];
 }
@@ -22,6 +25,7 @@ export interface PreparedCoaching {
   choices: Array<{ id: string; template: string; rule: EvidenceRule | null; questionType?: QuestionType; framed: boolean }>;
   content: string;
   decisionBasis: CoachingDecisionBasis;
+  learningFeedback?: LearningFeedback;
 }
 
 export function diagnoseCoaching(manifest: KnowledgeManifest, runtime: KnowledgeRuntime, learnerLevel: string): CoachingProfile {
@@ -139,7 +143,8 @@ export function prepareCoaching(manifest: KnowledgeManifest, runtime: KnowledgeR
     evidence: runtime.v12.observations.filter((item) => item.ref.messageId === diagnosed.basisMessageId && diagnosed.observedEvidenceIds.includes(item.evidenceId)).map((item) => ({ evidenceId: item.evidenceId, ...item.ref })),
     questionRequirements: null,
   });
-  return { input, choices, content: options.content, dimensionLabel: policy.dimensions[profile.dimension].label, decisionBasis };
+  const learningFeedback = buildCoachingFeedback(manifest, runtime, { kind: options.kind, profile: diagnosed, basis: decisionBasis, studentContent: options.studentContent, answerMessageId: options.answerMessageId });
+  return { input, choices, content: options.content, dimensionLabel: policy.dimensions[profile.dimension].label, decisionBasis, learningFeedback };
 }
 
 export function recordCoaching(runtime: KnowledgeRuntime, prepared: PreparedCoaching, decision: CoachingDecision, meta: { requestId: string; now: string }, content = prepared.content) {
@@ -154,5 +159,5 @@ export function recordCoaching(runtime: KnowledgeRuntime, prepared: PreparedCoac
     next.v12!.coachingPrompt = { questionId: runtime.currentQuestionId, stage: runtime.v12!.pedagogicalStage, text: question, rule: choice.rule };
   }
   const focus = ["DIAGNOSIS", "QUESTION"].includes(prepared.input.kind) && prepared.choices.some((item) => !item.framed) ? `追问焦点：${prepared.dimensionLabel}` : "";
-  return { runtime: next, assistantMessage: valid.followUp ? question : [opening, focus, question].filter(Boolean).join("\n\n"), questionType: choice.questionType };
+  return { runtime: next, assistantMessage: valid.followUp ? question : [opening, focus, question].filter(Boolean).join("\n\n"), questionType: choice.questionType, learningFeedback: prepared.learningFeedback };
 }

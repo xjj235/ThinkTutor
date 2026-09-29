@@ -21,7 +21,7 @@ export async function limitRegistration(request: Request): Promise<void> {
   await consumeRateLimit(`rate:register:${requestClientKey(request)}`, env.RATE_LIMIT_REGISTER_PER_HOUR, 60 * 60);
 }
 
-export async function withAIRequestProtection<T>(userId: string, sessionKey: string, operation: () => Promise<T>, sequentialCallsPerAttempt: 1 | 2 = 1): Promise<T> {
+export async function withAIRequestProtection<T>(userId: string, sessionKey: string, operation: () => Promise<T>, sequentialCallsPerAttempt: 1 | 2 | 3 = 1): Promise<T> {
   const env = getServerEnv();
   await Promise.all([
     consumeRateLimit(`rate:ai:minute:${userId}`, env.RATE_LIMIT_AI_PER_MINUTE, 60),

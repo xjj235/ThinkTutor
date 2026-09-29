@@ -12,10 +12,9 @@ import { nextV12Transition, nextAfterReportSaved, recordStageTransition, confirm
 import { knowledgeRuntimeSchema } from "./runtime-schemas";
 import { resolveRuntimeManifest } from "./releases";
 import { aggregateDiagnosticLevel, applyV12Assessment, constructionReady, diagnosticFinished, mergeCaseExposureHistory, recordV12Action, selectV12Action } from "./v12-engine";
-import { buildAssessmentRules } from "./assessment-context";
+import { buildAssessmentRules, resolveAssessmentTarget } from "./assessment-context";
 import { buildV12Report } from "./v12-report";
 import { knowledgeContextBudget } from "./context-budget";
-import { buildV12TurnFeedback } from "./turn-feedback";
 import { tutorResponseSchema } from "./v12-schema";
 import { diagnoseCoaching, recordCoaching } from "./coaching";
 import { selectCoaching } from "./coaching-service";
@@ -60,7 +59,9 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
   let pendingCase: KnowledgeAction | null = null;
   let profile: CoachingProfile | undefined;
   const wasResume = Boolean(runtime.v12.resumeVerification);
-  let feedback = "";
+  // Older reflection sessions retained the preceding transfer target. Bind the
+  // existing reflection target before retrieval, assessment and evidence updates.
+  runtime.currentTargetId = resolveAssessmentTarget(manifest, runtime);
   if (hint) {
     const action = selectV12Action(manifest, runtime, now, true);
     if (!action) throw new AppError("CONFLICT", "当前提示已用完，请先尝试回答。", 409);
@@ -68,7 +69,6 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
     assistantMessage = action.assistantMessage;
     questionType = "SCAFFOLDED_HINT";
   } else {
-    const answeredRuntime = runtime;
     const target = manifest.knowledgeUnits.find((u) => u.id === runtime.currentTargetId);
     let questionText = manifest.diagnosticQuestions.find((q) => q.id === runtime.currentQuestionId)?.questionText
       ?? manifest.socraticQuestions.find((q) => q.id === runtime.currentQuestionId)?.questionText
@@ -92,7 +92,6 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
     try { runtime = applyV12Assessment(manifest, runtime, assessment, { id: messageId, content: text }, now); }
     catch { throw new AppError("AI_INVALID_OUTPUT", "证据引用未通过校验，请重试。", 502, true); }
     profile = diagnoseCoaching(manifest, runtime, session.learnerLevel);
-    feedback = buildV12TurnFeedback(manifest, answeredRuntime, runtime, messageId, profile.ruleDecision?.supportedGap);
     const s = runtime.v12!;
     const resume = s.resumeVerification;
     if (resume) {
@@ -122,6 +121,7 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
       if (s.pedagogicalStage === "REFLECTION") {
         s.reflectionTargetId = Object.values(s.misconceptionStates).find((c) => c.status !== "RESOLVED")?.claimId ?? runtime.currentTargetId;
         s.reflectionTargetId = manifest.v12.errors[s.reflectionTargetId!]?.targetId ?? s.reflectionTargetId;
+        runtime.currentTargetId = resolveAssessmentTarget(manifest, runtime);
         s.activityType = "REFLECTION_REVISION";
         const label = manifest.knowledgeUnits.find((u) => u.id === s.reflectionTargetId)?.title;
         assistantMessage = `${s.experienceLimitReached ? "本次练习已达到轮数上限，未完成的验证会保留。\n\n" : ""}${reflectionQuestion(label)}`;
@@ -147,7 +147,7 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
   // remains reserved under the existing per-student database lock.
   const presentationRuntime = pendingCase ? recordV12Action(runtime, pendingCase, now) : runtime;
   const recentTurns = session.messages.filter((m) => m.role === "USER" || m.role === "ASSISTANT").slice(-6).map((m) => ({ role: m.role as "USER" | "ASSISTANT", content: m.content.slice(0, 2000) }));
-  const coaching = await selectCoaching(manifest, presentationRuntime, { kind, content: assistantMessage, learnerLevel: session.learnerLevel, studentContent: hint ? session.messages.filter((m) => m.role === "USER").at(-1)?.content : text, profile, recentTurns }, { userId: session.userId, sessionId, requestId: `${clientRequestId}:teaching` }, sessionId);
+  const coaching = await selectCoaching(manifest, presentationRuntime, { kind, content: assistantMessage, learnerLevel: session.learnerLevel, studentContent: hint ? session.messages.filter((m) => m.role === "USER").at(-1)?.content : text, answerMessageId: hint ? undefined : messageId, profile, recentTurns }, { userId: session.userId, sessionId, requestId: `${clientRequestId}:teaching` }, sessionId);
   knowledgeRuntimeSchema.parse(runtime);
   const independentExplanationId = runtime.v12!.finalFeynmanMessageId;
   const retryReview = built ? await reviewCompletedRetry(session, {
@@ -176,13 +176,13 @@ export async function submitV12Turn(sessionId: string, text: string, clientReque
       questionType = presented.questionType ?? questionType;
       assistantMessage = presented.assistantMessage;
       if (built) built.report.summary = assistantMessage;
-      const response = tutorResponseSchema.parse({ assistantMessage: feedback && !built ? `${feedback}\n\n${assistantMessage}` : assistantMessage });
+      const response = tutorResponseSchema.parse({ assistantMessage });
       knowledgeRuntimeSchema.parse(runtime);
       const changed = await tx.learningSession.updateMany({ where: { id: sessionId, version: session.version, phase: session.phase }, data: { phase, socraticTurns: turns, knowledgeRuntime: asJson(runtime), version: { increment: 1 }, ...(built ? { completedAt: new Date() } : {}) } });
       if (changed.count !== 1) throw new AppError("CONFLICT", "会话已变化，请刷新后重试。", 409, true);
       const messageCreatedAt = nextMessageCreatedAt(session.messages);
       if (!hint) await tx.message.create({ data: { id: messageId, sessionId, role: "USER", phase: session.phase, content: text, clientRequestId, createdAt: messageCreatedAt } });
-      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase, content: response.assistantMessage, questionType, ...(hint ? { clientRequestId } : {}), createdAt: hint ? messageCreatedAt : new Date(messageCreatedAt.getTime() + 1) } });
+      await tx.message.create({ data: { sessionId, role: "ASSISTANT", phase, content: response.assistantMessage, questionType, ...(hint ? { clientRequestId } : {}), ...(presented.learningFeedback ? { metadata: asJson({ learningFeedback: presented.learningFeedback, feedbackForMessageId: messageId }) } : {}), createdAt: hint ? messageCreatedAt : new Date(messageCreatedAt.getTime() + 1) } });
       if (built) {
         const { report, evidenceLinks } = built;
         const created = await tx.learningReport.create({ data: {

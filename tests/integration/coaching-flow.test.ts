@@ -5,6 +5,7 @@ import { createLearningSession, getSessionPayload, requestHint as requestLearnin
 import { submitV12SessionEvent } from "@/lib/knowledge/v12-session-service";
 import { knowledgeRuntimeSchema } from "@/lib/knowledge/runtime-schemas";
 import { AIProviderError } from "@/lib/errors";
+import { messageMetadataSchema } from "@/lib/contracts";
 import { createTestUser } from "../factories";
 
 const task = { course: undefined, chapter: undefined, referenceText: undefined, topic: "系统性风险", objective: "解释系统性风险的判断条件。", learnerLevel: "有基础" };
@@ -19,13 +20,17 @@ describe("transactional knowledge-bounded teaching selection", () => {
     const initial = await createLearningSession(student.id, task);
     const id = initial.session.id;
     await submitV12SessionEvent(id, { action: "GOAL_CONFIRMED", clientRequestId: `${id}-goal` });
-    await submitLearningAnswer(id, { answer, clientRequestId: `${id}-answer` });
-    await requestLearningHint(id, { clientRequestId: `${id}-hint` });
+    const answered = await submitLearningAnswer(id, { answer, clientRequestId: `${id}-answer` });
+    expect(answered.messages.at(-1)?.learningFeedback?.answerQuote).toBeTruthy();
+    expect(answered.messages.at(-1)?.feedbackForMessageId).toBe(answered.messages.at(-2)?.id);
+    const hinted = await requestLearningHint(id, { clientRequestId: `${id}-hint` });
+    expect(hinted.messages.at(-1)?.learningFeedback).toBeUndefined();
     const calls = spy.mock.calls.length;
     const duplicate = await requestLearningHint(id, { clientRequestId: `${id}-hint` });
     expect(duplicate.duplicate).toBe(true);
     expect(spy.mock.calls).toHaveLength(calls);
-    await submitV12SessionEvent(id, { action: "SESSION_RESUMED", clientRequestId: `${id}-resume` });
+    const resumed = await submitV12SessionEvent(id, { action: "SESSION_RESUMED", clientRequestId: `${id}-resume` });
+    expect(resumed.messages.at(-1)?.learningFeedback).toBeUndefined();
     expect(spy.mock.calls.map(([input]) => input.kind)).toEqual(expect.arrayContaining(["GOAL", "DIAGNOSIS", "HINT", "RESUME"]));
     const saved = await prisma.learningSession.findUniqueOrThrow({ where: { id } });
     const runtime = knowledgeRuntimeSchema.parse(saved.knowledgeRuntime);
@@ -63,7 +68,11 @@ describe("transactional knowledge-bounded teaching selection", () => {
     expect(runtime.flags).toContain("FLAG_NEED_VERIFY");
     expect(runtime.v12!.pedagogicalStage).toBe("DIAGNOSIS");
     expect(runtime.v12!.unitStates.C_SR_001.independentEvidenceCount).toBe(0);
-    expect(saved.messages.at(-1)!.content).toContain("尚不足以确认整体掌握");
+    const feedback = messageMetadataSchema.parse(saved.messages.at(-1)!.metadata);
+    expect(feedback.learningFeedback!.observation).toContain("尚不足以确认整体掌握");
+    expect(scopeAnswer).toContain(feedback.learningFeedback!.answerQuote);
+    expect(feedback.feedbackForMessageId).toBe(saved.messages.at(-2)!.id);
+    expect(saved.messages.at(-1)!.content).not.toContain("尚不足以确认整体掌握");
     expect(saved.messages.at(-1)!.content).toContain(trace.followUp!.question);
     const duplicate = await submitLearningAnswer(id, { answer: scopeAnswer, clientRequestId: `${id}-gap` });
     expect(duplicate.duplicate).toBe(true);
@@ -117,6 +126,13 @@ describe("transactional knowledge-bounded teaching selection", () => {
     expect(saved.messages.at(-1)?.content).toContain(generated!.question);
     const basis = runtime.v12!.coachingHistory.at(-1)!.decisionBasis!;
     const studentMessage = saved.messages.find((message) => message.id === basis.basisMessageId)!;
+    const metadata = messageMetadataSchema.parse(saved.messages.at(-1)!.metadata);
+    expect(metadata.feedbackForMessageId).toBe(studentMessage.id);
+    expect(studentMessage.content).toContain(metadata.learningFeedback!.answerQuote);
+    expect(metadata.learningFeedback!.focus).toContain("条件变化");
+    expect(metadata.learningFeedback!.whyItMatters).toContain("何时成立");
+    const refreshed = await getSessionPayload(id);
+    expect(refreshed.messages.at(-1)?.learningFeedback).toEqual(metadata.learningFeedback);
     expect(studentMessage.role).toBe("USER");
     expect(basis.contentHash).toBe(runtime.versions.contentHash);
     expect(basis.assessedTargetId).toBe("C_SR_001");

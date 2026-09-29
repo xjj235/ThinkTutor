@@ -16,6 +16,7 @@ import {
 import { gapStatusLabels } from "@/lib/display-labels";
 import { makeClientRequestId } from "@/lib/client-request-id";
 import { SafeMarkdown } from "./safe-markdown";
+import { LearningJourney } from "./learning-journey";
 import { WorkspaceState } from "./workspace-state";
 import { ArrowLeft, RotateCcw } from "lucide-react";
 
@@ -230,6 +231,8 @@ export function ReportClient({ sessionId, readOnly = false }: { sessionId: strin
           </button>
         </div>
       ) : null}
+
+      <LearningJourney messages={payload.messages ?? []} sessionId={sessionId} report={report} inReport />
 
       <section className="report-dimensions">
         <h2 className="text-xl font-semibold text-foreground">五维能力评估</h2>

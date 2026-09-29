@@ -24,6 +24,7 @@ for (const c of manifest.cases) test(`v1.2 eight-case ${c.id}: complete, repair,
     expect(response.ok()).toBe(true);
     const id = (await response.json()).data.session.id;
     await page.goto(`/session/${id}`);
+    const current = page.getByLabel("本轮反馈与任务", { exact: true });
     await page.getByRole("button", { name: "确认目标并开始" }).click();
     await expect(page.getByLabel("独立作答")).toBeVisible();
     const row = await prisma.learningSession.findUniqueOrThrow({ where: { id } });
@@ -35,7 +36,7 @@ for (const c of manifest.cases) test(`v1.2 eight-case ${c.id}: complete, repair,
     // Test-owned database fixture, not a runtime selection or mastery bypass endpoint.
     await prisma.learningSession.update({ where: { id }, data: { phase: "SOCRATIC", socraticTurns: scenario === "complete" ? 2 : 0, knowledgeRuntime: runtime as unknown as Prisma.InputJsonValue, messages: { create: { role: "ASSISTANT", phase: "SOCRATIC", content, questionType: "TRANSFER" } } } });
     await page.reload();
-    await expect(page.getByText(c.studentText, { exact: false }).last()).toBeVisible();
+    await expect(current.getByText(c.studentText, { exact: false })).toBeVisible();
     async function submit(text: string) {
       await page.getByLabel("独立作答").fill(text);
       const pending = page.waitForResponse((r) => r.url().endsWith("/answers") && r.request().method() === "POST");
@@ -46,7 +47,7 @@ for (const c of manifest.cases) test(`v1.2 eight-case ${c.id}: complete, repair,
       await submit("本情境的初始冲击可能引发传播，但我尚不能解释放大环节与条件变化。");
       expect(knowledgeRuntimeSchema.parse((await prisma.learningSession.findUniqueOrThrow({ where: { id } })).knowledgeRuntime).v12!.transferPassed).toBe(false);
       await submit(`${answer}这是针对缺失步骤的独立修订。`);
-      await expect(page.getByText(/教学合成案例/).last()).toBeVisible();
+      await expect(current.getByText(/教学合成案例/)).toBeVisible();
     }
     await submit(`${answer}这是最终新情境的完整判断。`);
     await expect(page.getByLabel("费曼阐释")).toBeVisible();

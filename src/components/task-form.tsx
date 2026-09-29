@@ -359,7 +359,7 @@ export function TaskForm({ courses = [], knowledgeTopics = [], referencePreviewE
 
       {creationRejected ? (
         <section className="space-y-3 rounded-md border border-border p-4" aria-label="创建任务恢复">
-          <p className="text-sm leading-6">本次重试已被拒绝，仍无法确认之前的创建结果。已输入内容保留在本页；离开或刷新前请先复制，并到学习总览查看是否已创建任务。</p>
+          <p className="text-sm leading-6">本次重试已被拒绝，仍无法确认之前的创建结果。已输入内容保留在本页；离开或刷新前请先复制，并到历史学习记录检查是否已创建任务。</p>
           <label className="block text-sm">
             已输入的任务内容
             <textarea
@@ -374,7 +374,7 @@ export function TaskForm({ courses = [], knowledgeTopics = [], referencePreviewE
             />
           </label>
           <div className="flex flex-wrap gap-3">
-            <Link href="/dashboard" className="button">返回学习总览</Link>
+            <Link href="/history" className="button">检查学习记录</Link>
             <button type="button" className="button button-secondary" onClick={() => window.location.reload()}>刷新任务页面</button>
           </div>
         </section>

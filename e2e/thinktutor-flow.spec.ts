@@ -49,18 +49,18 @@ test("mock mode completes the ThinkTutor learning loop", async ({ page }, testIn
   await expect(page.locator(".learning-record-heading").getByText("苏格拉底追问")).toBeVisible();
   await page.reload();
   await expect(page.locator(".learning-record-heading").getByText("苏格拉底追问")).toBeVisible();
-  await expect(
-    page.getByText("否", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByLabel("本轮反馈与任务").getByTestId("learning-feedback")).toContainText("否");
 
   const answers = [
     `关键概念是传染，因为机构之间有共同资产和信心联系。${"长文本输入检验。".repeat(600)}`,
     "如果流动性下降，会导致抛售，所以风险会被放大。",
     "这个判断依赖机构之间高度关联的前提，因此前提变化会影响结论。",
     "我会检查共同资产持仓与实际抛售记录，因为只有这些证据才能支持价格下跌沿机构传导的解释。",
+    "换到另一个金融市场，还需要检查共同敞口与融资约束，才能判断这条风险传播机制是否适用。",
   ];
 
   for (const answer of answers) {
+    if (await page.getByLabel("费曼阐释", { exact: true }).count()) break;
     await page.getByLabel("独立作答").fill(answer);
     await expect(page.getByLabel("独立作答")).toHaveValue(answer);
     await Promise.all([
@@ -114,16 +114,16 @@ test("mock mode completes the ThinkTutor learning loop", async ({ page }, testIn
     .getByRole("button", { name: "开启定向巩固" })
     .click();
   await expect(page).toHaveURL(/\/session\//);
-  await expect(page.locator("main")).toHaveAttribute(
+  await expect(page.locator("main[data-parent-session-id]")).toHaveAttribute(
     "data-parent-session-id",
     originalSessionId,
   );
   await page.reload();
-  await expect(page.locator("main")).toHaveAttribute(
+  await expect(page.locator("main[data-parent-session-id]")).toHaveAttribute(
     "data-parent-session-id",
     originalSessionId,
   );
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: "学习总览" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "今天，想弄懂什么？" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("workspace-records.png"), fullPage: true });
 });

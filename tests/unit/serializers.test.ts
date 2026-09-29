@@ -28,6 +28,19 @@ describe("report JSON compatibility", () => {
 });
 
 describe("browser DTO data minimization", () => {
+  it("exposes only bound student-facing feedback and keeps old messages readable", () => {
+    const learningFeedback = { answerQuote: "我认为是", observation: "目前表达了初步判断。", focus: "补充判断的条件。", whyItMatters: "条件会影响判断是否成立。", progress: null };
+    const base = { id: "coach", sessionId: "session", role: "ASSISTANT" as const, phase: "SOCRATIC" as const, content: "什么条件下成立？", questionType: "ASSUMPTION_TEST" as const, clientRequestId: null, createdAt: new Date() };
+    const result = serializeMessage({ ...base, metadata: { learningFeedback, feedbackForMessageId: "answer", transitionReason: "private rationale", learnerState: { masteryEstimate: 42, confirmedPoints: [], gaps: [], misconceptions: [] } } });
+    expect(result.learningFeedback).toEqual(learningFeedback);
+    expect(result.feedbackForMessageId).toBe("answer");
+    expect(result).not.toHaveProperty("learnerState");
+    expect(result).not.toHaveProperty("transitionReason");
+    expect(serializeMessage({ ...base, metadata: { learningFeedback } })).not.toHaveProperty("learningFeedback");
+    expect(serializeMessage({ ...base, metadata: null })).not.toHaveProperty("learningFeedback");
+    expect(serializeMessage({ ...base, role: "USER", metadata: { learningFeedback, feedbackForMessageId: "answer" } })).not.toHaveProperty("learningFeedback");
+  });
+
   it("does not expose ownership, curriculum foreign keys, raw references, learner state, or message metadata", () => {
     const now = new Date();
     const session = serializeSession({

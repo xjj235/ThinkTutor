@@ -19,7 +19,13 @@ const groundedInput: TeachingSelection = { ...input,
 };
 const generated = { ...valid, followUp: { question: "你以“支付中断”作为判断依据，如果这项业务能被其他机构及时接替，原判断应如何调整？", studentAnchor: "支付中断", focusEvidenceIds: ["condition_revision"], sourceIds: ["C_SR_001", "condition_revision"] } };
 const wireGenerated = { ...valid, followUp: { question: generated.followUp.question, studentAnchor: generated.followUp.studentAnchor, sourceIds: generated.followUp.sourceIds } };
-const approved = { grounded: true, targetAligned: true, answerConnected: true, nonRedundant: true, noAnswerLeak: true };
+const approved = {
+  minimumAnswer: "服务被及时接替后，应结合是否仍有功能损害修正原判断。",
+  requirementChecks: [{ evidenceId: "condition_revision", status: "ELICITED", questionQuote: "原判断应如何调整？", rationale: "学生需要依据改变的条件修正判断。" }],
+  answerLeakQuote: null, missingInformation: null,
+  grounded: true, targetAligned: true, answerConnected: true, nonRedundant: true, noAnswerLeak: true, questionAnswerable: true,
+};
+const reviewChecks = ["grounded", "targetAligned", "answerConnected", "nonRedundant", "noAnswerLeak", "questionAnswerable"] as const;
 
 describe("real provider teaching-selection contract with injected transport", () => {
   beforeEach(() => { vi.stubEnv("AI_PROVIDER", "deepseek"); vi.stubEnv("DEEPSEEK_API_KEY", "test-only-key"); vi.stubEnv("AI_MAX_RETRIES", "1"); vi.stubEnv("DEEPSEEK_WEB_SEARCH_FALLBACK", "true"); });
@@ -81,7 +87,7 @@ describe("real provider teaching-selection contract with injected transport", ()
     expect(usage.every((u) => u.status === "SUCCESS")).toBe(true);
   });
 
-  it.each(Object.keys(approved) as Array<keyof typeof approved>)("rejects %s failure and never silently returns a template", async (check) => {
+  it.each(reviewChecks)("rejects %s failure and never silently returns a template", async (check) => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(response(wireGenerated)).mockResolvedValueOnce(response({ ...approved, [check]: false }))
       .mockResolvedValueOnce(response(wireGenerated)).mockResolvedValueOnce(response({ ...approved, [check]: false }));
@@ -105,6 +111,18 @@ describe("real provider teaching-selection contract with injected transport", ()
       .mockResolvedValueOnce(response(wireGenerated)).mockResolvedValueOnce(new Response("", { status: 503 }))
       .mockResolvedValueOnce(response(wireGenerated)).mockResolvedValueOnce(new Response("", { status: 503 }));
     await expect(new DeepSeekProvider({ fetcher }).selectTeachingMove(groundedInput)).rejects.toMatchObject({ code: "AI_PROVIDER_ERROR" });
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
+  it.each([
+    { ...approved, answerLeakQuote: "业务能被其他机构及时接替" },
+    { ...approved, missingInformation: "缺少用于判断的条件变化。" },
+    { ...approved, requirementChecks: [{ ...approved.requirementChecks[0], status: "PROVIDED" }] },
+  ])("rejects concrete review evidence even when all reviewer boolean flags claim success", async (review) => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response(wireGenerated)).mockResolvedValueOnce(response(review))
+      .mockResolvedValueOnce(response(wireGenerated)).mockResolvedValueOnce(response(review));
+    await expect(new DeepSeekProvider({ fetcher }).selectTeachingMove(groundedInput)).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
     expect(fetcher).toHaveBeenCalledTimes(4);
   });
 

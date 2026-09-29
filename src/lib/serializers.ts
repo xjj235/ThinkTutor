@@ -79,6 +79,9 @@ export function serializeMessage(message: Message): MessageDTO {
     clientRequestId: message.clientRequestId,
     webSources: parsedMetadata?.webSources ?? [],
     knowledgePolicy: parsedMetadata?.knowledgePolicy ?? null,
+    ...(message.role === "ASSISTANT" && parsedMetadata?.learningFeedback && parsedMetadata.feedbackForMessageId
+      ? { learningFeedback: parsedMetadata.learningFeedback, feedbackForMessageId: parsedMetadata.feedbackForMessageId }
+      : {}),
     createdAt: message.createdAt.toISOString(),
   };
 }

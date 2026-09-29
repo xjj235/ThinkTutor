@@ -107,6 +107,7 @@ test("students choose all five risk topics and forty units, then complete a self
     "如果人民币升值而美元收入固定，那么兑换得到的人民币会减少，利润会受到影响；判断时还应检查是否有相同币种的成本。",
     "这个判断依赖收入币种、结算时间与套期保值安排，如果企业提前锁定汇率，实际结果可能不同，因此需要核对这些条件。",
     "我会比较未结算外币合同、同币种应付账款及套期保值记录，用实际净敞口检验是否仍有汇率风险。",
+    "换到进口业务，外币支出方向不同，必须重新检查现金流方向和结算条件才能判断损失。",
   ];
   for (const answer of answers) {
     await page.getByLabel("独立作答").fill(answer);

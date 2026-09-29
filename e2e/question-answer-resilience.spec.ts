@@ -374,7 +374,7 @@ test("a disconnected task creation followed by a terminal error preserves conten
   });
   expect(requests).toHaveLength(2);
   expect(requests[1]).toEqual(requests[0]);
-  await page.getByRole("link", { name: "返回学习总览", exact: true }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.getByRole("link", { name: "检查学习记录", exact: true }).click();
+  await expect(page).toHaveURL(/\/history$/);
   await expect(page.locator(`a[href="/session/${committedId}"]`).first()).toBeVisible();
 });

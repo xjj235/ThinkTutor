@@ -1,11 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LogOut } from "lucide-react";
 
 export function LogoutButton() {
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   return <span className="logout-control"><button type="button" disabled={pending} className="icon-button" aria-label={pending ? "退出中" : "退出"} title={pending ? "退出中" : "退出登录"} onClick={async () => {
@@ -14,8 +12,8 @@ export function LogoutButton() {
     try {
       const response = await fetch("/api/auth/logout", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
       if (!response.ok) throw new Error("退出请求失败");
-      router.push("/");
-      router.refresh();
+      // Authentication changed: discard cached authenticated routes and layouts.
+      window.location.replace("/");
     } catch {
       setError("退出失败，请重试");
     } finally {

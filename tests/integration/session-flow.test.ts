@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { AIProviderError } from "@/lib/errors";
 import { createTestUser } from "../factories";
 import { knowledgeRuntimeSchema } from "@/lib/knowledge/runtime-schemas";
+import { learningJourneySteps } from "@/lib/learning-journey";
 import { submitV12SessionEvent } from "@/lib/knowledge/v12-session-service";
 import {
   createLearningSession,
@@ -116,11 +117,18 @@ describe("learning session integration flow", () => {
     expect(round3.session.phase).toBe("SOCRATIC");
     expect(round3.session.socraticTurns).toBe(3);
 
-    const feynmanPhase = await submitLearningAnswer(created.session.id, {
+    const round4 = await submitLearningAnswer(created.session.id, {
       answer: "银行之间有共同资产持仓的数据可以支持这个判断。",
       clientRequestId: "answer-evidence-round-4",
     });
+    expect(round4.session.phase).toBe("SOCRATIC");
+    const feynmanPhase = await submitLearningAnswer(created.session.id, {
+      answer: "例如共同资产价格下降会同时影响多家机构，接下来还要检查实际的风险敞口。",
+      clientRequestId: "answer-application-round-5",
+    });
     expect(feynmanPhase.session.phase).toBe("FEYNMAN");
+    expect(feynmanPhase.messages.at(-1)?.learningFeedback?.answerQuote).toContain("例如共同资产");
+    expect(feynmanPhase.messages.at(-1)?.content).toContain("不代表已经掌握");
 
     const completed = await submitFeynmanExplanation(created.session.id, {
       explanation:
@@ -206,8 +214,9 @@ describe("learning session integration flow", () => {
     const user = await createTestUser("readiness-unanswered");
     const created = await createLearningSession(user.id, { ...task, topic: "汇率风险" });
     await submitLearningAnswer(created.session.id, { answer: "外币现金流的折算价值随汇率变化。", clientRequestId: "readiness-diagnosis" });
-    for (let round = 1; round <= 3; round++) {
-      await submitLearningAnswer(created.session.id, { answer: `企业有外币应收时，本币升值会降低折算价值，这是第${round}次机制解释。`, clientRequestId: `readiness-round-${round}` });
+    const answers = ["汇率风险是外币款项的折算价值变化。", "因为汇率发生变化，会导致外币款项的折算金额变化。", "如果企业有外币应收，本币升值会降低折算价值。"];
+    for (const [round, answer] of answers.entries()) {
+      await submitLearningAnswer(created.session.id, { answer, clientRequestId: `readiness-round-${round}` });
     }
     const beforeTie = await getSessionPayload(created.session.id);
     // Existing sessions may have identical millisecond timestamps. Their default
@@ -219,7 +228,23 @@ describe("learning session integration flow", () => {
     expect(waiting.availableActions?.canEnterFeynman).toBe(false);
     await expect(enterLearningFeynman(created.session.id, { clientRequestId: "readiness-too-early" })).rejects.toMatchObject({ code: "CONFLICT" });
     const answered = await submitLearningAnswer(created.session.id, { answer: "合同约定企业将在月底收取一笔美元货款，这就是外币应收的证据。", clientRequestId: "readiness-evidence-answer" });
-    expect(answered.session.phase).toBe("FEYNMAN");
+    expect(answered.session.phase).toBe("SOCRATIC");
+    expect(answered.availableActions?.canEnterFeynman).toBe(true);
+    const entered = await enterLearningFeynman(created.session.id, { clientRequestId: "readiness-enter-after-evidence" });
+    expect(entered.session.phase).toBe("FEYNMAN");
+    const explanation = "汇率风险是外币款项的折算价值变化，因为汇率会影响折算金额。例如持有美元应收款的企业，在本币升值时折算价值可能减少；合同与结算记录可用于核对这笔风险。";
+    await submitFeynmanExplanation(created.session.id, { explanation, clientRequestId: "readiness-final-explanation" });
+    const refreshed = await getSessionPayload(created.session.id);
+    const journey = learningJourneySteps(refreshed.messages, created.session.id, refreshed.report);
+    const finalStep = journey.at(-1)!;
+    expect(finalStep.kind).toBe("feynman");
+    expect(finalStep.step.question.id).toBe(entered.messages.at(-1)!.id);
+    expect(finalStep.step.response?.content).toBe(explanation);
+    expect(finalStep.report?.id).toBe(refreshed.report!.id);
+    const replaced = journey.find((entry) => entry.step.question.id === answered.messages.at(-1)!.id)!;
+    expect(replaced.step.responseStatus).toBe("replaced");
+    expect(replaced.step.response).toBeUndefined();
+    expect(replaced.report).toBeUndefined();
   });
 
   it("does not count an unknown response or a hint as answered evidence", async () => {
@@ -357,6 +382,65 @@ describe("learning session integration flow", () => {
     expect(after.phase).toBe(before.phase);
     expect(after.socraticTurns).toBe(before.socraticTurns);
     expect(after.messages).toHaveLength(before.messages.length);
+  });
+
+  it("binds feedback to the actual persisted answer, preserves it on reload and omits it for hints", async () => {
+    vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false");
+    const user = await createTestUser("feedback-binding");
+    const created = await createLearningSession(user.id, { ...task, topic: "汇率风险" });
+    expect(created.messages[0].learningFeedback).toBeUndefined();
+    const answer = "汇率风险是外币收款折算价值随汇率变化。";
+    const answered = await submitLearningAnswer(created.session.id, { answer, clientRequestId: "feedback-bind-answer" });
+    const studentMessage = answered.messages.at(-2)!;
+    const coachMessage = answered.messages.at(-1)!;
+    expect(studentMessage.role).toBe("USER");
+    expect(coachMessage.feedbackForMessageId).toBe(studentMessage.id);
+    expect(coachMessage.learningFeedback?.answerQuote).toBe(answer);
+    expect(coachMessage.learningFeedback?.focus).toBeTruthy();
+    expect(coachMessage.learningFeedback?.whyItMatters).toBeTruthy();
+    const duplicate = await submitLearningAnswer(created.session.id, { answer: "同一请求不得覆盖原来的回答或反馈。", clientRequestId: "feedback-bind-answer" });
+    expect(duplicate.messages).toEqual(answered.messages);
+    const hinted = await requestHint(created.session.id, { clientRequestId: "feedback-bind-hint" });
+    expect(hinted.messages.at(-1)?.learningFeedback).toBeUndefined();
+    expect(hinted.messages.at(-1)?.feedbackForMessageId).toBeUndefined();
+    expect((await getSessionPayload(created.session.id)).messages.find((message) => message.id === coachMessage.id)).toEqual(coachMessage);
+  });
+
+  it.each(["missing", "invented", "old-answer"] as const)("does not persist or advance when coach feedback is %s", async (kind) => {
+    vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false");
+    const user = await createTestUser(`feedback-invalid-${kind}`);
+    const created = await createLearningSession(user.id, { ...task, topic: "汇率风险" });
+    const originalAnswer = "以前的解释仅提到概念名称。";
+    await submitLearningAnswer(created.session.id, { answer: originalAnswer, clientRequestId: `feedback-first-${kind}` });
+    const before = await prisma.learningSession.findUniqueOrThrow({ where: { id: created.session.id }, include: { messages: true } });
+    const original = MockAIProvider.prototype.createCoachTurn;
+    vi.spyOn(MockAIProvider.prototype, "createCoachTurn").mockImplementationOnce(async function (input) {
+      const output = await original.call(new MockAIProvider(), input);
+      return { ...output, learningFeedback: kind === "missing" ? undefined : { ...output.learningFeedback!, answerQuote: kind === "old-answer" ? originalAnswer : "实际回答从未出现过的内容" } };
+    });
+    await expect(submitLearningAnswer(created.session.id, { answer: "现在补充的是本币升值对外币款项折算的影响。", clientRequestId: `feedback-invalid-${kind}` })).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
+    const after = await prisma.learningSession.findUniqueOrThrow({ where: { id: created.session.id }, include: { messages: true } });
+    expect(after.phase).toBe(before.phase);
+    expect(after.socraticTurns).toBe(before.socraticTurns);
+    expect(after.version).toBe(before.version);
+    expect(after.learnerState).toEqual(before.learnerState);
+    expect(after.messages).toEqual(before.messages);
+  });
+
+  it("rejects provider progress without an earlier student answer even when the current answer claims a revision", async () => {
+    vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false");
+    const user = await createTestUser("feedback-no-prior-progress");
+    const created = await createLearningSession(user.id, { ...task, topic: "汇率风险" });
+    const original = MockAIProvider.prototype.createCoachTurn;
+    vi.spyOn(MockAIProvider.prototype, "createCoachTurn").mockImplementationOnce(async (input) => {
+      const output = await original.call(new MockAIProvider(), input);
+      return { ...output, learningFeedback: { ...output.learningFeedback!, progress: "你已经修正了之前的看法。" } };
+    });
+    await expect(submitLearningAnswer(created.session.id, { answer: "我原先认为本币升值总是有利，现在我改了看法。", clientRequestId: "feedback-no-prior-progress" })).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
+    const reloaded = await getSessionPayload(created.session.id);
+    expect(reloaded.session.version).toBe(created.session.version);
+    expect(reloaded.session.phase).toBe("DIAGNOSIS");
+    expect(reloaded.messages).toEqual(created.messages);
   });
 
   it("persists curated selection, bounded hints, case transfer and immutable report versions", async () => {

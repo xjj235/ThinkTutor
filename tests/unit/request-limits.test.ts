@@ -10,7 +10,7 @@ describe("AI request lock covers sequential generation and review", () => {
   });
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
-  it.each([1, 2] as const)("holds the lock for %s sequential calls per attempt and releases it", async (calls) => {
+  it.each([1, 2, 3] as const)("holds the lock for %s sequential calls per attempt and releases it", async (calls) => {
     const release = vi.fn(async () => undefined);
     const lock = vi.spyOn(redis, "acquireLock").mockResolvedValue(release);
     expect(await withAIRequestProtection("student", "session", async () => "result", calls)).toBe("result");
@@ -18,14 +18,41 @@ describe("AI request lock covers sequential generation and review", () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
-  it("releases after a rejected generation and rejects concurrent work", async () => {
+  it("budgets three sequential calls when retries are disabled", async () => {
+    vi.stubEnv("AI_MAX_RETRIES", "0");
+    const release = vi.fn(async () => undefined);
+    const lock = vi.spyOn(redis, "acquireLock").mockResolvedValue(release);
+    await withAIRequestProtection("student", "session", async () => "result", 3);
+    expect(lock).toHaveBeenCalledWith("lock:ai:session", 145_000);
+    expect(redis.consumeRateLimit).toHaveBeenCalledTimes(2);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("releases a three-call budget after a review failure", async () => {
+    const release = vi.fn(async () => undefined);
+    const lock = vi.spyOn(redis, "acquireLock").mockResolvedValue(release);
+    await expect(withAIRequestProtection("student", "session", async () => { throw new Error("review rejected"); }, 3)).rejects.toThrow("review rejected");
+    expect(lock).toHaveBeenCalledWith("lock:ai:session", 415_000);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the three-call lock while review is pending and rejects concurrent work", async () => {
     const release = vi.fn(async () => undefined);
     const lock = vi.spyOn(redis, "acquireLock").mockResolvedValueOnce(release).mockResolvedValueOnce(null);
-    await expect(withAIRequestProtection("student", "session", async () => { throw new Error("review rejected"); }, 2)).rejects.toThrow("review rejected");
-    expect(release).toHaveBeenCalledOnce();
+    let finishReview: ((value: string) => void) | undefined;
+    const pendingReview = new Promise<string>((resolve) => { finishReview = resolve; });
+    const review = vi.fn(() => pendingReview);
+    const firstRequest = withAIRequestProtection("student", "session", review, 3);
+    await vi.waitFor(() => expect(review).toHaveBeenCalledOnce());
+    expect(release).not.toHaveBeenCalled();
     const work = vi.fn(async () => "not run");
-    await expect(withAIRequestProtection("student", "session", work, 2)).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(withAIRequestProtection("student", "session", work, 3)).rejects.toMatchObject({ code: "CONFLICT" });
     expect(work).not.toHaveBeenCalled();
+    expect(release).not.toHaveBeenCalled();
     expect(lock).toHaveBeenCalledTimes(2);
+    expect(lock).toHaveBeenNthCalledWith(2, "lock:ai:session", 415_000);
+    finishReview?.("reviewed");
+    await expect(firstRequest).resolves.toBe("reviewed");
+    expect(release).toHaveBeenCalledOnce();
   });
 });

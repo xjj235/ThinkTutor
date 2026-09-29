@@ -28,6 +28,13 @@ test("curated knowledge requires independent explanation at the turn limit befor
     const response = await responsePromise;
     expect(response.ok()).toBe(true);
     const result = await response.json() as ApiSuccess<SessionPayload>;
+    const feedback = result.data.messages.at(-1)!.learningFeedback;
+    expect(feedback).toBeTruthy();
+    expect(result.data.messages.at(-2)!.content).toContain(feedback!.answerQuote);
+    expect(result.data.messages.at(-1)!.feedbackForMessageId).toBe(result.data.messages.at(-2)!.id);
+    const current = page.getByLabel("本轮反馈与任务", { exact: true });
+    await expect(current.getByText(feedback!.focus, { exact: true })).toBeVisible();
+    await expect(current.getByText(feedback!.whyItMatters, { exact: true })).toBeVisible();
     reachedLimit = result.data.session.phase === "FEYNMAN";
     if (reachedLimit) {
       expect(result.data.session.socraticTurns).toBe(5);
@@ -60,6 +67,7 @@ test("curated knowledge requires independent explanation at the turn limit befor
   await page.getByRole("button", { name: "提交修订并生成报告" }).click();
   await expect(page).toHaveURL(/\/report\//);
   await expect(page.getByText("五维能力评估")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "我的理解如何变化" })).toBeVisible();
   await page.reload();
   await expect(page.getByText("五维能力评估")).toBeVisible();
   const sessionId = sessionUrl.split("/session/")[1];

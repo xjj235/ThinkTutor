@@ -31,8 +31,8 @@ async function login(page: Page, email: string, role?: "学生" | "教师" | "�
 }
 
 async function logout(page: Page): Promise<void> {
-  const menu = page.locator('summary[aria-label="打开主导航"]');
-  if (await menu.isVisible()) await menu.click();
+  const menu = page.getByRole("button", { name: "个人中心", exact: true });
+  if (await menu.isVisible() && await menu.getAttribute("aria-expanded") !== "true") await menu.click();
   await page.getByRole("button", { name: "退出" }).click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -44,8 +44,9 @@ test("local preview serves HTML and exposes the production-compatible result ent
 
   await page.goto("/");
   await expect(page).toHaveTitle("问思学伴 ThinkTutor");
-  await expect(page.getByRole("heading", { name: /从“好像懂了”\s*到真正讲清楚/ })).toBeVisible();
-  await expect(page.getByText("本地预览模式")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "问思学伴", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "新建学习任务", exact: true })).toBeInViewport();
+  await expect(page.getByRole("region", { name: "本地预览工具" })).toBeVisible();
   await expect(page.getByText("student@example.test")).toBeHidden();
   await assertFitsViewport(page);
   await captureNormalPage(page, `.local-preview/home-${testInfo.project.name}.png`);
@@ -57,8 +58,10 @@ test("local preview serves HTML and exposes the production-compatible result ent
 
   await login(page, "student@example.test", "学生");
   await expect(page).toHaveURL(/\/dashboard/);
-  await expect(page.getByRole("heading", { name: /继续思考/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "今天，想弄懂什么？" })).toBeVisible();
   await captureNormalPage(page, `.local-preview/student-dashboard-${testInfo.project.name}.png`);
+  await page.getByRole("button", { name: "个人中心", exact: true }).click();
+  await page.getByRole("link", { name: "历史学习记录", exact: true }).click();
   await page.getByRole("link", { name: /解释风险传播路径/ }).click();
   await expect(page.getByRole("heading", { name: "解释风险传播路径" })).toBeVisible();
   await assertFitsViewport(page);

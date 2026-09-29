@@ -42,6 +42,7 @@ test("teacher publishes an assignment, student completes it, and teacher sees th
     "因为孤立事实不能自动推出结论，所以需要说明中间推理关系。",
     "这条判断的证据可以是可复核数据，并要说明数据如何支持结论。",
     "例如保留同一测验的前后测原始成绩和学习时长记录，比较成绩变化并核查投入时间，才能检验学习方法是否有效。",
+    "如果迁移到新闻核查，需要核对原始出处以及替代解释，不能把相关性直接当成因果关系。",
   ];
   for (const [index, answer] of answers.entries()) {
     const answered = await data<{ session: { phase: string } }>(await studentContext.post(`/api/sessions/${sessionId}/answers`, { data: { answer, clientRequestId: `${marker}-answer-${index}` } }));

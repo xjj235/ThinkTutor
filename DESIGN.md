@@ -17,11 +17,12 @@ Default light appearance, with a persistent optional dark appearance.
 ## Product Expression
 
 - Authenticated users enter their role-specific workspace directly.
-- A full-width brand header and horizontal role navigation precede centered content.
+- A full-width brand header precedes centered content. Student secondary routes live in the top-right personal menu; teachers and administrators retain horizontal role navigation.
 - Learning context and stage progress appear above the study record at every viewport.
 - The learning session is a staged study record, not a generic chat client.
 - Reports prioritize traceable evidence and targeted follow-up.
-- The public entry retains the existing learning photograph, with legible text.
+- Public and student home screens center one primary action, “新建学习任务”. History, analytics, classes and assignments remain accessible through the personal menu and profile page.
+- Starting from the public action preserves the task-creation destination through login or registration; role routing remains server-enforced.
 - Wording is precise, domain-specific and restrained, without inflated claims.
 
 ## Constraints

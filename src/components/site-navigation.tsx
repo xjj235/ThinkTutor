@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { UserRole } from "@prisma/client";
-import { ArrowUpRight, BookOpen, BookOpenCheck, ChartNoAxesCombined, ChevronRight, ClipboardCheck, FileText, FolderOpen, LayoutDashboard, Menu, Plus, Settings2, ShieldCheck, Users, X, type LucideIcon } from "lucide-react";
+import { BookOpen, BookOpenCheck, ChartNoAxesCombined, ChevronDown, ChevronRight, ClipboardCheck, FileText, FolderOpen, LayoutDashboard, Menu, Settings2, ShieldCheck, Users, X, type LucideIcon } from "lucide-react";
 import { LogoutButton } from "./logout-button";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -29,12 +29,12 @@ function itemsFor(role: UserRole): NavigationItem[] {
     { href: "/admin/system", label: "系统状态", icon: Settings2 },
   ];
   return [
-    { href: "/dashboard", label: "学习总览", icon: LayoutDashboard },
-    { href: "/learn/new", label: "自主研习", icon: Plus },
+    { href: "/dashboard", label: "学习首页", icon: LayoutDashboard },
+    { href: "/history", label: "历史学习记录", icon: FolderOpen },
+    { href: "/profile/learning", label: "学习分析", icon: ChartNoAxesCombined },
     { href: "/assignments", label: "课程任务", icon: ClipboardCheck },
     { href: "/classes", label: "学习班级", icon: Users },
-    { href: "/history", label: "学习档案", icon: FolderOpen },
-    { href: "/profile/learning", label: "学习分析", icon: ChartNoAxesCombined },
+    { href: "/profile", label: "个人资料与账号安全", icon: Settings2 },
   ];
 }
 
@@ -46,6 +46,7 @@ export function SiteNavigation({ user }: { user: NavigationUser | null }) {
   const pathname = usePathname();
   const [expandedPath, setExpandedPath] = useState<string | null>(null);
   const open = expandedPath === pathname;
+  const isStudent = user?.role === "STUDENT";
   const menuButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -57,17 +58,32 @@ export function SiteNavigation({ user }: { user: NavigationUser | null }) {
     };
     document.addEventListener("keydown", close);
     const desktop = window.matchMedia("(min-width: 961px)");
-    const closeOnDesktop = () => { if (desktop.matches) setExpandedPath(null); };
+    const closeOnDesktop = () => { if (desktop.matches && !isStudent) setExpandedPath(null); };
     desktop.addEventListener("change", closeOnDesktop);
     return () => {
       document.removeEventListener("keydown", close);
       desktop.removeEventListener("change", closeOnDesktop);
     };
-  }, [open]);
+  }, [open, isStudent]);
   const brand = <Link href={user ? user.role === "STUDENT" ? "/dashboard" : user.role === "TEACHER" ? "/teacher" : "/admin" : "/"} className="brand" onClick={() => setExpandedPath(null)}><span className="brand-mark"><BookOpenCheck size={21} aria-hidden="true" /></span><span className="brand-copy"><strong>问思学伴</strong><small>ThinkTutor</small></span></Link>;
-  if (!user) return <header className="site-header"><div className="site-header-inner">{brand}<nav aria-label="主导航" className="main-nav public-nav flex-wrap"><ThemeToggle /><Link className="nav-link workspace-help" href="/about">学习方法</Link><Link className="nav-link" href="/login">登录</Link><Link className="button button-small" href="/register">开始学习<ArrowUpRight size={15} aria-hidden="true" /></Link></nav></div></header>;
+  if (!user) return <header className="site-header"><div className="site-header-inner">{brand}<nav aria-label="主导航" className="main-nav public-nav flex-wrap"><ThemeToggle /><Link className="nav-link" href="/login">登录</Link><Link className="nav-link public-register" href="/register" aria-label="注册，创建学生账号">注册</Link></nav></div></header>;
 
   const items = itemsFor(user.role);
+  if (isStudent) return <header className="workspace-shell student-shell">
+    <div className="workspace-topbar">
+      {brand}
+      <div className="workspace-account">
+        <ThemeToggle />
+        <button type="button" ref={menuButton} className="student-account-toggle" aria-expanded={open} aria-controls="student-navigation" onClick={() => setExpandedPath(open ? null : pathname)}>
+          <span className="profile-initial" aria-hidden="true">{user.name.slice(0, 1)}</span><span>个人中心</span><ChevronDown size={16} aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+    <div id="student-navigation" className="student-navigation" hidden={!open}>
+      <nav aria-label="个人中心" className="student-account-links">{items.map(({ icon: Icon, ...item }) => <Link key={item.href} href={item.href} className="workspace-link" aria-current={pathname === item.href || item.href !== "/profile" && isCurrentPath(pathname, item.href) ? "page" : undefined} onClick={() => setExpandedPath(null)}><Icon size={17} aria-hidden="true" /><span>{item.label}</span></Link>)}</nav>
+      <div className="student-account-footer"><Link className="text-link" href="/about" onClick={() => setExpandedPath(null)}>学习方法</Link><LogoutButton /></div>
+    </div>
+  </header>;
   const current = items.find((item) => isCurrentPath(pathname, item.href));
   const title = current?.label ?? (pathname.startsWith("/session/") ? "研习空间" : pathname.startsWith("/report/") ? "学习报告" : pathname.startsWith("/profile") ? "个人资料" : "工作区");
   const roleName = { STUDENT: "学生工作区", TEACHER: "教师工作区", ADMIN: "管理工作区" }[user.role];

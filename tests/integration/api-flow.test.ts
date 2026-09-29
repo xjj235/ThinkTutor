@@ -11,6 +11,7 @@ import { GET as reportRoute } from "@/app/api/reports/[sessionId]/route";
 import { MockAIProvider } from "@/lib/ai/mock-provider";
 import { prisma } from "@/lib/db";
 import { AIProviderError } from "@/lib/errors";
+import { learningFeedbackSchema } from "@/lib/learning-feedback";
 import { createTestUser } from "../factories";
 
 const authState = vi.hoisted(() => ({ user: null as null | { id: string; email: string; name: string; role: "STUDENT" | "TEACHER" | "ADMIN" } }));
@@ -32,8 +33,12 @@ const sessionSchema = z.object({
 
 const messageSchema = z.object({
   id: z.string(),
+  role: z.enum(["USER", "ASSISTANT", "SYSTEM"]),
+  questionType: z.string().nullable(),
   content: z.string(),
   clientRequestId: z.string().nullable(),
+  learningFeedback: learningFeedbackSchema.optional(),
+  feedbackForMessageId: z.string().optional(),
 });
 
 const reportSchema = z.object({
@@ -140,11 +145,16 @@ describe("ThinkTutor API flow", () => {
     const id = (await createSession()).data.session.id;
     const answered = await postAnswer(id, text, `length-answer-${id}`);
     expect(answered.status).toBe(200);
-    expect((await parseSessionResponse(answered)).data.messages.some((m) => m.content === text)).toBe(true);
-    for (let i = 0; i < 4; i++) {
+    const initial = await parseSessionResponse(answered);
+    expect(initial.data.messages.some((m) => m.content === text)).toBe(true);
+    expect(initial.data.messages.at(-1)?.feedbackForMessageId).toBe(initial.data.messages.at(-2)?.id);
+    expect(text).toContain(initial.data.messages.at(-1)?.learningFeedback?.answerQuote);
+    for (let i = 0; i < 5; i++) {
       const turn = await postAnswer(id, "因为机构关联，所以风险会传导并放大。", `length-turn-${id}-${i}`);
       expect(turn.status).toBe(200);
-      if (i === 3) expect((await parseSessionResponse(turn)).data.session.phase).toBe("FEYNMAN");
+      const body = await parseSessionResponse(turn);
+      expect(body.data.session.phase).toBe(i < 4 ? "SOCRATIC" : "FEYNMAN");
+      expect(body.data.messages.at(-1)?.feedbackForMessageId).toBe(body.data.messages.at(-2)?.id);
     }
     const result = await feynmanRoute(jsonRequest(`/api/sessions/${id}/feynman`, { explanation: text, clientRequestId: `length-feynman-${id}` }), sessionContext(id));
     expect(result.status).toBe(200);
@@ -250,8 +260,14 @@ describe("ThinkTutor API flow", () => {
     const evidenceAnswer = await postAnswer(sessionId, "机构披露的共同资产持仓和资金流数据可以支持这条传播链，仍需核对是否出现金融服务中断。", "answer-evidence-api-004");
     expect(evidenceAnswer.status).toBe(200);
     current = await parseSessionResponse(evidenceAnswer);
-    expect(current.data.session.phase).toBe("FEYNMAN");
+    expect(current.data.session.phase).toBe("SOCRATIC");
     expect(current.data.session.socraticTurns).toBe(4);
+    const finalAnswer = await postAnswer(sessionId, "例如共同资产冲击是否扩散，还要检查各机构的实际暴露规模以及能否继续提供信贷。", "answer-application-api-005");
+    expect(finalAnswer.status).toBe(200);
+    current = await parseSessionResponse(finalAnswer);
+    expect(current.data.session).toMatchObject({ phase: "FEYNMAN", socraticTurns: 5 });
+    expect(current.data.messages.at(-1)?.feedbackForMessageId).toBe(current.data.messages.at(-2)?.id);
+    expect(current.data.messages.at(-1)?.learningFeedback?.answerQuote).toContain("例如共同资产冲击");
 
     const explanation =
       "系统性风险是局部冲击通过关联和流动性扩散成整体风险。例如一家机构抛售会压低资产价格，所以其他机构也会受损。如果迁移到供应链场景，需要检查节点关联和替代条件。";
@@ -349,15 +365,22 @@ describe("ThinkTutor API flow", () => {
     const sessionId = created.data.session.id;
     await postAnswer(
       sessionId,
-      "系统性风险会通过机构之间的资产关联向外扩散。",
+      "我想到多个机构一起陷入困境。",
       "manual-diagnosis",
     );
-    for (let round = 1; round <= 3; round += 1) {
-      await postAnswer(
+    const answers = [
+      { answer: "系统性风险是金融体系整体功能面临严重损害的风险。", nextQuestionType: "CAUSE_PROBE" },
+      { answer: "因为机构持有相同资产，一家抛售会导致价格下跌并影响其他机构。", nextQuestionType: "ASSUMPTION_TEST" },
+      { answer: "如果机构存在共同资产敞口，价格冲击就可能同时影响多家。", nextQuestionType: "EVIDENCE_PROBE" },
+    ];
+    for (const [round, { answer, nextQuestionType }] of answers.entries()) {
+      const response = await postAnswer(
         sessionId,
-        `这是第 ${round} 轮完整回答，我会说明条件、机制与结果之间的关系。`,
+        answer,
         `manual-round-${round}`,
       );
+      expect(response.status).toBe(200);
+      expect((await parseSessionResponse(response)).data.messages.at(-1)?.questionType).toBe(nextQuestionType);
     }
 
     const requestBody = { clientRequestId: "manual-enter-feynman-001" };
@@ -391,12 +414,13 @@ describe("ThinkTutor API flow", () => {
 
   it("forces FEYNMAN after the configured fifth Socratic answer", async () => {
     vi.spyOn(MockAIProvider.prototype, "createCoachTurn").mockImplementation(
-      async () => ({
+      async (input) => ({
         assistantMessage: "请继续说明这个判断依赖的关键条件是什么？",
         questionType: "ASSUMPTION_TEST",
         learnerState: { masteryEstimate: 50, confirmedPoints: [], gaps: [], misconceptions: [] },
         nextAction: "ASK_QUESTION",
         transitionReason: "继续测试最大轮次。",
+        learningFeedback: { answerQuote: input.latestAnswer!.slice(0, 240), observation: "本次回答表达了一个待核验的风险判断。", focus: "补充判断成立的关键条件。", whyItMatters: "成立条件不同，判断可能不再适用于当前情境。", progress: null },
       }),
     );
     const created = await createSession();

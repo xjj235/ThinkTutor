@@ -3,6 +3,7 @@ import { MockAIProvider } from "@/lib/ai/mock-provider";
 import { prisma } from "@/lib/db";
 import { referenceKnowledgeUnits } from "@/lib/knowledge/reference-library";
 import { getStudentKnowledgeCatalog } from "@/lib/knowledge/student-catalog";
+import { learningFeedbackSchema } from "@/lib/learning-feedback";
 import {
   createLearningSession,
   createRetrySession,
@@ -63,37 +64,57 @@ describe("all forty selected knowledge units complete a persisted grounded learn
     const id = created.session.id;
     expect(created.session).toMatchObject({ topic: selected.topic, objective: selected.objective, phase: "DIAGNOSIS", socraticTurns: 0 });
     expect(created.messages[0].content).toContain(selected.topic);
+    expect(created.messages[0].learningFeedback).toBeUndefined();
     expectSelectedContext(diagnostic.mock.calls[0]?.[0].retrievedContext, selected.unitId);
     expect(diagnostic.mock.calls[0]?.[0].knowledgePolicy).toBe("COURSE_KNOWLEDGE_FIRST");
 
     const uncertain = await submitLearningAnswer(id, { answer: "不知道", clientRequestId: crypto.randomUUID() });
     expect(uncertain.session).toMatchObject({ phase: "SOCRATIC", socraticTurns: 0 });
     expect(uncertain.messages.at(-1)?.questionType).toBe("SCAFFOLDED_HINT");
+    expect(uncertain.messages.at(-1)?.learningFeedback?.answerQuote).toBe("不知道");
+    expect(uncertain.messages.at(-1)?.learningFeedback?.observation).toContain("还没有足够");
+    expect(uncertain.messages.at(-1)?.feedbackForMessageId).toBe(uncertain.messages.at(-2)?.id);
     const beforeHint = await prisma.learningSession.findUniqueOrThrow({ where: { id } });
     const hinted = await requestHint(id, { clientRequestId: crypto.randomUUID() });
     expect(hinted.session).toMatchObject({ phase: "SOCRATIC", socraticTurns: 0 });
     expect(hinted.messages.at(-1)?.questionType).toBe("SCAFFOLDED_HINT");
+    expect(hinted.messages.at(-1)?.learningFeedback).toBeUndefined();
+    expect(hinted.messages.at(-1)?.feedbackForMessageId).toBeUndefined();
     const afterHint = await prisma.learningSession.findUniqueOrThrow({ where: { id } });
     expect(afterHint.learnerState).toEqual(beforeHint.learnerState);
     expect(coach.mock.calls.at(-1)?.[0].isHintRequest).toBe(true);
 
     const answer = `${selected.topic}：${selected.content}例如同一个冲击对不同暴露结构的主体影响不同，因为条件影响传导过程，所以需要核对具体合同、现金流和时间。不能仅因为出现损失就认定为系统性风险。`;
     let current = hinted;
-    for (let round = 1; round <= 4; round += 1) {
-      current = await submitLearningAnswer(id, { answer: `${answer}这是第${round}次独立解释，我会用实际资料检查判断。`, clientRequestId: crypto.randomUUID() });
+    for (let round = 1; round <= 5; round += 1) {
+      const currentAnswer = `第${round}次解释：${answer}我会用实际资料检查判断。`;
+      current = await submitLearningAnswer(id, { answer: currentAnswer, clientRequestId: crypto.randomUUID() });
       expect(current.session.topic).toBe(selected.topic);
       expect(current.session.socraticTurns).toBe(round);
+      const studentMessage = current.messages.at(-2)!;
+      const coachMessage = current.messages.at(-1)!;
+      const feedback = learningFeedbackSchema.parse(coachMessage.learningFeedback);
+      expect(studentMessage).toMatchObject({ role: "USER", content: currentAnswer });
+      expect(coachMessage.feedbackForMessageId).toBe(studentMessage.id);
+      expect(currentAnswer).toContain(feedback.answerQuote);
+      expect(feedback.answerQuote).toContain(`第${round}次解释`);
+      expect(feedback.observation).toContain("模拟反馈");
+      expect(feedback.focus).toBeTruthy();
+      expect(feedback.whyItMatters).toBeTruthy();
+      expect(feedback.progress).toBeNull();
+      if (round < 5) expect(coachMessage.content.match(/[?？]/g)).toHaveLength(1);
       const timeline = JSON.stringify(current.messages.map(({ id: messageId, role, questionType, createdAt }) => ({ id: messageId, role, questionType, createdAt })));
-      expect(current.session.phase, `${selected.unitId} round ${round}: ${timeline}`).toBe(round < 4 ? "SOCRATIC" : "FEYNMAN");
-      if (round < 4) expect(current.availableActions?.canEnterFeynman, `${selected.unitId} round ${round}: ${timeline}`).toBe(false);
+      expect(current.session.phase, `${selected.unitId} round ${round}: ${timeline}`).toBe(round < 5 ? "SOCRATIC" : "FEYNMAN");
+      if (round < 5) expect(current.availableActions?.canEnterFeynman, `${selected.unitId} round ${round}: ${timeline}`).toBe(false);
     }
-    expect(coach).toHaveBeenCalledTimes(6);
+    expect(coach).toHaveBeenCalledTimes(7);
     for (const [request] of coach.mock.calls) {
       expect(request.task.topic).toBe(selected.topic);
       expect(request.knowledgePolicy).toBe("COURSE_KNOWLEDGE_FIRST");
       expectSelectedContext(request.retrievedContext, selected.unitId);
     }
     expect(current.messages.at(-1)?.content).toContain(selected.topic);
+    expect(current.messages.at(-1)?.content).toContain("不代表已经掌握");
 
     const explanation = `${answer}如果迁移到新案例，我会重新核对主体、暴露、冲击方向和约束条件，再解释相同机制是否仍然成立。`;
     const completed = await submitFeynmanExplanation(id, { explanation, clientRequestId: crypto.randomUUID() });

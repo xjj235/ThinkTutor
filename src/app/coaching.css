@@ -1,0 +1,36 @@
+.learning-current-entry { padding-inline: var(--space-5); scroll-margin-top: var(--space-5); }
+.learning-current-entry:focus { outline: none; }
+.learning-current-entry:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.learning-history { border-bottom: 1px solid var(--border); }
+.learning-history > summary { padding: var(--space-3) var(--space-5); cursor: pointer; color: var(--muted-foreground); font-size: var(--text-caption); }
+.learning-feedback { max-width: var(--reading-measure); margin-block: var(--space-3) var(--space-5); overflow-wrap: anywhere; }
+.feedback-observation h3 { font-size: var(--text-body); margin-bottom: var(--space-2); }
+.feedback-observation blockquote { margin: 0 0 var(--space-2); color: var(--muted-foreground); }
+.feedback-observation p,.feedback-purpose dd,.feedback-progress { font-size: var(--text-body); line-height: var(--leading-body); }
+.feedback-purpose { display: grid; gap: var(--space-3); margin-block: var(--space-4) 0; }
+.feedback-purpose dt { font-weight: 600; }
+.feedback-purpose dd { margin: var(--space-1) 0 0; }
+.feedback-progress { color: var(--brand); margin-top: var(--space-3); }
+.feedback-question { border-top: 1px solid var(--border); padding-top: var(--space-4); }
+.feedback-question h3 { font-size: var(--text-body); margin-bottom: var(--space-2); }
+.learning-journey { margin-block: var(--space-5); padding-block: var(--space-5); border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.learning-journey > h2 { margin-bottom: var(--space-2); }
+.learning-journey > ol { list-style: none; margin: var(--space-4) 0 0; padding: 0; }
+.learning-journey > ol > li { border-top: 1px solid var(--border); }
+.learning-journey summary { padding-block: var(--space-3); cursor: pointer; }
+.learning-journey summary span { margin-right: var(--space-3); color: var(--muted-foreground); font-size: var(--text-caption); }
+.learning-journey summary strong { font-weight: 500; }
+.journey-step { padding-bottom: var(--space-4); max-width: var(--reading-measure); }
+.journey-step dl { display: grid; gap: var(--space-4); margin: 0 0 var(--space-4); }
+.journey-step dt { font-size: var(--text-caption); color: var(--muted-foreground); margin-bottom: var(--space-1); }
+.journey-step dd,.journey-step blockquote { margin: 0; white-space: pre-wrap; }
+.journey-step .safe-markdown { white-space: normal; }
+.journey-step dd p + p { margin-top: var(--space-2); }
+.journey-report-feedback { display: grid; gap: var(--space-3); margin-block: var(--space-4); }
+.journey-report-feedback h3,.journey-report-feedback h4 { font-size: var(--text-body); font-weight: 600; }
+.journey-report-feedback ul { display: grid; gap: var(--space-3); list-style: disc; padding-left: var(--space-5); }
+@media (max-width: 700px) {
+  .learning-current-entry { padding-inline: var(--space-4); }
+  .learning-current-entry .entry-avatar { display: none; }
+  .learning-history > summary { padding-inline: var(--space-4); }
+}

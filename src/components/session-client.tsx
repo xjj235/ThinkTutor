@@ -21,6 +21,8 @@ import {
 import { PhaseProgress } from "./phase-progress";
 import { makeClientRequestId as makeRequestId } from "@/lib/client-request-id";
 import { SafeMarkdown } from "./safe-markdown";
+import { LearningFeedbackView } from "./learning-feedback";
+import { LearningJourney } from "./learning-journey";
 import { WorkspaceState } from "./workspace-state";
 import { ArrowLeft, ArrowUpRight, BookOpenCheck, Info as InfoIcon, Lightbulb, SendHorizontal, Play, RotateCcw, UserRound } from "lucide-react";
 
@@ -57,6 +59,8 @@ export function SessionClient({ sessionId, readOnly = false }: { sessionId: stri
   const feynmanRequestId = useRef<string | null>(null);
   const enterFeynmanRequestId = useRef<string | null>(null);
   const recordRef = useRef<HTMLDivElement>(null);
+  const lastPresentedMessage = useRef<string | null>(null);
+  const openedHistoryHash = useRef<string | null>(null);
   const eventRequestIds = useRef<Partial<Record<SessionEventAction, string>>>({});
   const interactionLocked = pending || unresolvedAction !== null;
 
@@ -164,8 +168,21 @@ export function SessionClient({ sessionId, readOnly = false }: { sessionId: stri
     }
   }
   useEffect(() => {
-    if (recordRef.current) recordRef.current.scrollTop = recordRef.current.scrollHeight;
-  }, [payload?.messages.length]);
+    const latestId = payload?.messages.at(-1)?.id;
+    if (!latestId || loading) return;
+    // Start with the explanation instead of scrolling past it to the question.
+    if (lastPresentedMessage.current && lastPresentedMessage.current !== latestId) {
+      recordRef.current?.focus({ preventScroll: true });
+      recordRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+    }
+    lastPresentedMessage.current = latestId;
+    if (window.location.hash.startsWith("#message-") && openedHistoryHash.current !== window.location.hash) {
+      openedHistoryHash.current = window.location.hash;
+      const history = document.getElementById("learning-history");
+      if (history instanceof HTMLDetailsElement) history.open = true;
+      document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "center" });
+    }
+  }, [payload?.messages, loading]);
 
   const loadSession = useCallback(async () => {
     if (pendingRef.current || unresolvedActionRef.current) return;
@@ -415,6 +432,10 @@ export function SessionClient({ sessionId, readOnly = false }: { sessionId: stri
   }
 
   const { session, messages } = payload;
+  let currentStart = Math.max(0, messages.length - 1);
+  if (messages.at(-1)?.questionType === "SCAFFOLDED_HINT") {
+    while (currentStart > 0 && messages[currentStart - 1].role === "ASSISTANT" && messages[currentStart - 1].phase === messages.at(-1)?.phase) currentStart--;
+  }
   const goalPending = session.knowledgeProgress?.pedagogicalStage === "GOAL_PRESENTATION";
   const resumeRequired = session.knowledgeProgress?.resumeRequired;
   const canAnswer = !goalPending && !resumeRequired && (session.phase === "DIAGNOSIS" || session.phase === "SOCRATIC");
@@ -471,15 +492,21 @@ export function SessionClient({ sessionId, readOnly = false }: { sessionId: stri
               {phaseLabels[session.phase]}
             </p>
           </div>
-          <div ref={recordRef} className="learning-entries" role="log" aria-label="研习记录" aria-relevant="additions">
+          <div role="log" aria-label="研习记录" aria-relevant="additions">
             {messages.length === 0 ? (
               <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
                 暂无研习记录。
               </p>
             ) : (
-              messages.map((message) => (
-                <MessageItem key={message.id} message={message} />
-              ))
+              <>
+                {currentStart > 0 ? <details className="learning-history" id="learning-history">
+                  <summary>回看前 {currentStart} 条学习记录</summary>
+                  <div className="learning-entries">{messages.slice(0, currentStart).map((message) => <MessageItem key={message.id} message={message} />)}</div>
+                </details> : null}
+                <div className="learning-current-entry" ref={recordRef} tabIndex={-1} aria-label="本轮反馈与任务">
+                  {messages.slice(currentStart).map((message) => <MessageItem key={message.id} message={message} />)}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -647,6 +674,7 @@ export function SessionClient({ sessionId, readOnly = false }: { sessionId: stri
             </Link>
           </div>
         ) : null}
+        <LearningJourney messages={messages} sessionId={sessionId} report={payload.report} />
       </section>
     </main>
   );
@@ -674,6 +702,7 @@ function MessageItem({ message }: { message: MessageDTO }) {
 
   return (
     <article
+      id={`message-${message.id}`}
       data-role={message.role}
       className={[
         "learning-entry",
@@ -699,7 +728,11 @@ function MessageItem({ message }: { message: MessageDTO }) {
             </span>
           ) : null}
         </div>
-        <SafeMarkdown>{message.content}</SafeMarkdown>
+        {assistant && message.learningFeedback ? <LearningFeedbackView feedback={message.learningFeedback} /> : null}
+        <div className={message.learningFeedback ? "feedback-question" : undefined}>
+          {message.learningFeedback ? <h3>{message.phase === "FEYNMAN" ? "接下来，独立讲清楚" : message.phase === "COMPLETED" ? "本次学习反馈" : "带着这一点继续想"}</h3> : null}
+          <SafeMarkdown>{message.content}</SafeMarkdown>
+        </div>
         {message.webSources.length ? (
           <div className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
             <p className="font-semibold text-foreground">实时网页来源</p>

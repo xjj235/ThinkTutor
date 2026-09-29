@@ -40,9 +40,12 @@ describe("course goals reach the structured coaching workflow", () => {
       const answer = "系统性风险关注金融体系，但我还没有说明它怎样影响其他机构。";
       const request = { answer, clientRequestId: crypto.randomUUID() };
       const assessed = await submitLearningAnswer(saved.id, request);
-      expect(assessed.messages.at(-1)?.content).toContain("原文依据");
-      expect(assessed.messages.at(-1)?.content).toContain(answer);
-      expect(assessed.messages.at(-1)?.content).toContain("下一步至少澄清一项");
+      const feedback = assessed.messages.at(-1)?.learningFeedback;
+      expect(feedback).toBeDefined();
+      expect(answer).toContain(feedback!.answerQuote);
+      expect(feedback!.focus.length).toBeGreaterThan(0);
+      expect(feedback!.whyItMatters.length).toBeGreaterThan(0);
+      expect(assessed.messages.at(-1)?.feedbackForMessageId).toBe(assessed.messages.at(-2)?.id);
       const duplicate = await submitLearningAnswer(saved.id, request);
       expect(duplicate.duplicate).toBe(true);
       expect(duplicate.messages).toEqual(assessed.messages);

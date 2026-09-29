@@ -9,6 +9,8 @@ import {
   learningReportDraftSchema,
 } from "../contracts";
 import { isLowInformationAnswer } from "../state-machine";
+import { requireAnswerFeedback } from "./coach-feedback";
+import type { LearningFeedback } from "../learning-feedback";
 import { retryReviewCandidateSchema, retryReviewInputSchema, type RetryReviewInput } from "../retry-review";
 import { mockAssessLearningTurn } from "./mock-assessment-v12";
 import type { TurnAssessmentInput } from "./types";
@@ -30,15 +32,6 @@ import {
   retryTaskSchema,
 } from "./schemas";
 
-const questionCycle: QuestionType[] = [
-  "CONCEPT_CLARIFICATION",
-  "CAUSE_PROBE",
-  "EVIDENCE_PROBE",
-  "ASSUMPTION_TEST",
-  "COUNTEREXAMPLE",
-  "TRANSFER",
-];
-
 function topicLabel(topic: string) {
   return topic.replace(/[\r\n?？]/g, " ").trim() || "这个知识点";
 }
@@ -56,7 +49,7 @@ function supportQuestion(input: CoachTurnInput): CoachTurn {
     return coachTurnSchema.parse({
       assistantMessage: `先把范围缩小：在“${topic}”里，你最能确定的一个关键词或现象是什么？`,
       questionType: "SCAFFOLDED_HINT",
-      learnerState: input.learnerState ?? { masteryEstimate: 20, confirmedPoints: [], gaps: [topic], misconceptions: [] },
+      learnerState: input.learnerState ?? { masteryEstimate: 0, confirmedPoints: [], gaps: [topic], misconceptions: [] },
       nextAction: "ASK_QUESTION",
       transitionReason: "学生需要缩小问题范围。",
     });
@@ -66,7 +59,7 @@ function supportQuestion(input: CoachTurnInput): CoachTurn {
     return coachTurnSchema.parse({
       assistantMessage: `给你一个二选一框架：你认为“${topic}”更像是概念之间的关系问题，还是条件变化导致的结果问题？`,
       questionType: "SCAFFOLDED_HINT",
-      learnerState: input.learnerState ?? { masteryEstimate: 20, confirmedPoints: [], gaps: [topic], misconceptions: [] },
+      learnerState: input.learnerState ?? { masteryEstimate: 0, confirmedPoints: [], gaps: [topic], misconceptions: [] },
       nextAction: "ASK_QUESTION",
       transitionReason: "学生需要二选一支架。",
     });
@@ -75,7 +68,7 @@ function supportQuestion(input: CoachTurnInput): CoachTurn {
   return coachTurnSchema.parse({
     assistantMessage: `最小必要原理是先找核心概念、再说明条件和结果；你能用这三步解释“${topic}”吗？`,
     questionType: "SCAFFOLDED_HINT",
-    learnerState: input.learnerState ?? { masteryEstimate: 20, confirmedPoints: [], gaps: [topic], misconceptions: [] },
+    learnerState: input.learnerState ?? { masteryEstimate: 0, confirmedPoints: [], gaps: [topic], misconceptions: [] },
     nextAction: "ASK_QUESTION",
     transitionReason: "学生需要最小必要原理。",
   });
@@ -115,35 +108,49 @@ export class MockAIProvider implements AIProvider {
   }
 
   async createCoachTurn(input: CoachTurnInput): Promise<CoachTurn> {
-    if (input.isHintRequest || input.unknownStreak > 0) {
+    if (input.isHintRequest) {
       return supportQuestion(input);
     }
-
+    const latestAnswer = input.latestAnswer ?? "";
     const topic = topicLabel(input.task.topic);
-    const questionType = questionCycle[input.socraticTurns % questionCycle.length];
-    const nextAction = input.socraticTurns >= 3 ? "REQUEST_FEYNMAN" : "ASK_QUESTION";
-
-    const questions: Record<QuestionType, string> = {
-      CONCEPT_CLARIFICATION: `你刚才的解释里，哪个概念是理解“${topic}”最关键的，为什么？`,
-      CAUSE_PROBE: `如果“${topic}”发生变化，最先被影响的原因链条是哪一段？`,
-      ASSUMPTION_TEST: `你的判断依赖了什么前提；如果这个前提不成立，结论会怎样变化？`,
-      COUNTEREXAMPLE: `能不能构造一个看似符合“${topic}”但会推翻你说法的反例？`,
-      EVIDENCE_PROBE: `你刚才的判断可以用哪一条具体证据来支持？`,
-      TRANSFER: `如果把“${topic}”迁移到一个新场景，你会先检查哪个条件？`,
-      SCAFFOLDED_HINT: `请把“${topic}”拆成一个概念、一个条件和一个结果来说明。`,
+    const studentText = [...input.messages.filter((message) => message.role === "USER").map((message) => message.content), latestAnswer].join("\n");
+    const lowInformation = isLowInformationAnswer(latestAnswer);
+    // These markers choose a demonstrable exercise, never certify subject mastery.
+    const questionType: QuestionType = lowInformation ? "SCAFFOLDED_HINT"
+      : !/是|指|意思|定义/.test(studentText) ? "CONCEPT_CLARIFICATION"
+        : !/因为|所以|导致|因此|通过|使/.test(studentText) ? "CAUSE_PROBE"
+          : !/如果|前提|条件|只有|当/.test(studentText) ? "ASSUMPTION_TEST"
+            : !/证据|数据|观察|合同|记录/.test(studentText) ? "EVIDENCE_PROBE"
+              : !/例如|比如|场景|案例/.test(studentText) ? "TRANSFER" : "COUNTEREXAMPLE";
+    const moves: Record<QuestionType, { question: string; focus: string; why: string }> = {
+      CONCEPT_CLARIFICATION: { question: `你刚才使用的说法中，“${topic}”的核心含义是什么？`, focus: `用自己的话界定“${topic}”的核心含义。`, why: "先确定概念所指，才能检查后面的原因和例子是否在解释同一件事。" },
+      CAUSE_PROBE: { question: "你刚才描述的现象是通过哪一个关键环节影响结果的？", focus: "补充你所描述的现象与结果之间的一个因果环节。", why: "只说现象与结果同时出现，还不能解释为什么前者会带来后者。" },
+      ASSUMPTION_TEST: { question: "你刚才的判断需要什么条件才能成立？", focus: "说明刚才判断成立所依赖的关键条件。", why: "说明成立条件，才能避免把特定情境下的判断用于所有情境。" },
+      EVIDENCE_PROBE: { question: "你刚才的判断可以用哪一条具体证据来支持？", focus: "为刚才的判断补充一条可核对的证据。", why: "把判断连到可观察的事实，才能区分有依据的解释与猜测。" },
+      TRANSFER: { question: `换到一个新的具体场景，你会如何用“${topic}”解释其中的现象？`, focus: `检验“${topic}”在一个新场景中的应用。`, why: "换一个情境进行解释，可以检查原来的说法是否只适用于熟悉的例子。" },
+      COUNTEREXAMPLE: { question: "你能给出一个会使刚才判断失效的情境吗？", focus: "检验你刚才判断的适用边界。", why: "找到可能失效的条件，可以帮助区分一般规律与过度概括。" },
+      SCAFFOLDED_HINT: { question: supportQuestion({ ...input, unknownStreak: Math.max(1, input.unknownStreak) }).assistantMessage, focus: "先找到一个能用自己的话说明的概念或现象。", why: "先说清一个具体的起点，后续才能据此追问，而不需要猜一个完整答案。" },
     };
-
+    const move = moves[questionType];
+    const learningFeedback: LearningFeedback = {
+      answerQuote: latestAnswer.trim().slice(0, 240),
+      observation: lowInformation ? "模拟反馈：这次还没有足够的解释可供核验，我们先把问题缩小。" : "模拟反馈：已记录你的这段解释；以下练习根据表达线索安排，尚不能确认观点是否正确。",
+      focus: input.selectedAction ? `围绕课程问题继续核验：${input.selectedAction.assistantMessage.slice(-150)}` : move.focus,
+      whyItMatters: input.selectedAction ? "补充课程问题要求的关系或条件，才能核验刚才的解释是否足以用于这个情境。" : move.why,
+      progress: null,
+    };
     return coachTurnSchema.parse({
-      assistantMessage: questions[questionType],
-      questionType,
+      assistantMessage: input.selectedAction?.assistantMessage ?? move.question,
+      questionType: input.selectedAction?.questionType ?? questionType,
+      learningFeedback: requireAnswerFeedback(learningFeedback, latestAnswer),
       learnerState: {
-        masteryEstimate: Math.min(90, 35 + input.socraticTurns * 15),
-        confirmedPoints: [`能够继续解释“${topic}”`],
-        gaps: input.socraticTurns >= 2 ? [] : [`“${topic}”的条件与机制仍需澄清`],
+        masteryEstimate: 0,
+        confirmedPoints: [],
+        gaps: [learningFeedback.focus],
         misconceptions: [],
       },
-      nextAction,
-      transitionReason: nextAction === "REQUEST_FEYNMAN" ? "已完成至少三轮追问，可检验独立讲解。" : "仍需继续追问。",
+      nextAction: "ASK_QUESTION",
+      transitionReason: "模拟模式仅安排练习，学科理解仍待独立检验。",
     });
   }
 

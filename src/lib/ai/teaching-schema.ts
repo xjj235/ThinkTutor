@@ -9,7 +9,16 @@ const groundingSchema = z.object({
   instructions: z.array(z.string()).max(12), maxQuestionChars: z.number().int().min(120).max(500),
 }).strict();
 export const teachingReviewSchema = z.object({
-  grounded: z.boolean(), targetAligned: z.boolean(), answerConnected: z.boolean(), nonRedundant: z.boolean(), noAnswerLeak: z.boolean(),
+  minimumAnswer: z.string().trim().min(1).max(800),
+  requirementChecks: z.array(z.object({
+    evidenceId: z.string().min(1),
+    status: z.enum(["ELICITED", "PROVIDED", "NOT_ASKED"]),
+    questionQuote: z.string().trim().min(1).max(500).nullable(),
+    rationale: z.string().trim().min(1).max(300),
+  }).strict()).min(1).max(80),
+  answerLeakQuote: z.string().trim().min(1).max(500).nullable(),
+  missingInformation: z.string().trim().min(1).max(500).nullable(),
+  grounded: z.boolean(), targetAligned: z.boolean(), answerConnected: z.boolean(), nonRedundant: z.boolean(), noAnswerLeak: z.boolean(), questionAnswerable: z.boolean(),
 }).strict();
 
 export const teachingSelectionInputSchema = z.object({

@@ -1,6 +1,7 @@
 import { knowledgeSelectionSchema } from "./knowledge/student-catalog-schema";
 import { z } from "zod";
 import { textLimits } from "./content-limits";
+import { learningFeedbackSchema, type LearningFeedback } from "./learning-feedback";
 
 export { textLimits } from "./content-limits";
 
@@ -57,7 +58,7 @@ export const questionTypeLabels: Record<QuestionType, string> = {
   CONCEPT_CLARIFICATION: "概念澄清",
   CAUSE_PROBE: "原因追问",
   ASSUMPTION_TEST: "假设检验",
-  COUNTEREXAMPLE: "反例思考",
+  COUNTEREXAMPLE: "情形检验",
   EVIDENCE_PROBE: "证据追问",
   TRANSFER: "迁移应用",
   SCAFFOLDED_HINT: "支架提示",
@@ -186,6 +187,7 @@ export const coachTurnSchema = z
     learnerState: learnerStateSchema,
     nextAction: coachNextActionSchema,
     transitionReason: z.string().max(300),
+    learningFeedback: learningFeedbackSchema.optional(),
   })
   .strict();
 
@@ -232,6 +234,8 @@ export const messageMetadataSchema = z
     retrySessionId: z.string().trim().min(1).max(64).optional(),
     knowledgePolicy: z.enum(["COURSE_KNOWLEDGE_FIRST", "MODEL_FALLBACK", "WEB_SEARCH_FALLBACK"]).optional(),
     webSources: z.array(webSourceSchema).max(5).optional(),
+    learningFeedback: learningFeedbackSchema.optional(),
+    feedbackForMessageId: z.string().trim().min(1).max(64).optional(),
   })
   .strict();
 
@@ -321,6 +325,8 @@ export interface MessageDTO {
   clientRequestId: string | null;
   webSources: WebSource[];
   knowledgePolicy: MessageMetadata["knowledgePolicy"] | null;
+  learningFeedback?: LearningFeedback;
+  feedbackForMessageId?: string;
   createdAt: string;
 }
 

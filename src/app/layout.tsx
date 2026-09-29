@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./tokens.css";
 import "./workspace.css";
+import "./coaching.css";
 import "katex/dist/katex.min.css";
 import { SiteHeader } from "@/components/site-header";
 
