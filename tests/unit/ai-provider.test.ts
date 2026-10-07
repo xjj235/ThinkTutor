@@ -111,7 +111,7 @@ describe("prompt and output boundaries", () => {
 });
 
 describe("DeepSeekProvider", () => {
-  it("audits content prerequisites with low thinking and keeps the subsequent teaching review fast", async () => {
+  it("audits content prerequisites without lengthy reasoning and keeps the subsequent teaching review fast", async () => {
     process.env.DEEPSEEK_API_KEY = "test-server-key";
     process.env.AI_MAX_RETRIES = "0";
     resetServerEnvForTests();
@@ -123,15 +123,37 @@ describe("DeepSeekProvider", () => {
     expect(bodies[0]?.messages[0]?.content).toContain("仅凭这些信息是否足以判断");
     expect(bodies[1]?.messages[0]?.content).toContain("你是学习内容可用性复核模块");
     expect(bodies[2]?.messages[0]?.content).toContain("你是学习反馈质量复核模块");
-    expect(bodies.map((body) => body.thinking.type)).toEqual(["enabled", "enabled", "disabled"]);
-    expect(bodies.map((body) => body.max_tokens)).toEqual([8000, 8000, 8000]);
-    expect(bodies.map((body) => body.reasoning_effort)).toEqual(["low", "low", undefined]);
+    expect(bodies.map((body) => body.thinking.type)).toEqual(["enabled", "disabled", "disabled"]);
+    expect(bodies.map((body) => body.max_tokens)).toEqual([8000, 2500, 8000]);
+    expect(bodies.map((body) => body.reasoning_effort)).toEqual(["low", undefined, undefined]);
     expect(bodies[1]?.messages[0]?.content).toContain('"prerequisiteEvidence"');
     expect(bodies[2]?.messages[0]?.content).not.toContain('"prerequisiteEvidence"');
     expect(bodies[2]?.messages[0]?.content).not.toContain('"prerequisitesSupported"');
     expect(result).toEqual(output);
     expect(result).not.toHaveProperty("answerDisclosure");
     expect(result).not.toHaveProperty("minimumAnswer");
+  });
+
+  it("accepts concrete givens from the question the student just answered, but rejects invented givens", async () => {
+    process.env.DEEPSEEK_API_KEY = "test-server-key";
+    process.env.AI_MAX_RETRIES = "0";
+    resetServerEnvForTests();
+    const previousQuestion = "某银行固定利率贷款的利息收入不变，浮动利率存款的利息支出增加。净利息收入会怎样变化？";
+    const input = { ...coachInput, latestAnswer: "净利息收入减少。", messages: [
+      { role: "ASSISTANT" as const, phase: "SOCRATIC" as const, content: previousQuestion, questionType: "CAUSE_PROBE" as const },
+      { role: "USER" as const, phase: "SOCRATIC" as const, content: "净利息收入减少。", questionType: null },
+    ] };
+    const output = { assistantMessage: "固定利率贷款利息收入不变时，净利息收入为什么减少？", questionType: "CAUSE_PROBE", learningFeedback: { ...feedback, answerQuote: "净利息收入减少。" }, learnerState: { masteryEstimate: 0, confirmedPoints: [], gaps: [], misconceptions: [] }, nextAction: "ASK_QUESTION", transitionReason: "补上收支变化依据" };
+    const given = "浮动利率存款的利息支出增加";
+    const audit = { ...contentReviewPass, prerequisiteEvidence: [{ fact: given, kind: "READING_ARITHMETIC", source: "QUESTION", quote: given }] };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion(output)).mockResolvedValueOnce(completion(audit)).mockResolvedValueOnce(completion(reviewPass));
+    await expect(new DeepSeekProvider({ fetcher }).createCoachTurn(input)).resolves.toEqual(output);
+    const reviewRequest = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)) as { messages: Array<{ content: string }> };
+    expect(reviewRequest.messages[1]?.content).toContain(previousQuestion);
+
+    const forged = { ...audit, prerequisiteEvidence: [{ ...audit.prerequisiteEvidence[0], quote: "题设不存在的条件" }] };
+    const rejectingFetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion(output)).mockResolvedValueOnce(completion(forged));
+    await expect(new DeepSeekProvider({ fetcher: rejectingFetcher }).createCoachTurn(input)).rejects.toThrow("追问内容未通过");
   });
 
   it("keeps the shared content answer in untrusted review data and rejects a rewritten answer", async () => {
