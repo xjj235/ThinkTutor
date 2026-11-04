@@ -67,6 +67,7 @@ test("curated knowledge requires independent explanation at the turn limit befor
   await page.getByRole("button", { name: "提交修订并生成报告" }).click();
   await expect(page).toHaveURL(/\/report\//);
   await expect(page.getByText("五维能力评估")).toBeVisible();
+  await page.getByTestId("report-journey-disclosure").locator(":scope > summary").click();
   await expect(page.getByRole("heading", { name: "我的理解如何变化" })).toBeVisible();
   await page.reload();
   await expect(page.getByText("五维能力评估")).toBeVisible();

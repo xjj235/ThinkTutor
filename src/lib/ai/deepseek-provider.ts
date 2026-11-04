@@ -1,4 +1,5 @@
 import "server-only";
+import { createFeynmanTaskInstruction } from "./feynman-instruction";
 
 import { createHmac } from "node:crypto";
 import { z } from "zod";
@@ -29,7 +30,6 @@ import { logger, safeErrorForLog } from "../logger";
 import { coachSystemPrompt, diagnosticSystemPrompt, reportSystemPrompt, wrapUntrustedLearningContent } from "./prompts";
 import { tutorSystemPrompt } from "./prompts/tutor";
 import {
-  feynmanInstructionSchema,
   learningContextSummarySchema,
   materialKeywordsSchema,
   retryTaskSchema,
@@ -112,8 +112,8 @@ ruleIndex指向prerequisiteEvidence中P→Q的规则（从0计数），inference
 二元判断的方向也是待答结论。先确定question正在让学生判哪个主张的真假，再检查反馈是否已经断言该主张正确、错误或需要修正；即使未直说“是/否”，让学生“找到推断中需要修正的一步”也预设原判断错误。若下一问仍检验这同一个判断，必须记answerDisclosure并判ANSWER_DISCLOSED，不能因还让学生说依据就放行，也不能因审核器可从材料证明错误便当成学生已经确认。中性的“检查判断的依据”没有预选方向；指出已由此前作答独立确立的缺项并转向新的应用或补充步骤可以，但不得预答新问题。
 对尚待学生判断的具体例子，反馈先称它为“反例”“错误案例”等也已暗示不成立，应按答案暴露处理；回顾学生已确认的反例，或明确让学生自行构造反例，不属此类。
 边界对照：问“需要什么角”却已称“两直角边”，这个名称直接给出正在检验的角条件，不是普通给定，应拒绝；在已建立勾股定理后点明“用上勾股定理”，让学生求新的边长，仍留下完整列式计算任务，即使还问“依据是什么”也不因工具名称而拒绝。若本题专门检验选择哪个工具，提前告知工具才属于泄露。
-2. 题设自洽：核对实际数据、定义和约束是否能同时成立。矛盾时inconsistentGivens列出question里冲突的2至4段连续原文，并用一句具体事实或计算说明conflict，verdict=INCONSISTENT_GIVENS。不能只挑其中一条条件作答而忽略另一条。
-3. 定位信息：要求指出具体对象时，是否确有图、标号、数据或足够文字供定位？缺失时missingInformationQuote摘出question里无法定位的连续原文，verdict=MISSING_INFORMATION；不能自行补图或把具体定位改答成一般方法。
+2. 题设自洽：核对实际数据、定义和约束是否能同时成立。三角形若同时给全部角度和两条边，必须核对角对应边比能否成立，不能仅因角和为180°就放行任意边长；无法在本次短审核中确认时用UNCERTAIN，不能猜测它自洽。矛盾时inconsistentGivens列出question里冲突的2至4段连续原文，并用一句具体事实或计算说明conflict，verdict=INCONSISTENT_GIVENS。不能只挑其中一条条件作答而忽略另一条。
+3. 定位信息：要求指出具体对象时，是否确有图、标号、数据或足够文字供定位？判断一个过程是否正在发生还需前后变化或必要外部条件，单一时刻的状态不够，例如“有冰且0℃”并不单独证明正在熔化。缺失时missingInformationQuote摘出question里信息不足的连续原文，verdict=MISSING_INFORMATION；不能自行补图、补过程条件或把具体定位改答成一般方法。
 没有问题的对应问题摘录字段为null。只有前提有支持且三项均无问题才PASS；不能确定时UNCERTAIN。所有引用必须出现在指定字段。minimumAnswer只写最短核心答案，各fact只记实际用到的一项关系；不重复推演、扩展题目或输出修订建议。只输出短JSON，不写思维过程。`;
 const counterfactualOutcomeSchema = z.object({
   kind: z.enum(["AFFIRM", "DENY", "INSUFFICIENT", "VALUE"]),
@@ -206,6 +206,7 @@ const coachRetryContextSchema = z.object({
   ])).min(1),
   rejectedDraft: coachTurnSchema.pick({ assistantMessage: true, learningFeedback: true }),
   answerDisclosure: coachContentReviewSchema.shape.answerDisclosure.unwrap().pick({ field: true, quote: true }).optional(),
+  unsupportedPrerequisites: z.array(z.string().trim().min(1).max(240)).max(4).optional(),
 }).strict();
 type CoachRetryContext = z.infer<typeof coachRetryContextSchema>;
 type CoachRetryCheck = CoachRetryContext["failedChecks"][number];
@@ -219,7 +220,7 @@ const coachRetryInstructions: Record<CoachRetryCheck, string> = {
   scaffoldAppropriate: "把下一问降到学生可尝试的一个特征、术语或明确小判断，questionType必须为SCAFFOLDED_HINT；不要只加简单的开场白，却仍要求完整公式、证明或复杂解释。",
   changeRecognized: "对照真实前轮与本轮，在observation或progress中明确指出已经发生的具体新增或修正，不因尚未完全掌握而略过。",
   diagnosticValue: "重选能获得新证据的情境或明确检验遗漏依据；保留学生原话的全部条件，补齐不打算检验的条件，让沿用完整错误规则无法得到同样可接受的答案。不能靠假设再给一个条件或附加为什么来宣称已有区分；已修正或缺证据时补真实缺项即可。",
-  prerequisitesSupported: "逐项核对来源及逻辑方向，保持对象、量词及属性范围；一个局部不满足不能推出整体不满足，信息不足只能说尚不能确认。只有P→Q时，非P只说明不能直接应用该规则，不能推出非Q；也不能由Q反推P，合法逆否非Q→非P可以。提供完整数据或改为有据的小判断，确需额外规则时须有充分来源，不把新定理、逆命题或专业工具包装成本轮缺口。",
+  prerequisitesSupported: "逐项核对来源及逻辑方向，保持对象、量词及属性范围；一个局部不满足不能推出整体不满足，信息不足只能说尚不能确认。只有P→Q时，非P只说明不能直接应用该规则，不能推出非Q；也不能由Q反推P，合法逆否非Q→非P可以。提供完整数据或改为有据的小判断，确需额外规则时须有充分来源，不把新定理、逆命题或专业工具包装成本轮缺口。不可信数据若有unsupportedPrerequisites，它们只是上一草稿未获来源支持、必须避用的依赖，不是可采信的新知识。改用资料已经建立的条件或删去不必要数值，不把这些依赖搬到新题干充当已知事实，也不重复原草稿等待放行。",
   respectfulFeedback: "删除如果连……都……、这么简单还不会等责备句式，改用平等支持的表达；说明下一小步能帮助什么，不指责学生尚未做到什么。",
 };
 
@@ -453,7 +454,7 @@ export class DeepSeekProvider implements AIProvider {
             body: JSON.stringify({
               model: env.DEEPSEEK_MODEL,
               instructions: `${systemPrompt}\n\n你必须调用 web_search 获取实时网页信息，并在 JSON 的 webSources 字段列出最多 5 个实际网页来源。webSources 只能列出无用户名、无密码的 HTTPS URL；如果检索结果是 http、data、file 或带凭据 URL，必须丢弃。assistantMessage 必须只包含一个主要问题，且全文只能出现一个问号或一个中文问号；不要用“也就是说”“换句话说”追加第二个问题。如果调用方提供 retrievedContext，必须先对比课程知识库与网页检索结果：一致处可合并使用；差异处要按课程目标、材料时效、来源权威性和学生当前任务进行校准，再提出问题或提示。不要简单忽略任一来源；不要输出内部对比过程。你必须只输出合法 JSON（JSON），不得输出 Markdown。示例 JSON：${examples[operation]}\n${outputContract}\n${correctionInstructions}`,
-              input: `${correction ? `${wrapUntrustedLearningContent({ rejectedCoachDraft: correction.rejectedDraft, answerDisclosure: correction.answerDisclosure })}\n` : ""}${wrapUntrustedLearningContent(requestPayload)}`,
+              input: `${correction ? `${wrapUntrustedLearningContent({ rejectedCoachDraft: correction.rejectedDraft, answerDisclosure: correction.answerDisclosure, unsupportedPrerequisites: correction.unsupportedPrerequisites })}\n` : ""}${wrapUntrustedLearningContent(requestPayload)}`,
               tools: [{ type: "web_search" }],
               tool_choice: { type: "web_search" },
               text: { format: { type: "json_object" } },
@@ -478,13 +479,13 @@ export class DeepSeekProvider implements AIProvider {
                 ...(attempt > 0 && lastError.code === "AI_INVALID_OUTPUT" && operation === "report" ? [{ role: "system", content: "上次报告未通过证据校验。每个超过25分的维度以及每条strengths.evidence都必须用中文双引号逐字引用学生的连续原文；不得引用教练内容、拼接或杜撰。缺乏证据时评分不得超过25，并说明本次对话未充分展示。" }] : []),
                 ...(correction ? [
                   { role: "system", content: correctionInstructions },
-                  { role: "user", content: wrapUntrustedLearningContent({ rejectedCoachDraft: correction.rejectedDraft, answerDisclosure: correction.answerDisclosure }) },
+                  { role: "user", content: wrapUntrustedLearningContent({ rejectedCoachDraft: correction.rejectedDraft, answerDisclosure: correction.answerDisclosure, unsupportedPrerequisites: correction.unsupportedPrerequisites }) },
                 ] : []),
                 { role: "user", content: wrapUntrustedLearningContent(operation === "turn_assessment" && isRecord(requestPayload) ? { message: requestPayload.message, questionText: requestPayload.questionText } : ["teaching_selection", "teaching_review"].includes(operation) && isRecord(requestPayload) ? { studentContent: requestPayload.studentContent, recentTurns: requestPayload.recentTurns, previousQuestions: requestPayload.previousQuestions, candidate: requestPayload.candidate } : requestPayload) },
               ],
               response_format: { type: "json_object" },
               thinking: { type: thinking ? "enabled" : "disabled" },
-              ...(thinking ? { reasoning_effort: operation === "coach" || operation === "diagnostic_review" ? "low" : "high" } : boundedOperations.includes(operation) ? { temperature: 0 } : {}),
+              ...(thinking ? { reasoning_effort: operation === "coach" || operation === "diagnostic_review" || operation === "report" ? "low" : "high" } : boundedOperations.includes(operation) ? { temperature: 0 } : {}),
               // Thinking tokens share the completion budget; leave room for the report JSON.
               max_tokens: operation === "report" ? 8_000 + attempt * 4_000 : operation === "coach_review" || operation === "coach" && thinking ? 8_000 : operation === "turn_assessment" || operation === "retry_review" || operation === "diagnostic_review" ? 4_000 : operation === "coach_content_review" ? 2_500 : 1_500,
               user: anonymousUserId(meta.userId, env.AI_PSEUDONYM_SECRET),
@@ -577,11 +578,12 @@ export class DeepSeekProvider implements AIProvider {
     const feedbackSchema = previousStudentAnswers.length ? learningFeedbackSchema : learningFeedbackSchema.extend({ progress: z.null() });
     const schema: z.ZodType<SourcedCoachTurn> = input.isHintRequest ? coachTurnSchema.omit({ learningFeedback: true }) : coachTurnSchema.extend({ learningFeedback: feedbackSchema });
     let retryContext: CoachRetryContext | null = null;
-    const rememberRejectedDraft = (turn: SourcedCoachTurn, failedChecks: CoachRetryCheck[], answerDisclosure?: CoachRetryContext["answerDisclosure"]) => {
+    const rememberRejectedDraft = (turn: SourcedCoachTurn, failedChecks: CoachRetryCheck[], answerDisclosure?: CoachRetryContext["answerDisclosure"], unsupportedPrerequisites?: string[]) => {
       retryContext = coachRetryContextSchema.parse({
         failedChecks: [...new Set(failedChecks)],
         rejectedDraft: { assistantMessage: input.selectedAction?.assistantMessage ?? turn.assistantMessage, learningFeedback: turn.learningFeedback },
         ...(answerDisclosure ? { answerDisclosure } : {}),
+        ...(unsupportedPrerequisites?.length ? { unsupportedPrerequisites } : {}),
       });
     };
     return this.structured("coach", schema, renderSystemPrompt(input.isHintRequest ? tutorSystemPrompt : coachSystemPrompt, input) + hintInstructions, input, input, !input.isHintRequest, async (turn) => {
@@ -643,7 +645,8 @@ export class DeepSeekProvider implements AIProvider {
           if (!prerequisiteEvidenceValid || contentReview.verdict === "UNSUPPORTED_PREREQUISITE") failedChecks.push("prerequisitesSupported");
           if (contentReview.inconsistentGivens || contentReview.missingInformationQuote || ["INCONSISTENT_GIVENS", "MISSING_INFORMATION", "AMBIGUOUS_QUESTION", "UNCERTAIN"].includes(contentReview.verdict) || !contentEvidenceValid) failedChecks.push("questionAnswerable");
           if (conditionalFailure) failedChecks.push(conditionalFailure);
-          rememberRejectedDraft(turn, failedChecks, disclosure && contentEvidenceValid ? { field: disclosure.field, quote: disclosure.quote } : undefined);
+          rememberRejectedDraft(turn, failedChecks, disclosure && contentEvidenceValid ? { field: disclosure.field, quote: disclosure.quote } : undefined,
+            contentReview.prerequisiteEvidence.filter((item) => item.source === "UNSUPPORTED").map((item) => item.fact));
           logger.warn({ answerDisclosed: Boolean(disclosure) || contentReview.verdict === "ANSWER_DISCLOSED", inconsistentGivens: Boolean(contentReview.inconsistentGivens), missingInformation: Boolean(contentReview.missingInformationQuote), uncertain: contentReview.verdict === "UNCERTAIN", contentEvidenceValid, prerequisiteEvidenceValid, conditionalReasoningValid: conditionalFailure === null }, "Coach content rejected by focused review");
           throw new AIProviderError("AI_INVALID_OUTPUT", "追问内容未通过答案暴露、题设或前提检查，请重试。", 502, true);
         }
@@ -686,8 +689,8 @@ export class DeepSeekProvider implements AIProvider {
     }, () => retryContext);
   }
 
-  createFeynmanInstruction(input: FeynmanInstructionInput) {
-    return this.structured("feynman_instruction", feynmanInstructionSchema, renderSystemPrompt(tutorSystemPrompt, input), input, input, false);
+  async createFeynmanInstruction(input: FeynmanInstructionInput) {
+    return createFeynmanTaskInstruction(input.task);
   }
 
   createLearningReport(input: ReportInput) {

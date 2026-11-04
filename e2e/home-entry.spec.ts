@@ -6,6 +6,11 @@ async function assertSingleEntry(page: Page) {
   await expect(action).toBeInViewport();
   await expect(page.locator("main .button")).toHaveCount(1);
   await expect(page.locator(".stat-grid,.study-agenda,.role-ledger,.method-track")).toHaveCount(0);
+  await expect(page.getByText("AI 自主学习教练", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "一次学习，怎么进行" })).toBeVisible();
+  await expect(page.locator('[aria-labelledby="home-workflow-title"] li')).toHaveCount(4);
+  await expect(page.getByText("演示对话 · 非实际学习记录", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "完成后，留下自己的学习成果" })).toBeVisible();
   const bounds = await action.boundingBox();
   expect(bounds).not.toBeNull();
   expect(Math.abs(bounds!.x + bounds!.width / 2 - page.viewportSize()!.width / 2)).toBeLessThan(2);

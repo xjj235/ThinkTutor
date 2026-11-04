@@ -9,6 +9,7 @@ test("students can see why each question follows their answer and revisit their 
   await page.getByRole("button", { name: "创建学生账号" }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await page.getByRole("link", { name: "新建学习任务", exact: true }).click();
+  await expect(page).toHaveURL(/\/learn\/new$/);
   await page.getByLabel("知识点").fill("杠杆与收益");
   await page.getByLabel("学习目标").fill("区分借款放大收益的条件和风险");
   await page.getByLabel("学习者水平").selectOption("入门");
@@ -50,6 +51,13 @@ test("students can see why each question follows their answer and revisit their 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     feedbackCount++;
     if (feedbackCount === 1) {
+      const source = current.locator(".feedback-source");
+      await expect(source).not.toHaveAttribute("open", "");
+      await source.locator("summary").focus();
+      await page.keyboard.press("Enter");
+      await expect(source.locator("blockquote")).toHaveText(`“${feedback.answerQuote}”`);
+      await expect(current.getByText(feedback.observation, { exact: true })).toBeVisible();
+      await source.locator("summary").click();
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
       await page.screenshot({ path: testInfo.outputPath("answer-connected-feedback.png"), fullPage: true });
       await page.reload();
@@ -75,6 +83,18 @@ test("students can see why each question follows their answer and revisit their 
   await page.getByRole("button", { name: "生成学习报告" }).click();
   await expect(page).toHaveURL(/\/report\//);
   await page.reload();
+  const journeyDisclosure = page.getByTestId("report-journey-disclosure");
+  await expect(journeyDisclosure).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("report-evidence-note")).toContainText("不等于能力不足");
+  await expect(page.getByTestId("dimension-evidence-coverage")).toHaveCount(5);
+  const findings = await page.getByLabel("主要发现与下一步").boundingBox();
+  const dimensions = await page.locator(".report-dimensions").boundingBox();
+  const trajectory = await journeyDisclosure.boundingBox();
+  expect(findings!.y).toBeLessThan(dimensions!.y);
+  expect(dimensions!.y).toBeLessThan(trajectory!.y);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("report-summary-before-trajectory.png"), fullPage: true });
+  await journeyDisclosure.locator(":scope > summary").click();
   await expect(page.getByRole("heading", { name: "我的理解如何变化" })).toBeVisible();
   await expect(page.locator(".learning-journey > ol > li")).toHaveCount(feedbackCount);
   await expect(page.getByTestId("independent-explanation-step")).toHaveCount(0);
@@ -100,6 +120,7 @@ test("voluntary Feynman explanation remains connected to its report without answ
   await page.getByRole("button", { name: "创建学生账号" }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await page.getByRole("link", { name: "新建学习任务", exact: true }).click();
+  await expect(page).toHaveURL(/\/learn\/new$/);
   await page.getByLabel("知识点").fill("汇率风险");
   await page.getByLabel("学习目标").fill("解释外币现金流的折算价值为什么变化");
   await page.getByLabel("学习者水平").selectOption("有基础");
@@ -129,6 +150,7 @@ test("voluntary Feynman explanation remains connected to its report without answ
   await page.getByRole("button", { name: "生成学习报告" }).click();
   await expect(page).toHaveURL(/\/report\//);
   await page.reload();
+  await page.getByTestId("report-journey-disclosure").locator(":scope > summary").click();
   await expect(independent).toHaveCount(1);
   await independent.locator("summary").click();
   await expect(independent.getByText(explanation, { exact: true })).toBeVisible();

@@ -9,6 +9,7 @@ import {
   learningReportDraftSchema,
 } from "../contracts";
 import { isLowInformationAnswer } from "../state-machine";
+import { createFeynmanTaskInstruction } from "./feynman-instruction";
 import { requireAnswerFeedback } from "./coach-feedback";
 import { normalizeInitialDiagnostic } from "./diagnostic";
 import type { LearningFeedback } from "../learning-feedback";
@@ -27,7 +28,6 @@ import type {
   RetryTaskInput,
 } from "./types";
 import {
-  feynmanInstructionSchema,
   learningContextSummarySchema,
   materialKeywordsSchema,
   retryTaskSchema,
@@ -276,11 +276,7 @@ export class MockAIProvider implements AIProvider {
   }
 
   async createFeynmanInstruction(input: FeynmanInstructionInput) {
-    const topic = topicLabel(input.task.topic);
-    return feynmanInstructionSchema.parse({
-      assistantMessage: `请把“${topic}”讲给一位第一次接触它的同学听。`,
-      requirements: ["用自己的话说明核心概念", "解释条件、机制与结果", "给出一个例子", "说明在新场景中的适用条件"],
-    });
+    return createFeynmanTaskInstruction(input.task);
   }
 
   async createRetryTask(input: RetryTaskInput) {

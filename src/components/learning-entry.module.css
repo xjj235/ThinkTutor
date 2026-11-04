@@ -1,0 +1,68 @@
+.overview {
+  width: min(100%, var(--workspace-width));
+  margin-inline: auto;
+  padding: var(--space-8) var(--page-gutter) var(--space-9);
+}
+
+.introduction {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-bottom: var(--space-8);
+}
+
+.introduction h1 { max-width: 26em; text-wrap: balance; }
+.purpose { margin-top: var(--space-5); font-size: var(--text-reading); }
+.purpose strong { font-weight: 600; color: var(--brand); }
+.description { max-width: 40em; margin-top: var(--space-3); color: var(--muted-foreground); text-wrap: pretty; }
+.action { min-height: 56px; min-width: 224px; margin-top: var(--space-5); font-size: var(--text-reading); }
+.startHint { max-width: 42em; margin-top: var(--space-3); color: var(--muted-foreground); font-size: var(--text-caption); }
+
+.guide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-9);
+  border-top: 1px solid var(--border);
+  padding-block: var(--space-7);
+}
+
+.sectionDescription { margin-top: var(--space-2); color: var(--muted-foreground); }
+.steps { margin: var(--space-5) 0 0; padding: 0; list-style: none; }
+.steps li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: var(--space-4); padding-block: var(--space-4); }
+.steps li + li { border-top: 1px solid var(--border); }
+.steps li:first-child { padding-top: 0; }
+.steps h3 { font-size: var(--text-body); line-height: var(--leading-body); }
+.steps p { margin-top: var(--space-1); color: var(--muted-foreground); }
+.stepNumber { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; color: var(--brand); font-variant-numeric: tabular-nums; }
+
+.example { align-self: start; border: 1px solid var(--border); border-radius: var(--radius-surface); background: var(--card); overflow: hidden; }
+.exampleHeader { padding: var(--space-5); border-bottom: 1px solid var(--border); }
+.exampleHeader p { margin-top: var(--space-2); color: var(--muted-foreground); font-size: var(--text-caption); }
+.dialogue { margin: 0; }
+.dialogue > div { padding: var(--space-4) var(--space-5); }
+.dialogue dt { font-size: var(--text-caption); color: var(--muted-foreground); margin-bottom: var(--space-2); }
+.dialogue dd { margin: 0; font-size: var(--text-body); line-height: var(--leading-body); }
+.studentLine { background: var(--muted); }
+.dialogue > .questionLine { padding-top: 0; }
+.questionLine dt { color: var(--brand); }
+.questionLine dd { font-weight: 600; }
+.exampleNote { padding: var(--space-4) var(--space-5); border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: var(--text-caption); }
+
+.outcomes { border-top: 1px solid var(--border); padding-top: var(--space-6); }
+.outcomes h2 { font-size: var(--text-reading); }
+.outcomes dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-6); margin: var(--space-5) 0 0; }
+.outcomes dt { font-weight: 600; }
+.outcomes dd { margin: var(--space-2) 0 0; color: var(--muted-foreground); }
+
+@media (max-width: 800px) {
+  .overview { padding-top: var(--space-6); }
+  .introduction { padding-bottom: var(--space-6); }
+  .guide { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); padding-block: var(--space-6); }
+  .outcomes dl { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+}
+
+@media (max-width: 450px) {
+  .exampleHeader,.dialogue > div,.exampleNote { padding-inline: var(--space-4); }
+  .steps li { gap: var(--space-3); }
+}

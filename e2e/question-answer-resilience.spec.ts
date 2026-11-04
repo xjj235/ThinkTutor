@@ -55,6 +55,48 @@ async function prepareTaskForm(page: Page) {
   await page.getByLabel("学习者水平").selectOption("有基础");
 }
 
+test("a slow answer shows honest elapsed time and preserves a copy without submitting twice", async ({ page }) => {
+  await register(page);
+  const created = await createSession(page);
+  await page.goto(`/session/${created.session.id}`);
+  await expect(page.getByLabel("独立作答")).toBeVisible();
+  await page.clock.install();
+  let requests = 0;
+  let releaseAnswer: () => void = () => {};
+  const answerGate = new Promise<void>((resolve) => { releaseAnswer = resolve; });
+  await page.route("**/api/sessions/*/answers", async (route) => {
+    requests++;
+    await answerGate;
+    await route.continue();
+  });
+  try {
+    await page.getByLabel("独立作答").fill(originalAnswer);
+    await page.getByRole("button", { name: "提交回答", exact: true }).click();
+    const pending = page.getByTestId("learning-pending");
+    await expect(pending).toContainText("正在等待服务端返回结果");
+    await expect(page.getByLabel("独立作答")).toHaveValue(originalAnswer);
+    await page.clock.fastForward(20_000);
+    await expect(pending).toContainText("本次等待较久");
+    await expect(pending.locator(".learning-pending-time")).toContainText(/已等待 2\d 秒/u);
+    await pending.getByText("查看并复制本次提交内容", { exact: true }).click();
+    await expect(pending.getByLabel("本次提交内容（可复制）")).toHaveValue(originalAnswer);
+    await expect(pending.getByLabel("本次提交内容（可复制）")).toHaveAttribute("readonly", "");
+    await page.clock.fastForward(40_000);
+    await expect(pending).toContainText("仍未收到本次操作结果");
+    await expect(page.getByRole("button", { name: "提交回答", exact: true })).toBeDisabled();
+    await page.locator("form.response-composer").evaluate((form) => {
+      if (!(form instanceof HTMLFormElement)) throw new Error("Missing response form");
+      form.requestSubmit();
+    });
+    expect(requests).toBe(1);
+  } finally {
+    releaseAnswer();
+  }
+  await expect(page.getByTestId("learning-pending")).toHaveCount(0);
+  await expect(page.getByLabel("独立作答")).toHaveValue("");
+  expect(requests).toBe(1);
+});
+
 for (const failureMode of ["disconnect", "server-error"] as const) {
 test(`a committed answer with ${failureMode} locks edits and recovers the same request`, async ({ page }) => {
   await register(page);

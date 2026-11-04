@@ -93,15 +93,19 @@ export const auditActionLabels = {
   ADMIN_LOGIN: "管理员登录",
 } satisfies Record<AuditAction, string>;
 
-const aiOperationLabels = {
+export const aiOperationLabels = {
   turn_assessment: "学习证据诊断",
   teaching_selection: "教学策略与追问生成",
   teaching_review: "追问质量复核",
   diagnostic: "知识诊断",
+  diagnostic_review: "诊断内容复核",
   coach: "苏格拉底追问",
+  coach_content_review: "追问内容复核",
+  coach_review: "学习反馈复核",
   feynman_instruction: "费曼讲解说明",
   report: "学习报告",
   retry_task: "漏洞再练",
+  retry_review: "再练结果复核",
   context_summary: "学习上下文摘要",
   material_keywords: "材料关键词提取",
 } as const;

@@ -15,6 +15,7 @@ import {
 } from "@/lib/contracts";
 import { gapStatusLabels } from "@/lib/display-labels";
 import { makeClientRequestId } from "@/lib/client-request-id";
+import { reportDimensionSources } from "@/lib/report-evidence-view";
 import { SafeMarkdown } from "./safe-markdown";
 import { LearningJourney } from "./learning-journey";
 import { WorkspaceState } from "./workspace-state";
@@ -202,7 +203,7 @@ export function ReportClient({ sessionId, readOnly = false }: { sessionId: strin
         </p>
         <div className="report-overview">
           <div className="report-score">
-            <p className="text-sm text-muted-foreground">综合分</p>
+            <p className="text-sm text-muted-foreground">本次表现综合分</p>
             <p className="text-brand">
               {report.overallScore}
             </p>
@@ -232,21 +233,20 @@ export function ReportClient({ sessionId, readOnly = false }: { sessionId: strin
         </div>
       ) : null}
 
-      <LearningJourney messages={payload.messages ?? []} sessionId={sessionId} report={report} inReport />
+      <section className="report-findings" aria-label="主要发现与下一步">
+        <GapBlock items={report.gaps} />
+        <ListBlock title="进阶建议" items={report.nextSteps} />
+        <StrengthBlock items={report.strengths} />
+      </section>
 
       <section className="report-dimensions">
         <h2 className="text-xl font-semibold text-foreground">五维能力评估</h2>
+        <p className="report-evidence-note" data-testid="report-evidence-note">分数只描述本次已展示的表现。未充分展示，或没有获得充分练习机会，不等于能力不足；需要更多独立作答才能判断。下方标明可回看的原文，引用存在不代表证据已经充分。</p>
         <div className="grid gap-4 md:grid-cols-2">
           {dimensionKeys.map((key) => (
             <DimensionCard key={key} report={report} dimensionKey={key} messages={payload.messages ?? []} />
           ))}
         </div>
-      </section>
-
-      <section className="report-findings">
-        <StrengthBlock items={report.strengths} />
-        <GapBlock items={report.gaps} />
-        <ListBlock title="进阶建议" items={report.nextSteps} />
       </section>
 
       {report.retryReview ? <section className="space-y-3 border-t border-border pt-4" aria-labelledby="retry-review-heading">
@@ -259,6 +259,11 @@ export function ReportClient({ sessionId, readOnly = false }: { sessionId: strin
         </details> : <p className="text-sm text-muted-foreground">本次尚无足够的独立证据确认修复，可继续围绕原要点练习。</p>}
         {session.parentSessionId ? <Link className="button button-secondary" href={`/report/${session.parentSessionId}`}>查看原要点与继续巩固</Link> : null}
       </section> : null}
+
+      <details className="report-journey-disclosure" data-testid="report-journey-disclosure">
+        <summary>回看完整学习轨迹</summary>
+        <LearningJourney messages={payload.messages ?? []} sessionId={sessionId} report={report} inReport />
+      </details>
 
       {report.evidenceAudit ? <section className="space-y-3 border-t border-border pt-4">
         <h2 className="text-xl font-semibold">判断与版本记录</h2>
@@ -294,6 +299,7 @@ function DimensionCard({
   messages: import("@/lib/contracts").MessageDTO[];
 }) {
   const dimension = report.dimensions[dimensionKey];
+  const sources = reportDimensionSources(report, dimensionKey, messages);
   return (
     <article className="dimension-card">
       <div className="flex items-center justify-between gap-3">
@@ -317,6 +323,9 @@ function DimensionCard({
           style={{ width: `${dimension.score}%` }}
         />
       </div>
+      <p className="dimension-evidence-coverage" data-testid="dimension-evidence-coverage">
+        {sources.length ? `可回看依据：${sources.length} 条本次作答。请结合题目和独立作答情况核对。` : "暂无可定位的学生原文，请先补充或核对证据，不能仅据此判定能力不足。"}
+      </p>
       <p className="mt-4 text-sm leading-6 text-muted-foreground">
         <span className="font-medium text-foreground">证据：</span>
         {dimension.evidence}
@@ -325,9 +334,9 @@ function DimensionCard({
         <span className="font-medium text-foreground">反馈：</span>
         {dimension.feedback}
       </p>
-      {report.evidenceLinks?.[dimensionKey]?.length ? <details className="mt-3 border-t border-border pt-2">
+      {sources.length ? <details className="mt-3 border-t border-border pt-2">
         <summary className="cursor-pointer py-2 text-sm font-medium text-brand">查看评分原文</summary>
-        {report.evidenceLinks[dimensionKey].map((id) => <blockquote key={id} className="my-2 break-words text-sm leading-6">{messages.find((message) => message.id === id)?.content ?? "原文暂不可用，请返回学习会话查看。"}</blockquote>)}
+        {sources.map((message) => <blockquote key={message.id} className="my-2 break-words text-sm leading-6">{message.content}</blockquote>)}
       </details> : null}
     </article>
   );
@@ -335,7 +344,7 @@ function DimensionCard({
 function StrengthBlock({ items }: { items: LearningReportDTO["strengths"] }) {
   return (
     <section className="report-list-block">
-      <h2 className="font-semibold text-foreground">已掌握内容</h2>
+      <h2 className="font-semibold text-foreground">本次已展示的理解</h2>
       {items.length === 0 ? (
         <p className="mt-3 text-sm text-muted-foreground">本次对话暂无足够证据。</p>
       ) : (

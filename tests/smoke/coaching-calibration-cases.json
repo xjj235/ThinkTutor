@@ -1,0 +1,41 @@
+{
+  "reviewStatus": "PENDING_TEACHER_REVIEW",
+  "scope": "Synthetic cross-subject multi-turn engineering calibration; not teacher-approved scoring or evidence of student learning efficacy.",
+  "reviewChecklist": [
+    "The next question preserves the complete student claim and supplied conditions.",
+    "A student retaining the misconception cannot answer correctly for the same reason as a corrected student.",
+    "Feedback explains one gap without disclosing the answer to the pending question.",
+    "Repeated unknown answers receive a concrete smaller task, not a repeated abstract demand.",
+    "Claimed progress is supported by actual earlier and later student expressions.",
+    "Report distinguishes missing evidence or opportunities from demonstrated errors."
+  ],
+  "cases": [
+    {
+      "id": "geometry-condition-revision",
+      "task": { "topic": "勾股定理", "objective": "检验适用条件并解释边长关系", "learnerLevel": "入门", "referenceText": "直角三角形中，两直角边的平方和等于斜边的平方。斜边是直角所对的边。一般三角形不能直接套用这一等式。" },
+      "turns": [
+        { "answer": "任何三角形只要知道两条边，就能用勾股定理求第三条边。", "intent": "misconception" },
+        { "answer": "我修正前面的说法：只有直角三角形能用，斜边是直角对面的边，不能把任意两边都看作直角边。", "intent": "revision" },
+        { "answer": "我还不能解释怎样确定题目给出的边对应公式里的哪一项。", "intent": "incomplete" }
+      ]
+    },
+    {
+      "id": "science-repeated-unknown",
+      "task": { "topic": "冰的熔化", "objective": "用观察区分温度与物态的变化", "learnerLevel": "入门", "referenceText": "在通常大气压下，纯冰熔化期间持续吸收热量，温度可保持0摄氏度，同时冰逐渐变成液态水。温度不变不等于没有吸热。记录物态和温度可以帮助区分不同过程。" },
+      "turns": [
+        { "answer": "不知道", "intent": "unknown" },
+        { "answer": "还是不知道", "intent": "unknown" },
+        { "answer": "我能看出冰变成了水，但还没有解释温度和吸热之间的关系。", "intent": "incomplete" }
+      ]
+    },
+    {
+      "id": "data-correlation-causation",
+      "task": { "topic": "相关与因果", "objective": "区分共同变化和因果解释", "learnerLevel": "入门", "referenceText": "两个量一起变化只能说明相关，不能单凭这一点确定因果。第三个因素可能同时影响两者。例如炎热天气可能同时增加冰淇淋销量和游泳人数。观察记录不是随机分配的实验。" },
+      "turns": [
+        { "answer": "冰淇淋销量和游泳人数一起增加，所以一定是买冰淇淋使人去游泳。", "intent": "misconception" },
+        { "answer": "我改正了：共同变化还不能确定谁造成谁，天气炎热可能同时影响两者。", "intent": "revision" },
+        { "answer": "我只能说明这份记录里两者共同变化，还没有新的比较来排除天气这个解释。", "intent": "incomplete" }
+      ]
+    }
+  ]
+}

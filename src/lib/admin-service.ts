@@ -1,8 +1,9 @@
 import "server-only";
 
-import type { UserRole, UserStatus } from "@prisma/client";
+import type { Prisma, UserRole, UserStatus } from "@prisma/client";
 import { prisma } from "./db";
 import { AppError } from "./errors";
+import { adminDateRange, aiUsageListSchema, auditLogListSchema, materialJobListSchema, type AIUsageListQuery, type AuditLogListQuery, type MaterialJobListQuery } from "./admin-list-query";
 
 const userSelect = { id: true, email: true, name: true, role: true, status: true, lastLoginAt: true, createdAt: true } as const;
 
@@ -56,17 +57,62 @@ export async function changeUserStatus(actorId: string, userId: string, status: 
 }
 
 export async function listAIUsage(limit: number) {
-  return prisma.aIUsage.findMany({ orderBy: { createdAt: "desc" }, take: limit, select: { id: true, provider: true, model: true, operation: true, status: true, promptTokens: true, completionTokens: true, cacheHitTokens: true, latencyMs: true, retryCount: true, errorCode: true, createdAt: true } });
+  return (await listAIUsagePage({ page: 1, limit })).items;
 }
 
 export async function listMaterialJobs(limit: number) {
-  return prisma.material.findMany({ where: { status: { in: ["QUEUED", "PROCESSING", "FAILED", "UNSUPPORTED"] } }, orderBy: { updatedAt: "desc" }, take: limit, select: { id: true, title: true, originalName: true, status: true, retryCount: true, failureCode: true, failureMessage: true, updatedAt: true } });
+  return (await listMaterialJobsPage({ page: 1, limit })).items;
 }
 
 export async function listAuditLogs(limit: number) {
-  return prisma.auditLog.findMany({
-    orderBy: { createdAt: "desc" },
-    take: limit,
+  return (await listAuditLogsPage({ page: 1, limit })).items;
+}
+
+function pageMeta(total: number, input: { page: number; limit: number }) {
+  return { total, page: input.page, pageSize: input.limit, totalPages: Math.max(1, Math.ceil(total / input.limit)) };
+}
+
+export async function listAIUsagePage(query: AIUsageListQuery) {
+  const input = aiUsageListSchema.parse(query);
+  const where = {
+    createdAt: adminDateRange(input),
+    ...(input.status ? { status: input.status } : {}),
+    ...(input.operation ? { operation: input.operation } : {}),
+    ...(input.query ? { OR: ["model", "provider", "errorCode", "requestId"].map((key) => ({ [key]: { contains: input.query, mode: "insensitive" as const } })) } : {}),
+  };
+  const [items, total] = await prisma.$transaction([
+    prisma.aIUsage.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (input.page - 1) * input.limit, take: input.limit,
+      select: { id: true, provider: true, model: true, operation: true, status: true, promptTokens: true, completionTokens: true, cacheHitTokens: true, latencyMs: true, retryCount: true, errorCode: true, createdAt: true } }),
+    prisma.aIUsage.count({ where }),
+  ], { isolationLevel: "RepeatableRead" });
+  return { items, ...pageMeta(total, input) };
+}
+
+export async function listMaterialJobsPage(query: MaterialJobListQuery) {
+  const input = materialJobListSchema.parse(query);
+  const where: Prisma.MaterialWhereInput = {
+    status: input.status ? input.status : { in: ["QUEUED", "PROCESSING", "FAILED", "UNSUPPORTED"] },
+    updatedAt: adminDateRange(input),
+    ...(input.query ? { OR: [{ title: { contains: input.query, mode: "insensitive" as const } }, { originalName: { contains: input.query, mode: "insensitive" as const } }] } : {}),
+  };
+  const [items, total] = await prisma.$transaction([
+    prisma.material.findMany({ where, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], skip: (input.page - 1) * input.limit, take: input.limit,
+      select: { id: true, title: true, originalName: true, status: true, retryCount: true, failureCode: true, failureMessage: true, updatedAt: true } }),
+    prisma.material.count({ where }),
+  ], { isolationLevel: "RepeatableRead" });
+  return { items, ...pageMeta(total, input) };
+}
+
+export async function listAuditLogsPage(query: AuditLogListQuery) {
+  const input = auditLogListSchema.parse(query);
+  const where = {
+    createdAt: adminDateRange(input),
+    ...(input.action ? { action: input.action } : {}),
+    ...(input.query ? { OR: [{ requestId: { contains: input.query, mode: "insensitive" as const } }, { targetId: { contains: input.query, mode: "insensitive" as const } }, { actor: { OR: [{ name: { contains: input.query, mode: "insensitive" as const } }, { email: { contains: input.query, mode: "insensitive" as const } }] } }] } : {}),
+  };
+  const [items, total] = await prisma.$transaction([
+    prisma.auditLog.findMany({
+    where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (input.page - 1) * input.limit, take: input.limit,
     select: {
       id: true,
       action: true,
@@ -76,5 +122,8 @@ export async function listAuditLogs(limit: number) {
       createdAt: true,
       actor: { select: { name: true, email: true } },
     },
-  });
+    }),
+    prisma.auditLog.count({ where }),
+  ], { isolationLevel: "RepeatableRead" });
+  return { items, ...pageMeta(total, input) };
 }

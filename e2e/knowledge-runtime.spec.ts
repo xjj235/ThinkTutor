@@ -48,6 +48,8 @@ test("curated knowledge follows a course goal and gives grounded feedback in HTM
     expect(assistant.feedbackForMessageId).toBe(payload.messages.filter((message) => message.role === "USER").at(-1)!.id);
     const feedbackView = current.getByTestId("learning-feedback");
     await expect(feedbackView.getByRole("heading", { name: "从你的回答出发", exact: true })).toBeVisible();
+    await expect(feedbackView.locator(".feedback-source")).not.toHaveAttribute("open", "");
+    await feedbackView.getByText("查看回答依据", { exact: true }).click();
     await expect(feedbackView.locator("blockquote")).toHaveText(`“${feedback.answerQuote}”`);
     await expect(feedbackView.getByText(feedback.observation, { exact: true })).toBeVisible();
     await expect(feedbackView.getByText(feedback.focus, { exact: true })).toBeVisible();
@@ -58,6 +60,8 @@ test("curated knowledge follows a course goal and gives grounded feedback in HTM
     const saved = await prisma.learningSession.findUniqueOrThrow({ where: { id: sessionId } });
     expect(knowledgeRuntimeSchema.parse(saved.knowledgeRuntime).versions.releaseId).toBe("KR_SR_1_2");
     await page.reload();
+    await expect(feedbackView.locator(".feedback-source")).not.toHaveAttribute("open", "");
+    await feedbackView.getByText("查看回答依据", { exact: true }).click();
     await expect(feedbackView.locator("blockquote")).toHaveText(`“${feedback.answerQuote}”`);
     await expect(feedbackView.getByText(feedback.observation, { exact: true })).toBeVisible();
     await expect(feedbackView.getByText(feedback.focus, { exact: true })).toBeVisible();

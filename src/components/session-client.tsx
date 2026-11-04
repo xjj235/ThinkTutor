@@ -23,6 +23,7 @@ import { makeClientRequestId as makeRequestId } from "@/lib/client-request-id";
 import { SafeMarkdown } from "./safe-markdown";
 import { LearningFeedbackView } from "./learning-feedback";
 import { LearningJourney } from "./learning-journey";
+import { LearningPending } from "./learning-pending";
 import { WorkspaceState } from "./workspace-state";
 import { ArrowLeft, ArrowUpRight, BookOpenCheck, Info as InfoIcon, Lightbulb, SendHorizontal, Play, RotateCcw, UserRound } from "lucide-react";
 
@@ -48,6 +49,7 @@ export function SessionClient({ sessionId, readOnly = false }: { sessionId: stri
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [pendingMessage, setPendingMessage] = useState("");
+  const [pendingContent, setPendingContent] = useState("");
   const [error, setError] = useState("");
   const [retryAction, setRetryAction] = useState<"load" | "sync" | SessionAction | null>(null);
   const [unresolvedAction, setUnresolvedAction] = useState<SessionAction | null>(null);
@@ -70,6 +72,7 @@ export function SessionClient({ sessionId, readOnly = false }: { sessionId: stri
     pendingRef.current = true;
     setPending(true);
     setPendingMessage(message);
+    setPendingContent(action === "answer" ? answer : action === "feynman" ? explanation : "");
     setError("");
     setRetryAction(null);
     return true;
@@ -112,6 +115,7 @@ export function SessionClient({ sessionId, readOnly = false }: { sessionId: stri
     pendingRef.current = false;
     setPending(false);
     setPendingMessage("");
+    setPendingContent("");
   }
 
   async function synchronizeSession() {
@@ -511,9 +515,7 @@ export function SessionClient({ sessionId, readOnly = false }: { sessionId: stri
           </div>
         </div>
 
-        <div aria-live="polite" className="min-h-6 text-sm text-muted-foreground">
-          {pending ? pendingMessage : ""}
-        </div>
+        {pending ? <LearningPending message={pendingMessage} submittedContent={pendingContent} /> : null}
 
         {error ? (
           <div

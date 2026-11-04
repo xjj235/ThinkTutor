@@ -11,6 +11,15 @@ import { coachTurnSchema } from "@/lib/contracts";
 import boundaryReplays from "./coach-boundary-replays.json";
 import conditionPreservationReplay from "./coach-condition-preservation-replay.json";
 
+// Isolate only the usage-log sink; generation and both reviewers remain real.
+const liveTelemetry = vi.hoisted(() => ({ usage: [] as Array<Record<string, unknown>> }));
+vi.mock("@/lib/db", () => ({ prisma: { aIUsage: {
+  create: async (input: { data: Record<string, unknown> }) => {
+    liveTelemetry.usage.push(input.data);
+    return { id: `coaching-live-${liveTelemetry.usage.length}`, ...input.data };
+  },
+} } }));
+
 config({ path: [".env.local", ".env"], quiet: true });
 const enabled = process.env.RUN_DEEPSEEK_LIVE_TEST === "true" && Boolean(process.env.DEEPSEEK_API_KEY);
 const records: Array<{ origin: "real_generation"; scenario: string; answer: string; output: SourcedCoachTurn }> = [];
@@ -334,7 +343,7 @@ describe.skipIf(!enabled)("DeepSeek live coaching feedback", () => {
   afterAll(async () => {
     await mkdir(".data/coaching-live", { recursive: true });
     const generatedAt = new Date().toISOString();
-    await writeFile(`.data/coaching-live/recheck-${generatedAt.replace(/[:.]/g, "-")}.json`, JSON.stringify({ generatedAt, evidenceScope: "records为合成学生回答的真实生成；fixtureReviews为固定候选题注入后调用真实模型审核；repairs仅注入首份错误草稿，后续生成和审核为真实调用；drafts包含这些合成案例的未批准草稿及结构化审核结果，不代表已返回学生。均不代表真实教学成效或生产验收。", model: process.env.DEEPSEEK_MODEL, records, fixtureReviews, repairs, responseMetadata, drafts }, null, 2), "utf8");
+    await writeFile(`.data/coaching-live/recheck-${generatedAt.replace(/[:.]/g, "-")}.json`, JSON.stringify({ generatedAt, evidenceScope: "records为合成学生回答的真实生成；fixtureReviews为固定候选题注入后调用真实模型审核；repairs仅注入首份错误草稿，后续生成和审核为真实调用；drafts包含这些合成案例的未批准草稿及结构化审核结果，不代表已返回学生。仅将用量日志存储替换为本文件，所有模型生成和审核仍是真实调用。均不代表真实教学成效或生产验收。", model: process.env.DEEPSEEK_MODEL, records, fixtureReviews, repairs, responseMetadata, drafts, usage: liveTelemetry.usage }, null, 2), "utf8");
     vi.unstubAllEnvs();
     resetServerEnvForTests();
   });
@@ -343,6 +352,18 @@ describe.skipIf(!enabled)("DeepSeek live coaching feedback", () => {
     const output = await ask("incorrect-condition", "我认为任何三角形都能用勾股定理，只要知道两条边就能求第三边。");
     expect(`${output.learningFeedback?.focus} ${output.assistantMessage}`).toMatch(/条件|角|三角形|适用/);
     expect(output.learningFeedback?.progress).toBeNull();
+  }, 180_000);
+
+  it("real reviewer rejects incompatible complete triangle angles and side lengths", async () => {
+    const answer = "任何三角形只要知道两条边，就能用勾股定理求第三条边。";
+    const candidate = coachTurnSchema.parse({
+      assistantMessage: "一个三角形的三个角分别为50°、60°、70°，已知其中两条边长分别为3和4，能否直接用勾股定理求第三边，依据是什么？",
+      questionType: "ASSUMPTION_TEST", learnerState: { masteryEstimate: 0, confirmedPoints: [], gaps: [], misconceptions: [] },
+      nextAction: "ASK_QUESTION", transitionReason: "核验适用条件",
+      learningFeedback: { answerQuote: answer, observation: "你把适用对象说成了任何三角形。", focus: "检验一个具体情形", whyItMatters: "这能核对你提出的适用范围。", progress: null },
+    });
+    const result = await reviewFixedCandidate("incompatible-triangle-givens", "reject", candidate, answer);
+    expect(["INCONSISTENT_GIVENS", "UNCERTAIN"]).toContain(result.contentReview?.verdict);
   }, 180_000);
 
   it("generation flow explains why an unknown answer needs a smaller starting point", async () => {
