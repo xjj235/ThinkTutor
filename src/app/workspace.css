@@ -230,15 +230,10 @@ a.card:hover { border-color: var(--input); }
 .learning-entry-copy p { margin-top: var(--space-4); color: var(--muted-foreground); }
 .learning-entry-action { min-height: 56px; min-width: 224px; margin-top: var(--space-6); padding: var(--space-3) var(--space-5); font-size: var(--text-reading); }
 .student-shell { border-bottom: 1px solid var(--border); }
-.student-account-toggle { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--icon-target); padding: var(--space-1) var(--space-2); border: 1px solid transparent; border-radius: var(--radius-control); background: transparent; color: var(--foreground); }
-.student-account-toggle:hover,.student-account-toggle[aria-expanded="true"] { background: var(--accent); }
-.student-account-toggle[aria-expanded="true"]>svg { transform: rotate(180deg); }
-.student-navigation { width: min(var(--workspace-width),calc(100% - var(--page-gutter) * 2)); margin-inline: auto; padding-block: var(--space-3); border-top: 1px solid var(--border); }
-.student-account-links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2) var(--space-5); }
-.student-account-links .workspace-link { border-bottom: 0; min-height: var(--icon-target); }
-.student-account-links .workspace-link[aria-current="page"] { color: var(--brand); }
-.student-account-footer { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-5); margin-top: var(--space-2); }
-.student-account-footer .text-link { color: var(--muted-foreground); font-size: var(--text-caption); }
+.student-navigation { width: min(var(--workspace-width),calc(100% - var(--page-gutter) * 2)); margin-inline: auto; border-top: 1px solid var(--border); }
+.student-account-links { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); }
+.student-account-links .workspace-link { min-height: var(--icon-target); }
+.student-account-links .workspace-link[aria-current="page"] { color: var(--brand); border-bottom-color: var(--brand); }
 .profile-learning-links { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); margin-bottom: var(--space-6); padding-block: var(--space-3); border-block: 1px solid var(--border); }
 .profile-learning-links a { display: inline-flex; align-items: center; min-height: var(--icon-target); }
 .preview-access { width: min(var(--workspace-width),calc(100% - var(--page-gutter) * 2)); margin-inline: auto; }
@@ -271,6 +266,8 @@ a.card:hover { border-color: var(--input); }
   .workspace-navigation:not([data-open="true"]) { display: none; }
   .workspace-navigation[data-open="true"] { padding-block: var(--space-2); border-top: 1px solid var(--border); }
   .workspace-links { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--space-2); }
+  .student-account-links { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--space-1); padding-block: var(--space-2); }
+  .student-account-links .workspace-link { white-space: normal; }
   .workspace-link { padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-control); }
   .workspace-link[aria-current="page"] { background: var(--muted); }
   .overview-columns { grid-template-columns: 1fr; }
@@ -335,10 +332,7 @@ a.card:hover { border-color: var(--input); }
   .dimension-card { padding: var(--space-4); }
   .home-page,.learning-home-entry { min-height: calc(100dvh - 210px); }
   .learning-home-entry { padding-block: var(--space-8); }
-  .student-account-toggle { gap: var(--space-1); padding-inline: var(--space-2); }
-  .student-account-toggle .profile-initial { display: none; }
-  .student-account-links { display: grid; grid-template-columns: 1fr; gap: var(--space-1); }
-  .student-account-links .workspace-link { padding-inline: var(--space-3); }
-  .student-account-footer { justify-content: space-between; padding-inline: var(--space-3); }
+  .student-account-links { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .student-account-links .workspace-link { padding-inline: var(--space-2); }
   .preview-role-links { grid-template-columns: 1fr; }
 }

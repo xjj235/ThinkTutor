@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { UserRole } from "@prisma/client";
-import { BookOpen, BookOpenCheck, ChartNoAxesCombined, ChevronDown, ChevronRight, ClipboardCheck, FileText, FolderOpen, LayoutDashboard, Menu, Settings2, ShieldCheck, Users, X, type LucideIcon } from "lucide-react";
+import { BookOpen, BookOpenCheck, ChartNoAxesCombined, ChevronRight, ClipboardCheck, FileText, FolderOpen, LayoutDashboard, Menu, Settings2, ShieldCheck, Users, X, type LucideIcon } from "lucide-react";
 import { LogoutButton } from "./logout-button";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -58,13 +58,13 @@ export function SiteNavigation({ user }: { user: NavigationUser | null }) {
     };
     document.addEventListener("keydown", close);
     const desktop = window.matchMedia("(min-width: 961px)");
-    const closeOnDesktop = () => { if (desktop.matches && !isStudent) setExpandedPath(null); };
+    const closeOnDesktop = () => { if (desktop.matches) setExpandedPath(null); };
     desktop.addEventListener("change", closeOnDesktop);
     return () => {
       document.removeEventListener("keydown", close);
       desktop.removeEventListener("change", closeOnDesktop);
     };
-  }, [open, isStudent]);
+  }, [open]);
   const brand = <Link href={user ? user.role === "STUDENT" ? "/dashboard" : user.role === "TEACHER" ? "/teacher" : "/admin" : "/"} className="brand" onClick={() => setExpandedPath(null)}><span className="brand-mark"><BookOpenCheck size={21} aria-hidden="true" /></span><span className="brand-copy"><strong>问思学伴</strong><small>ThinkTutor</small></span></Link>;
   if (!user) return <header className="site-header"><div className="site-header-inner">{brand}<nav aria-label="主导航" className="main-nav public-nav flex-wrap"><ThemeToggle /><Link className="nav-link" href="/login">登录</Link><Link className="nav-link public-register" href="/register" aria-label="注册，创建学生账号">注册</Link></nav></div></header>;
 
@@ -74,14 +74,13 @@ export function SiteNavigation({ user }: { user: NavigationUser | null }) {
       {brand}
       <div className="workspace-account">
         <ThemeToggle />
-        <button type="button" ref={menuButton} className="student-account-toggle" aria-expanded={open} aria-controls="student-navigation" onClick={() => setExpandedPath(open ? null : pathname)}>
-          <span className="profile-initial" aria-hidden="true">{user.name.slice(0, 1)}</span><span>个人中心</span><ChevronDown size={16} aria-hidden="true" />
-        </button>
+        <Link className="icon-button workspace-help" href="/about" aria-label="学习方法" title="学习方法"><FileText size={18} aria-hidden="true" /></Link>
+        <Link href="/profile" className="workspace-profile" aria-label="个人资料" title={`${user.name} · 个人资料与安全`} aria-current={pathname === "/profile" ? "page" : undefined}><span className="profile-initial" aria-hidden="true">{user.name.slice(0, 1)}</span><span className="profile-name">{user.name}</span></Link>
+        <LogoutButton />
       </div>
     </div>
-    <div id="student-navigation" className="student-navigation" hidden={!open}>
-      <nav aria-label="个人中心" className="student-account-links">{items.map(({ icon: Icon, ...item }) => <Link key={item.href} href={item.href} className="workspace-link" aria-current={pathname === item.href || item.href !== "/profile" && isCurrentPath(pathname, item.href) ? "page" : undefined} onClick={() => setExpandedPath(null)}><Icon size={17} aria-hidden="true" /><span>{item.label}</span></Link>)}</nav>
-      <div className="student-account-footer"><Link className="text-link" href="/about" onClick={() => setExpandedPath(null)}>学习方法</Link><LogoutButton /></div>
+    <div className="student-navigation">
+      <nav aria-label="学习导航" className="student-account-links">{items.map(({ icon: Icon, ...item }) => <Link key={item.href} href={item.href} className="workspace-link" aria-current={pathname === item.href || item.href !== "/profile" && isCurrentPath(pathname, item.href) ? "page" : undefined}><Icon size={17} aria-hidden="true" /><span>{item.label}</span></Link>)}</nav>
     </div>
   </header>;
   const current = items.find((item) => isCurrentPath(pathname, item.href));

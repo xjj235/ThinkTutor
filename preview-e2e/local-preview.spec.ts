@@ -31,8 +31,6 @@ async function login(page: Page, email: string, role?: "学生" | "教师" | "�
 }
 
 async function logout(page: Page): Promise<void> {
-  const menu = page.getByRole("button", { name: "个人中心", exact: true });
-  if (await menu.isVisible() && await menu.getAttribute("aria-expanded") !== "true") await menu.click();
   await page.getByRole("button", { name: "退出" }).click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -60,7 +58,6 @@ test("local preview serves HTML and exposes the production-compatible result ent
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByRole("heading", { name: "今天，想弄懂什么？" })).toBeVisible();
   await captureNormalPage(page, `.local-preview/student-dashboard-${testInfo.project.name}.png`);
-  await page.getByRole("button", { name: "个人中心", exact: true }).click();
   await page.getByRole("link", { name: "历史学习记录", exact: true }).click();
   await page.getByRole("link", { name: /解释风险传播路径/ }).click();
   await expect(page.getByRole("heading", { name: "解释风险传播路径" })).toBeVisible();

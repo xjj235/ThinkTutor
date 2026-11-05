@@ -40,7 +40,6 @@ test("single home action continues through registration and login to a new task"
   await expect(page).toHaveURL(/\/dashboard$/);
   await assertSingleEntry(page);
   await page.screenshot({ path: info.outputPath("student-home.png"), fullPage: true });
-  await page.getByRole("button", { name: "个人中心", exact: true }).click();
   await page.getByRole("button", { name: "退出", exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("link", { name: "登录", exact: true })).toBeVisible();

@@ -19,7 +19,7 @@ export function LearningEntry({ signedIn }: { signedIn: boolean }) {
         <Link className={`button ${styles.action}`} href={signedIn ? "/learn/new" : "/login?next=%2Flearn%2Fnew"}>
           <Plus size={20} aria-hidden="true" />新建学习任务
         </Link>
-        <p className={styles.startHint}>{signedIn ? "从一个主题和学习目标开始。历史记录与课程任务在右上角个人中心。" : "选择一个知识点就能开始；登录后继续创建任务。"}</p>
+        <p className={styles.startHint}>{signedIn ? "从一个主题和学习目标开始。通过顶部导航查看历史记录与课程任务。" : "选择一个知识点就能开始；登录后继续创建任务。"}</p>
       </div>
 
       <div className={styles.guide}>

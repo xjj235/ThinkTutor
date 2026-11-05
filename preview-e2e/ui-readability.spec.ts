@@ -113,19 +113,24 @@ for (const { role, entry, routes } of roles) {
       }
     }
     await page.goto(entry);
-    if (role === "student" || (page.viewportSize()?.width ?? 1440) < 960) {
-      const toggle = page.getByRole("button", { name: role === "student" ? "个人中心" : "打开主导航", exact: true });
+    const collapsible = role !== "student" && (page.viewportSize()?.width ?? 1440) <= 960;
+    if (collapsible) {
+      const toggle = page.getByRole("button", { name: "打开主导航", exact: true });
       await toggle.click();
-      const navigation = page.getByRole("navigation", { name: role === "student" ? "个人中心" : "主导航", exact: true });
+    }
+    if (role === "student" || collapsible) {
+      const navigation = page.getByRole("navigation", { name: role === "student" ? "学习导航" : "主导航", exact: true });
       await expect(navigation).toBeVisible();
       for (const link of await navigation.getByRole("link").all()) {
         const rect = await link.boundingBox();
         expect(rect!.height).toBeGreaterThanOrEqual(44);
         expect(rect!.x + rect!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
       }
-      await page.screenshot({ path: info.outputPath("navigation-expanded.png") });
+      await page.screenshot({ path: info.outputPath("navigation-visible.png") });
+    }
+    if (collapsible) {
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("button", { name: role === "student" ? "个人中心" : "打开主导航", exact: true })).toBeFocused();
+      await expect(page.getByRole("button", { name: "打开主导航", exact: true })).toBeFocused();
     }
     await writeFile(info.outputPath("readability.json"), JSON.stringify(measures, null, 2));
     console.log(JSON.stringify({ role, viewport: info.project.name, pages: measures.length }));
