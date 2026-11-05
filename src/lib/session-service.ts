@@ -21,6 +21,7 @@ import {
 import { getAIProvider } from "./ai";
 import { requireAnswerFeedback } from "./ai/coach-feedback";
 import { buildInitialSelfExplanation } from "./initial-question";
+import { normalizeInitialDiagnostic } from "./ai/diagnostic";
 import { buildLearningContext } from "./ai/context-builder";
 import { prisma } from "./db";
 import { AppError } from "./errors";
@@ -298,25 +299,12 @@ export async function createLearningSession(userId: string, input: CreateSession
     const protectionKey = resolved.assignmentId ? `assignment-start:${userId}:${resolved.assignmentId}` : `create:${requestId}`;
     const manifest = await findKnowledgeManifest(resolved.task.topic, isStudentKnowledgeTaskTopic(resolved.task.topic) ? {} : resolved.task);
     let runtime = manifest ? initialKnowledgeRuntime(createVersionSnapshot(manifest)) : null;
-    const context = manifest ? await buildLearningContext({
-      courseId: resolved.task.courseId,
-      chapterId: resolved.task.chapterId,
-      topic: resolved.task.topic,
-      objective: resolved.task.objective,
-      phase: "DIAGNOSIS",
-      knowledgeRuntime: runtime,
-      messages: [],
-    }) : undefined;
     // Before a first answer exists, invite the learner's own understanding.
     // Keep start-request rate/lock protection, without inventing AI evidence or
     // spending a model request to restate the reference material as a question.
-    const diagnostic = runtime?.v12 && manifest ? initialCuratedDiagnostic() : await withAIRequestProtection(userId, protectionKey, () => manifest ? getAIProvider().createDiagnosticQuestion({
-      task: resolved.task,
-      userId,
-      requestId,
-      retrievedContext: context?.retrievedContext,
-      knowledgePolicy: context?.knowledgePolicy,
-    }) : Promise.resolve(buildInitialSelfExplanation()), manifest ? 2 : 1);
+    const diagnostic = runtime?.v12 && manifest ? initialCuratedDiagnostic() : await withAIRequestProtection(userId, protectionKey, () => Promise.resolve(
+      manifest ? normalizeInitialDiagnostic(initialCuratedDiagnostic()) : buildInitialSelfExplanation(),
+    ), manifest ? 2 : 1);
     if (runtime && manifest) {
       const question = manifest.diagnosticQuestions.find((item) => item.status === "published");
       if (!question) throw new AppError("CONFLICT", "当前知识版本没有可用诊断题。", 409);

@@ -750,8 +750,8 @@ describe("DeepSeekProvider", () => {
     const audit = { ...contentReviewPass, prerequisiteEvidence: [{ fact: given, kind: "READING_ARITHMETIC", source: "QUESTION", quote: given }] };
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion(output)).mockResolvedValueOnce(completion(audit)).mockResolvedValueOnce(completion(reviewPass));
     await expect(new DeepSeekProvider({ fetcher: passingDisclosureReview(fetcher) }).createCoachTurn(input)).resolves.toEqual(output);
-    const reviewRequest = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)) as { messages: Array<{ content: string }> };
-    expect(reviewRequest.messages[1]?.content).toContain(previousQuestion);
+    const reviewRequest = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)) as { messages: Array<{ role: string; content: string }> };
+    expect(reviewRequest.messages.find((message) => message.role === "user")?.content).toContain(previousQuestion);
 
     const forged = { ...audit, prerequisiteEvidence: [{ ...audit.prerequisiteEvidence[0], quote: "题设不存在的条件" }] };
     const rejectingFetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion(output)).mockResolvedValueOnce(completion(forged));
@@ -939,7 +939,8 @@ describe("DeepSeekProvider", () => {
     process.env.DEEPSEEK_API_KEY = "test-server-key";
     process.env.AI_MAX_RETRIES = "0";
     resetServerEnvForTests();
-    const input = { task, messages: [], feynmanExplanation: "不知道" };
+    const teacherQuestion = "换成一个新情境时，你会怎样判断？";
+    const input = { task, messages: [{ role: "ASSISTANT" as const, phase: "SOCRATIC" as const, content: teacherQuestion, questionType: null }], feynmanExplanation: "不知道" };
     const output = await new MockAIProvider().createLearningReport(input);
     for (const dimension of Object.values(output.dimensions)) {
       dimension.score = 25;
@@ -947,15 +948,23 @@ describe("DeepSeekProvider", () => {
     }
     output.strengths = [];
     output.gaps = [];
+    output.dimensions.transferAbility.evidence = "本次对话未充分展示，新情境任务尚未获得学生作答。";
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion(output));
     expect(await new DeepSeekProvider({ fetcher: passingDisclosureReview(fetcher) }).createLearningReport(input)).toEqual(output);
-    const request = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)) as { messages: Array<{ content: string }>; thinking: { type: string }; reasoning_effort: string; max_tokens: number };
+    const request = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)) as { messages: Array<{ role: string; content: string }>; thinking: { type: string }; reasoning_effort: string; max_tokens: number };
     expect(request.thinking.type).toBe("enabled");
     expect(request.reasoning_effort).toBe("low");
     expect(request.max_tokens).toBe(8000);
     expect(request.messages[0]?.content).toContain("gaps只列当前学习目标内");
+    expect(request.messages[1]?.role).toBe("system");
+    expect(request.messages[1]?.content).toContain("包括score<=25的维度");
+    expect(request.messages[1]?.content).toContain("不带任何引号");
+    expect(request.messages[1]?.content).toContain("不得把未测到等同不会");
+    expect(request.messages.at(-1)?.role).toBe("user");
     const invented = { ...output, dimensions: { ...output.dimensions, conceptCompleteness: { ...output.dimensions.conceptCompleteness, score: 75, evidence: "学生原文：“不存在的学生原话”" } } };
     await expect(new DeepSeekProvider({ fetcher: vi.fn<typeof fetch>().mockResolvedValueOnce(completion(invented)) }).createLearningReport(input)).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
+    const teacherEvidence = { ...output, dimensions: { ...output.dimensions, transferAbility: { ...output.dimensions.transferAbility, evidence: `本次对话未充分展示，教师提出“${teacherQuestion}”后学生没有作答。` } } };
+    await expect(new DeepSeekProvider({ fetcher: vi.fn<typeof fetch>().mockResolvedValueOnce(completion(teacherEvidence)) }).createLearningReport(input)).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
   });
 
   it.each([
@@ -1030,6 +1039,34 @@ describe("DeepSeekProvider", () => {
     expect(retry.messages.filter((message) => message.role === "system").every((message) => !message.content.includes("条件是甲"))).toBe(true);
     expect(JSON.stringify(retry)).not.toContain("PRIVATE_CONTENT_ANSWER");
     expect(result).toEqual(corrected);
+  });
+
+  it.each(["PASS", "ANSWER_DISCLOSED"])("keeps the attribution clarification local to content review while honoring its %s verdict", async (verdict) => {
+    process.env.DEEPSEEK_API_KEY = "test-server-key";
+    process.env.AI_MAX_RETRIES = "0";
+    resetServerEnvForTests();
+    const output = { assistantMessage: "这个联系如何传递冲击？", questionType: "CAUSE_PROBE", learningFeedback: feedback, learnerState: { masteryEstimate: 0, confirmedPoints: [], gaps: [], misconceptions: [] }, nextAction: "ASK_QUESTION", transitionReason: "检查具体传递环节" };
+    const audit = { ...contentReviewPass, verdict, answerDisclosure: verdict === "PASS" ? null : { field: "observation", quote: feedback.observation, disclosedAnswer: "模型仍判定该反馈泄露答案" } };
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(completion(output)).mockResolvedValueOnce(completion(audit)).mockResolvedValueOnce(completion(reviewPass));
+    const observedFetch = vi.fn<typeof fetch>(passingDisclosureReview(fetcher));
+    const result = new DeepSeekProvider({ fetcher: observedFetch }).createCoachTurn(coachInput);
+    if (verdict === "PASS") await expect(result).resolves.toEqual(output);
+    else await expect(result).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
+    expect(observedFetch).toHaveBeenCalledTimes(verdict === "PASS" ? 4 : 3);
+    const requests = observedFetch.mock.calls.map(([, init]) => JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: string }> });
+    const contentRequest = requests.find((request) => request.messages[0]!.content.startsWith("你是学习内容可用性复核模块"))!;
+    const clarification = contentRequest.messages.at(-2)!;
+    expect(contentRequest.messages[0]!.content).toContain("必须严格符合以下 JSON Schema");
+    expect(clarification.role).toBe("system");
+    expect(clarification.content).toContain("忠实归因复述学生观点");
+    expect(clarification.content).toContain("不能据此反推出教练断言非P");
+    expect(clarification.content).toContain("复述后明确称其错误、需要修正或称待判断例子为反例，仍按原二元方向规则拒绝");
+    expect(clarification.content).not.toContain(coachInput.latestAnswer);
+    expect(clarification.content).not.toContain(task.referenceText);
+    expect(contentRequest.messages.at(-1)!.role).toBe("user");
+    expect(contentRequest.messages.at(-1)!.content).toContain(feedback.observation);
+    expect(requests.filter((request) => request.messages.some((message) => message.content === clarification.content))).toHaveLength(1);
   });
 
   it("rejects feedback that labels an untested case as a counterexample before the learner judges it", async () => {

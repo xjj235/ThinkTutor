@@ -131,6 +131,8 @@ ruleIndex指向prerequisiteEvidence中P→Q的规则（从0计数），inference
 2. 题设自洽：核对实际数据、定义和约束是否能同时成立。三角形若同时给全部角度和两条边，必须核对角对应边比能否成立，不能仅因角和为180°就放行任意边长；无法在本次短审核中确认时用UNCERTAIN，不能猜测它自洽。矛盾时inconsistentGivens列出question里冲突的2至4段连续原文，并用一句具体事实或计算说明conflict，verdict=INCONSISTENT_GIVENS。不能只挑其中一条条件作答而忽略另一条。
 3. 定位信息：要求指出具体对象时，是否确有图、标号、数据或足够文字供定位？判断一个过程是否正在发生还需前后变化或必要外部条件，单一时刻的状态不够，例如“有冰且0℃”并不单独证明正在熔化。缺失时missingInformationQuote摘出question里信息不足的连续原文，verdict=MISSING_INFORMATION；不能自行补图、补过程条件或把具体定位改答成一般方法。
 没有问题的对应问题摘录字段为null。只有前提有支持且三项均无问题才PASS；不能确定时UNCERTAIN。所有引用必须出现在指定字段。minimumAnswer只写最短核心答案，各fact只记实际用到的一项关系；不重复推演、扩展题目或输出修订建议。只输出短JSON，不写思维过程。`;
+const coachContentAttributionInstructions = "忠实归因复述学生观点（如“你刚才认为P”）只说明学生说过P，不能据此反推出教练断言非P。answerDisclosure.quote必须实际断言或预设disclosedAnswer，不能用审核者对学生观点真伪的判断补造泄露；复述后明确称其错误、需要修正或称待判断例子为反例，仍按原二元方向规则拒绝。";
+const reportEvidenceInstructions = "报告证据归属要求适用于所有dimensions.evidence、strengths.evidence和gaps.evidence，包括score<=25的维度。引号中的每段内容都只能是单条学生回答或费曼讲解的连续逐字原文，不能引用教师问题、题干或模型的概括。若没有可引用的学生作答，score不得超过25，写本次对话未充分展示，并用不带任何引号的文字概括尚未作答的任务或证据不足情况，不复写教师原句。不得把未测到等同不会。五维评价、真实学生证据和当前目标内缺口要求全部保持。";
 const counterfactualOutcomeSchema = z.object({
   kind: z.enum(["AFFIRM", "DENY", "INSUFFICIENT", "VALUE"]),
   value: z.string().trim().min(1).max(120).nullable(),
@@ -568,6 +570,8 @@ export class DeepSeekProvider implements AIProvider {
                   { role: "system", content: correctionInstructions },
                   { role: "user", content: wrapUntrustedLearningContent({ rejectedCoachDraft: correction.rejectedDraft, answerDisclosure: correction.answerDisclosure, unsupportedPrerequisites: correction.unsupportedPrerequisites }) },
                 ] : []),
+                ...(operation === "coach_content_review" ? [{ role: "system", content: coachContentAttributionInstructions }] : []),
+                ...(operation === "report" ? [{ role: "system", content: reportEvidenceInstructions }] : []),
                 { role: "user", content: wrapUntrustedLearningContent(operation === "turn_assessment" && isRecord(requestPayload) ? { message: requestPayload.message, questionText: requestPayload.questionText } : ["teaching_selection", "teaching_review"].includes(operation) && isRecord(requestPayload) ? { studentContent: requestPayload.studentContent, recentTurns: requestPayload.recentTurns, previousQuestions: requestPayload.previousQuestions, candidate: requestPayload.candidate } : requestPayload) },
               ],
               response_format: { type: "json_object" },

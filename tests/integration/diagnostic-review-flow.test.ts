@@ -6,6 +6,11 @@ import { getServerEnv, resetServerEnvForTests } from "@/lib/env";
 import { prisma } from "@/lib/db";
 import { createLearningSession, createRetrySession } from "@/lib/session-service";
 import { buildInitialSelfExplanation } from "@/lib/initial-question";
+import { knowledgeManifests } from "@/lib/knowledge/static-manifests";
+import { createVersionSnapshot } from "@/lib/knowledge/releases";
+import { knowledgeRuntimeSchema } from "@/lib/knowledge/runtime-schemas";
+import { messageMetadataSchema } from "@/lib/contracts";
+import { AppError } from "@/lib/errors";
 import { createTestUser } from "../factories";
 import { POST as createSessionRoute } from "@/app/api/sessions/route";
 
@@ -18,6 +23,20 @@ vi.mock("@/lib/auth/session", () => ({ requireUser: async () => {
 const task = { course: undefined, chapter: undefined, topic: "三角形中的边与角", objective: "说明目前对边角关系的理解", learnerLevel: "入门", referenceText: "直角所对的边称为斜边。" };
 const completion = (value: unknown) => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(value) } }] }), { status: 200 });
 const userIds: string[] = [];
+const releaseIds: string[] = [];
+
+async function createLegacyRelease(ownerId: string) {
+  const original = knowledgeManifests.find((manifest) => !manifest.v12);
+  if (!original) throw new Error("Expected a legacy knowledge fixture");
+  const manifest = structuredClone(original);
+  manifest.release = { ...manifest.release, id: `KR_TEST_${crypto.randomUUID()}`, status: "published", verifiedBy: ownerId, verifiedAt: new Date().toISOString() };
+  for (const source of manifest.sources) source.status = "reviewed";
+  const versions = createVersionSnapshot(manifest);
+  // Synthetic publication fixture only, never a real teacher-approved release.
+  await prisma.knowledgeRelease.create({ data: { id: manifest.release.id, ownerId, status: "PUBLISHED", contentHash: versions.contentHash, manifest, sourceReviews: [], goldenSet: [], verifiedBy: ownerId, verifiedAt: new Date() } });
+  releaseIds.push(manifest.release.id);
+  return { manifest, versions };
+}
 
 async function completedParent(label: string) {
   const student = await createTestUser(label); userIds.push(student.id);
@@ -46,7 +65,11 @@ describe("ordinary initial self-explanation persistence", () => {
     vi.stubEnv("AI_MAX_RETRIES", "0");
     resetServerEnvForTests();
   });
-  afterEach(() => { authState.user = null; vi.restoreAllMocks(); vi.unstubAllEnvs(); resetServerEnvForTests(); });
+  afterEach(async () => {
+    await prisma.knowledgeRelease.deleteMany({ where: { id: { in: releaseIds } } });
+    releaseIds.length = 0;
+    authState.user = null; vi.restoreAllMocks(); vi.unstubAllEnvs(); resetServerEnvForTests();
+  });
   afterAll(async () => {
     await prisma.learningSession.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
@@ -73,6 +96,57 @@ describe("ordinary initial self-explanation persistence", () => {
     const stored = await prisma.learningSession.findUniqueOrThrow({ where: { id: result.session.id } });
     expect(stored.learnerState).toEqual({ masteryEstimate: 0, confirmedPoints: [], gaps: [], misconceptions: [] });
     expect(await prisma.aIUsage.count({ where: { userId: student.id } })).toBe(0);
+  });
+
+  it("uses the published legacy diagnostic through the API without discarded model calls", async () => {
+    vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false"); resetServerEnvForTests();
+    const student = await createTestUser("published-legacy-start"); userIds.push(student.id);
+    authState.user = { id: student.id, role: "STUDENT" };
+    const { manifest, versions } = await createLegacyRelease(student.id);
+    const question = manifest.diagnosticQuestions.find((item) => item.status === "published")!;
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error("Synthetic model outage"));
+    const provider = vi.spyOn(ai, "getAIProvider").mockReturnValue(new DeepSeekProvider({ fetcher }));
+    const lock = vi.spyOn(redis, "acquireLock");
+    const rate = vi.spyOn(redis, "consumeRateLimit");
+    const input = { ...task, topic: manifest.knowledgePoint.title, clientRequestId: "published-legacy-start" };
+    const response = await createSessionRoute(new Request(`${getServerEnv().APP_URL}/api/sessions`, { method: "POST", headers: { "content-type": "application/json", origin: new URL(getServerEnv().APP_URL).origin }, body: JSON.stringify(input) }));
+    expect(response.status).toBe(201);
+    const result = (await response.json()).data;
+    expect(result.messages[0]).toMatchObject({ content: question.questionText, questionType: "CONCEPT_CLARIFICATION", knowledgePolicy: "COURSE_KNOWLEDGE_FIRST", webSources: [] });
+    expect(result.messages[0].learningFeedback).toBeUndefined();
+    expect(provider).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+    expect(lock).toHaveBeenCalledWith("lock:ai:create:published-legacy-start", 100_000);
+    expect(rate).toHaveBeenCalledTimes(2);
+    const saved = await prisma.learningSession.findUniqueOrThrow({ where: { id: result.session.id }, include: { messages: true } });
+    expect(saved.learnerState).toEqual({ masteryEstimate: 0, confirmedPoints: [], gaps: [], misconceptions: [] });
+    expect(knowledgeRuntimeSchema.parse(saved.knowledgeRuntime)).toMatchObject({ versions, currentQuestionId: question.id, currentTargetId: question.targetConcepts[0], usedQuestionIds: [question.id] });
+    expect(messageMetadataSchema.parse(saved.messages[0].metadata)).toMatchObject({ nextAction: "ASK_QUESTION", transitionReason: "首次提问，等待学生作答后再判断理解。", knowledgePolicy: "COURSE_KNOWLEDGE_FIRST", learnerState: saved.learnerState });
+    expect((await createLearningSession(student.id, input, { clientRequestId: input.clientRequestId })).session.id).toBe(saved.id);
+    expect(lock).toHaveBeenCalledTimes(1);
+    const concurrentRequestId = "published-legacy-concurrent";
+    const concurrent = await Promise.allSettled([0, 1].map(() => createLearningSession(student.id, { ...task, topic: manifest.knowledgePoint.title }, { clientRequestId: concurrentRequestId })));
+    const accepted = concurrent.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+    expect(accepted.length).toBeGreaterThan(0);
+    expect(new Set(accepted.map((result) => result.session.id)).size).toBe(1);
+    for (const result of concurrent) if (result.status === "rejected") expect(result.reason).toMatchObject({ code: "CONFLICT", retryable: true });
+    expect(await prisma.learningSession.count({ where: { userId: student.id, clientRequestId: concurrentRequestId } })).toBe(1);
+    expect(await prisma.message.count({ where: { sessionId: accepted[0].session.id } })).toBe(1);
+    expect(await prisma.aIUsage.count({ where: { userId: student.id } })).toBe(0);
+  });
+
+  it.each(["lock", "rate-limit"] as const)("retains legacy creation protection before any state is saved: %s", async (blockedBy) => {
+    vi.stubEnv("ALLOW_DRAFT_KNOWLEDGE", "false"); resetServerEnvForTests();
+    const student = await createTestUser("published-legacy-locked"); userIds.push(student.id);
+    const { manifest } = await createLegacyRelease(student.id);
+    const provider = vi.spyOn(ai, "getAIProvider");
+    const lock = vi.spyOn(redis, "acquireLock").mockResolvedValue(null);
+    if (blockedBy === "rate-limit") vi.spyOn(redis, "consumeRateLimit").mockRejectedValue(new AppError("RATE_LIMITED", "Synthetic rate limit", 429, true));
+    await expect(createLearningSession(student.id, { ...task, topic: manifest.knowledgePoint.title }, { clientRequestId: "published-legacy-locked" })).rejects.toMatchObject({ code: blockedBy === "lock" ? "CONFLICT" : "RATE_LIMITED", retryable: true });
+    if (blockedBy === "lock") expect(lock).toHaveBeenCalledWith("lock:ai:create:published-legacy-locked", 100_000);
+    else expect(lock).not.toHaveBeenCalled();
+    expect(provider).not.toHaveBeenCalled();
+    expect(await prisma.learningSession.count({ where: { userId: student.id } })).toBe(0);
+    expect(await prisma.message.count({ where: { session: { userId: student.id } } })).toBe(0);
   });
 
   it("retains the request lock and leaves storage untouched when another creation holds it", async () => {
