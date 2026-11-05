@@ -101,6 +101,7 @@ export const aiOperationLabels = {
   diagnostic_review: "诊断内容复核",
   coach: "苏格拉底追问",
   coach_content_review: "追问内容复核",
+  coach_disclosure_review: "待答结论暴露复核",
   coach_review: "学习反馈复核",
   feynman_instruction: "费曼讲解说明",
   report: "学习报告",

@@ -8,6 +8,7 @@ import { learningFeedbackSchema } from "@/lib/learning-feedback";
 import { resetServerEnvForTests } from "@/lib/env";
 import { coachConditionalCheckSchema } from "@/lib/ai/coach-feedback";
 import { coachTurnSchema } from "@/lib/contracts";
+import { answerDisclosureAuditSchema } from "@/lib/ai/answer-disclosure-audit";
 import boundaryReplays from "./coach-boundary-replays.json";
 import conditionPreservationReplay from "./coach-condition-preservation-replay.json";
 
@@ -24,9 +25,9 @@ config({ path: [".env.local", ".env"], quiet: true });
 const enabled = process.env.RUN_DEEPSEEK_LIVE_TEST === "true" && Boolean(process.env.DEEPSEEK_API_KEY);
 const records: Array<{ origin: "real_generation"; scenario: string; answer: string; output: SourcedCoachTurn }> = [];
 type EvidenceOrigin = "real_generation" | "fixed_candidate_real_review" | "fixed_first_draft_real_repair";
-const repairs: Array<{ scenario: string; injectedGenerationCalls: number; realGenerationCalls: number; realReviewCalls: number; output: SourcedCoachTurn | null }> = [];
+const repairs: Array<{ scenario: string; injectedGenerationCalls: number; realGenerationCalls: number; realReviewCalls: number; realDisclosureCalls: number; output: SourcedCoachTurn | null }> = [];
 const responseMetadata: Array<{
-  origin: EvidenceOrigin; scenario: string; operation: "coach" | "coach_review" | "coach_content_review";
+  origin: EvidenceOrigin; scenario: string; operation: "coach" | "coach_review" | "coach_content_review" | "coach_disclosure_review";
   httpStatus: number | null; finishReason: string | null;
   promptTokens: number | null; completionTokens: number | null; totalTokens: number | null;
   jsonParseable: boolean;
@@ -43,6 +44,7 @@ const coachDraftSchema = z.object({ assistantMessage: z.string(), learningFeedba
 
 function requestOperation(init?: RequestInit): (typeof responseMetadata)[number]["operation"] {
   const request = requestEnvelopeSchema.parse(JSON.parse(String(init?.body)));
+  if (request.messages.some((message) => message.role === "system" && message.content.includes("你是独立的答案暴露检查员"))) return "coach_disclosure_review";
   if (request.messages.some((message) => message.role === "system" && message.content.includes("你是学习内容可用性复核模块"))) return "coach_content_review";
   return request.messages.some((message) => message.role === "system" && message.content.includes("你是学习反馈质量复核模块")) ? "coach_review" : "coach";
 }
@@ -75,6 +77,9 @@ async function observedFetch(origin: EvidenceOrigin, scenario: string, url: Para
         } else if (metadata.operation === "coach_content_review") {
           const audit = contentReviewSchema.safeParse(parsedContent);
           if (audit.success) drafts.push({ origin, scenario, requestIndex, operation: "coach_content_review", content: audit.data });
+        } else if (metadata.operation === "coach_disclosure_review") {
+          const audit = answerDisclosureAuditSchema.safeParse(parsedContent);
+          if (audit.success) drafts.push({ origin, scenario, requestIndex, operation: "coach_disclosure_review", content: audit.data });
         }
       }
     }
@@ -212,12 +217,13 @@ const drafts: Array<{
   | { operation: "coach"; content: z.infer<typeof coachDraftSchema> }
   | { operation: "coach_review"; content: z.infer<typeof fixtureReviewSchema> }
   | { operation: "coach_content_review"; content: z.infer<typeof contentReviewSchema> }
+  | { operation: "coach_disclosure_review"; content: z.infer<typeof answerDisclosureAuditSchema> }
 )> = [];
 const fixtureReviews: Array<{
   origin: "fixed_candidate_real_review"; scenario: string; expected: "reject" | "accept" | "inspect";
   candidate: SourcedCoachTurn; review: z.infer<typeof fixtureReviewSchema> | null;
   contentReview: z.infer<typeof contentReviewSchema> | null;
-  injectedGenerationCalls: number; realReviewCalls: number; accepted: boolean | null;
+  injectedGenerationCalls: number; realReviewCalls: number; realDisclosureCalls: number; accepted: boolean | null;
   provenance?: { sourceArtifact: string; sourceScenario: string; changedFields: string[]; objective: string };
 }> = [];
 const task = {
@@ -261,7 +267,7 @@ async function reviewFixedCandidate(
   contextTask: CoachTurnInput["task"] = task,
   provenance?: (typeof fixtureReviews)[number]["provenance"],
 ): Promise<(typeof fixtureReviews)[number]> {
-  const record: (typeof fixtureReviews)[number] = { origin: "fixed_candidate_real_review", scenario, expected, candidate, review: null, contentReview: null, injectedGenerationCalls: 0, realReviewCalls: 0, accepted: null, ...(provenance ? { provenance } : {}) };
+  const record: (typeof fixtureReviews)[number] = { origin: "fixed_candidate_real_review", scenario, expected, candidate, review: null, contentReview: null, injectedGenerationCalls: 0, realReviewCalls: 0, realDisclosureCalls: 0, accepted: null, ...(provenance ? { provenance } : {}) };
   fixtureReviews.push(record);
   vi.stubEnv("AI_MAX_RETRIES", "0");
   resetServerEnvForTests();
@@ -273,7 +279,8 @@ async function reviewFixedCandidate(
         if (record.injectedGenerationCalls !== 1) throw new Error("The fixed candidate must not regenerate.");
         return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(candidate) } }] }), { status: 200 });
       }
-      record.realReviewCalls += 1;
+      if (operation === "coach_disclosure_review") record.realDisclosureCalls += 1;
+      else record.realReviewCalls += 1;
       const response = await observedFetch("fixed_candidate_real_review", scenario, url, init);
       if (response.ok) {
         try {
@@ -283,7 +290,7 @@ async function reviewFixedCandidate(
           if (operation === "coach_review") {
             const reviewed = fixtureReviewSchema.safeParse(parsed);
             if (reviewed.success) record.review = reviewed.data;
-          } else {
+          } else if (operation === "coach_content_review") {
             const reviewed = contentReviewSchema.safeParse(parsed);
             if (reviewed.success) record.contentReview = reviewed.data;
           }
@@ -316,6 +323,7 @@ async function reviewFixedCandidate(
       record.accepted = true;
     }
     expect(record.injectedGenerationCalls).toBe(1);
+    expect(record.realDisclosureCalls).toBe(1);
     expect(record.realReviewCalls).toBeGreaterThanOrEqual(1);
     expect(record.realReviewCalls).toBeLessThanOrEqual(2);
     expect(record.contentReview).not.toBeNull();
@@ -826,7 +834,7 @@ describe.skipIf(!enabled)("DeepSeek live coaching feedback", () => {
       nextAction: "ASK_QUESTION", transitionReason: "澄清适用条件",
       learningFeedback: { answerQuote: answer, observation: "你还没有认识到这个定理只适用于直角三角形。", focus: "说出定理适用的三角形类型。", whyItMatters: "确认条件可以避免在不适用的情境中套公式。", progress: null },
     };
-    const record: (typeof repairs)[number] = { scenario: "repair-leaked-condition", injectedGenerationCalls: 0, realGenerationCalls: 0, realReviewCalls: 0, output: null };
+    const record: (typeof repairs)[number] = { scenario: "repair-leaked-condition", injectedGenerationCalls: 0, realGenerationCalls: 0, realReviewCalls: 0, realDisclosureCalls: 0, output: null };
     repairs.push(record);
     const provider = new DeepSeekProvider({ fetcher: async (url, init) => {
       if (requestOperation(init) === "coach") {
@@ -835,13 +843,15 @@ describe.skipIf(!enabled)("DeepSeek live coaching feedback", () => {
           return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(candidate) } }] }), { status: 200 });
         }
         record.realGenerationCalls += 1;
-      } else record.realReviewCalls += 1;
+      } else if (requestOperation(init) === "coach_disclosure_review") record.realDisclosureCalls += 1;
+      else record.realReviewCalls += 1;
       return observedFetch("fixed_first_draft_real_repair", record.scenario, url, init);
     } });
     record.output = await provider.createCoachTurn({ task, phase: "SOCRATIC", socraticTurns: 0, maxTurns: 5, unknownStreak: 0, learnerState: null, latestAnswer: answer, messages: [{ role: "USER", phase: "SOCRATIC", content: answer, questionType: null }], knowledgePolicy: "MODEL_FALLBACK" });
     expect(record.injectedGenerationCalls).toBe(1);
     expect(record.realGenerationCalls).toBe(1);
     expect(record.realReviewCalls).toBe(3);
+    expect(record.realDisclosureCalls).toBe(2);
     expect(record.output.learningFeedback).not.toEqual(candidate.learningFeedback);
     expect(answer).toContain(record.output.learningFeedback?.answerQuote);
     const reviews = drafts.filter((draft) => draft.scenario === record.scenario && draft.operation === "coach_content_review");

@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "sourceArtifact": "final-2026-11-05T03-12-45-637Z.json",
+  "input": {
+    "task": {
+      "topic": "史料能支持什么结论",
+      "objective": "区分史料直接记录、推断和仍未知的信息。",
+      "learnerLevel": "入门",
+      "referenceText": "以下为虚构练习材料，不能补入外部史实：青禾镇档案片段仅写‘水渠修成后，沿渠田地的灌溉更方便’，未记载开工年份、竣工年份或修建者。史料未记录一个信息不等于该事件没有发生；不能只凭这个片段确定具体年份。"
+    },
+    "phase": "SOCRATIC",
+    "socraticTurns": 0,
+    "maxTurns": 5,
+    "unknownStreak": 0,
+    "learnerState": {
+      "masteryEstimate": 40,
+      "confirmedPoints": [
+        "能指出材料未记载年份，确定修成年份仍需资料",
+        "能读出片段写到修渠后沿渠田地灌溉更方便"
+      ],
+      "gaps": [
+        "尚未说明片段中哪些是直接记录、哪些是推断"
+      ],
+      "misconceptions": []
+    },
+    "latestAnswer": "我仍不能从这段材料推出具体年份。可以补查有明确日期的档案再核对；现在只能说材料没有提供，不能说从未修过水渠。",
+    "messages": [
+      {
+        "role": "ASSISTANT",
+        "phase": "DIAGNOSIS",
+        "content": "如果暂时说不清，也可以直接说“不知道”。先用自己的话说说：关于这个知识点，你现在认为最重要的一点是什么？",
+        "questionType": "CONCEPT_CLARIFICATION"
+      },
+      {
+        "role": "USER",
+        "phase": "DIAGNOSIS",
+        "content": "我只能读到修渠以后灌溉更方便，材料没写年份；如果要确定哪一年修成，我还缺资料。",
+        "questionType": null
+      },
+      {
+        "role": "ASSISTANT",
+        "phase": "SOCRATIC",
+        "content": "在这份档案片段中（“水渠修成后，沿渠田地的灌溉更方便”），哪些内容是档案直接记录的，哪些是需要推断的，你的依据是什么？",
+        "questionType": "CONCEPT_CLARIFICATION"
+      },
+      {
+        "role": "USER",
+        "phase": "SOCRATIC",
+        "content": "我仍不能从这段材料推出具体年份。可以补查有明确日期的档案再核对；现在只能说材料没有提供，不能说从未修过水渠。",
+        "questionType": null
+      }
+    ],
+    "knowledgePolicy": "MODEL_FALLBACK",
+    "sessionId": "synthetic-fbd87d72-c579-4407-affb-5fa87c25283b",
+    "requestId": "multi-7ef32337-530e-4eae-8cea-d287e702ba92"
+  },
+  "rejectedCandidate": {
+    "assistantMessage": "在这段档案片段中，“水渠修成后，沿渠田地的灌溉更方便”这句话直接写出的内容是什么？",
+    "questionType": "CONCEPT_CLARIFICATION",
+    "learnerState": {
+      "masteryEstimate": 45,
+      "confirmedPoints": [
+        "能指出材料未记载年份，确定修成年份仍需资料",
+        "能指出未记载不等于从未修过水渠",
+        "能读出片段写到修渠后沿渠田地灌溉更方便"
+      ],
+      "gaps": [
+        "尚未指出档案片段直接写出的具体内容"
+      ],
+      "misconceptions": []
+    },
+    "nextAction": "ASK_QUESTION",
+    "transitionReason": "学生已处理未知信息，下一步需指出材料直接写出的内容。",
+    "learningFeedback": {
+      "answerQuote": "我仍不能从这段材料推出具体年份。可以补查有明确日期的档案再核对；现在只能说材料没有提供，不能说从未修过水渠。",
+      "observation": "你刚才提到材料没有提供年份、不能据此说从未修过水渠；还没有指出片段中哪部分是档案直接写出的。",
+      "focus": "从原句中找出档案直接写出的那一事实",
+      "whyItMatters": "这能帮你把材料明说的内容与尚不能确认的年份分开。",
+      "progress": "上一轮你已说材料没写年份、确定年份还缺资料，这次补充了“不能说从未修过水渠”；但直接写出的内容仍未指出。"
+    }
+  },
+  "semanticChecks": [
+    "保留前轮已读出灌溉更方便的事实，不因本轮省略而声称尚未指出",
+    "区分说出事实与解释其分类依据；下一问需补新证据而非同义复述",
+    "不能编造年份、建造者或其他未给的史料"
+  ]
+}

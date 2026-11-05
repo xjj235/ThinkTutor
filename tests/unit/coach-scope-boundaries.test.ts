@@ -8,6 +8,12 @@ const completion = (value: unknown) => new Response(JSON.stringify({
   choices: [{ message: { content: JSON.stringify(value) } }],
 }), { status: 200 });
 
+const disclosurePass = (question: string) => ({
+  pendingTaskQuote: question, taskKind: "EXPLAIN_OR_APPLY", prematureDirection: null,
+  namedTargetAttribute: null, remainingWork: "学生仍须完成当前判断。",
+  fields: ["question", "observation", "focus", "whyItMatters", "progress"].map((id) => ({ id, status: "OPEN", quote: null, reason: null })),
+});
+
 const contentPass = {
   minimumAnswer: "待核对的具体答案",
   verdict: "PASS",
@@ -107,14 +113,15 @@ describe("mocked coaching scope-review gates", () => {
     expect(question).toContain(audit.answerDisclosure.quote);
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(completion(output))
-      .mockResolvedValueOnce(completion(audit));
+      .mockResolvedValueOnce(completion(audit))
+      .mockResolvedValueOnce(completion(disclosurePass(question)));
 
     await expect(new DeepSeekProvider({ fetcher }).createCoachTurn({
       ...input,
       latestAnswer,
       task: { course: undefined, chapter: undefined, topic: "勾股定理", objective: "识别适用条件", learnerLevel: "入门", referenceText: "在直角三角形中，两条直角边的平方和等于斜边的平方。" },
     })).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
   it("rejects an unsupported whole-object premise even when a local-property quotation exists and verdict is PASS", async () => {
@@ -132,14 +139,15 @@ describe("mocked coaching scope-review gates", () => {
     expect(question).toContain(localQuote);
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(completion(candidate(question)))
-      .mockResolvedValueOnce(completion(audit));
+      .mockResolvedValueOnce(completion(audit))
+      .mockResolvedValueOnce(completion(disclosurePass(question)));
 
     await expect(new DeepSeekProvider({ fetcher }).createCoachTurn(input))
       .rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
-  it("accepts a calculation with explicit total scope and grounded premises after all three calls", async () => {
+  it("accepts a calculation with explicit total scope and grounded premises after all four calls", async () => {
     const question = "某企业全部资产合计80万元，全部负债合计30万元，这家企业的自有资本是多少？";
     const output = candidate(question);
     const minimumAnswer = "50万元。";
@@ -155,13 +163,14 @@ describe("mocked coaching scope-review gates", () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(completion(output))
       .mockResolvedValueOnce(completion(audit))
+      .mockResolvedValueOnce(completion(disclosurePass(question)))
       .mockResolvedValueOnce(completion({ ...teachingPass, minimumAnswer }));
 
     const result = await new DeepSeekProvider({ fetcher }).createCoachTurn(input);
     expect(result).toEqual(output);
     expect(result).not.toHaveProperty("minimumAnswer");
     expect(result).not.toHaveProperty("prerequisiteEvidence");
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
   it("honors a teaching-review rejection when content review misses the whole-object scope error", async () => {
@@ -180,6 +189,7 @@ describe("mocked coaching scope-review gates", () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(completion(candidate(question)))
       .mockResolvedValueOnce(completion(audit))
+      .mockResolvedValueOnce(completion(disclosurePass(question)))
       .mockResolvedValueOnce(completion({
         ...teachingPass,
         minimumAnswer: incorrectMinimumAnswer,
@@ -189,6 +199,6 @@ describe("mocked coaching scope-review gates", () => {
 
     await expect(new DeepSeekProvider({ fetcher }).createCoachTurn(input))
       .rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 });

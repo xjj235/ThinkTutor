@@ -4,6 +4,8 @@
 
 [GitHub 源代码](https://github.com/xjj235/ThinkTutor) · [许可证适用范围](LICENSE_SCOPE.md)
 
+[多会话真实模型验收与剩余限制](docs/MULTI_SESSION_REAL_ACCEPTANCE_2026-11-05.md) · [本轮方案比较](docs/MULTI_SESSION_QUALITY_PLAN_2026-11-05.md)
+
 ThinkTutor 是面向学生、教师与平台管理员的 AI 自主学习系统。核心闭环保持为：任务创建 → 知识诊断 → 3～6 轮苏格拉底追问（最多 8 轮可配置）→ 费曼讲解 → 五维形成性报告 → 从最高优先级漏洞再练。
 
 ## 技术架构

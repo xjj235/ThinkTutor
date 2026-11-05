@@ -35,7 +35,7 @@ const responseSchema = z.object({
   usage: z.object({ prompt_tokens: z.number().optional(), completion_tokens: z.number().optional(), total_tokens: z.number().optional() }).optional(),
 });
 interface RequestRecord {
-  scenario: string; turn: number; operation: "generation" | "content_review" | "teaching_review" | "report";
+  scenario: string; turn: number; operation: "generation" | "content_review" | "disclosure_review" | "teaching_review" | "report";
   elapsedMs: number; status: number | null; finishReason: string | null; totalTokens: number | null;
   transportFailure: boolean;
 }
@@ -52,6 +52,7 @@ function operationOf(init?: RequestInit): RequestRecord["operation"] {
   const envelope: unknown = JSON.parse(String(init?.body));
   const messages = z.object({ messages: z.array(z.object({ role: z.string(), content: z.string() })) }).parse(envelope).messages;
   const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n");
+  if (system.includes("你是独立的答案暴露检查员")) return "disclosure_review";
   if (system.includes("你是学习内容可用性复核模块")) return "content_review";
   if (system.includes("你是学习反馈质量复核模块")) return "teaching_review";
   if (system.includes("学习诊断模块")) return "report";
