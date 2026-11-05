@@ -454,6 +454,127 @@ describe("bounded coach task classification recovery", () => {
   });
 });
 
+describe("AI turn format normalization", () => {
+  const output = { assistantMessage: "这个判断成立吗？", questionType: "CAUSE_PROBE", learningFeedback: feedback, learnerState: { masteryEstimate: 0, confirmedPoints: [], gaps: [], misconceptions: [] }, nextAction: "ASK_QUESTION", transitionReason: "核验依据" };
+  const configure = () => {
+    process.env.DEEPSEEK_API_KEY = "test-server-key";
+    process.env.AI_MAX_RETRIES = "0";
+    resetServerEnvForTests();
+  };
+
+  it.each([false, true])("drops undeclared feedback fields before reviews and output for diagnostic=%s", async (diagnostic) => {
+    configure();
+    const unknownFields = { internalAnswer: "INTERNAL_ONLY_DO_NOT_RETURN", score: 99, ["__proto__"]: "PRIVATE_PROTOTYPE", constructor: "PRIVATE_CONSTRUCTOR" };
+    const raw = { ...output, questionType: diagnostic ? "CONCEPT_CLARIFICATION" : output.questionType, learningFeedback: { ...feedback, ...unknownFields } };
+    expect(coachTurnSchema.safeParse(raw).success).toBe(false);
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion(raw)).mockResolvedValueOnce(completion(contentReviewPass)).mockResolvedValueOnce(completion(reviewPass));
+    const transport = vi.fn(diagnostic ? passingContentReview(fetcher) : passingDisclosureReview(fetcher));
+    const provider = new DeepSeekProvider({ fetcher: transport });
+    const result = diagnostic ? await provider.createDiagnosticQuestion({ task }) : await provider.createCoachTurn(coachInput);
+    expect(result.learningFeedback).toEqual(diagnostic ? undefined : feedback);
+    for (const marker of Object.values(unknownFields).filter((value) => typeof value === "string")) {
+      expect(JSON.stringify(result)).not.toContain(marker);
+      expect(JSON.stringify(transport.mock.calls.slice(1))).not.toContain(marker);
+    }
+    expect(transport).toHaveBeenCalledTimes(diagnostic ? 2 : 4);
+  });
+
+  it.each(["missing quote", "wrong quote type", "invented quote", "missing explanation", "wrong explanation type", "missing progress", "wrong progress type"])("still rejects %s after dropping extra feedback keys", async (failure) => {
+    configure();
+    const invalidFeedback: Record<string, unknown> = { ...feedback, internalAnswer: "DROP_THIS" };
+    switch (failure) {
+      case "missing quote": delete invalidFeedback.answerQuote; break;
+      case "wrong quote type": invalidFeedback.answerQuote = 4; break;
+      case "invented quote": invalidFeedback.answerQuote = "学生从未说过的内容"; break;
+      case "missing explanation": delete invalidFeedback.whyItMatters; break;
+      case "wrong explanation type": invalidFeedback.whyItMatters = { text: "解释" }; break;
+      case "missing progress": delete invalidFeedback.progress; break;
+      case "wrong progress type": invalidFeedback.progress = ["进步"]; break;
+    }
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion({ ...output, learningFeedback: invalidFeedback }));
+    await expect(new DeepSeekProvider({ fetcher }).createCoachTurn({ ...coachInput, messages: [{ role: "USER", phase: "SOCRATIC", content: "之前只列出了损失。", questionType: null }] })).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["这个判断成立吗？为什么？", "这个判断成立吗，为什么？"],
+    ["能否使用这条规则?\n依据是什么?", "能否使用这条规则，\n依据是什么？"],
+    ["可以这样判断吗？ 你的依据是什么？", "可以这样判断吗， 你的依据是什么？"],
+  ])("joins only the standalone trailing reason request in %s before every review", async (question, normalized) => {
+    configure();
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion({ ...output, assistantMessage: question })).mockResolvedValueOnce(completion(contentReviewPass)).mockResolvedValueOnce(completion(reviewPass));
+    const transport = vi.fn(passingDisclosureReview(fetcher));
+    const result = await new DeepSeekProvider({ fetcher: transport }).createCoachTurn(coachInput);
+    expect(result.assistantMessage).toBe(normalized);
+    expect(transport).toHaveBeenCalledTimes(4);
+    for (const [, init] of transport.mock.calls.slice(1)) {
+      const body = JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: string }> };
+      expect(body.messages.at(-1)!.content).toContain(JSON.stringify(normalized));
+    }
+  });
+
+  it("normalizes diagnostic questions before their independent review", async () => {
+    configure();
+    const question = "你目前怎样理解风险？依据是什么？";
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion({ ...output, questionType: "CONCEPT_CLARIFICATION", assistantMessage: question }));
+    const transport = vi.fn(passingContentReview(fetcher));
+    const result = await new DeepSeekProvider({ fetcher: transport }).createDiagnosticQuestion({ task });
+    expect(result.assistantMessage).toBe("你目前怎样理解风险，依据是什么？");
+    expect(transport).toHaveBeenCalledTimes(2);
+    const review = JSON.parse(String(transport.mock.calls[1]?.[1]?.body)) as { messages: Array<{ content: string }> };
+    expect(review.messages.at(-1)!.content).toContain(result.assistantMessage);
+  });
+
+  it("uses the same normalization for the server-side Responses API path", async () => {
+    configure();
+    process.env.DEEPSEEK_WEB_SEARCH_FALLBACK = "true";
+    resetServerEnvForTests();
+    const raw = { ...output, assistantMessage: "这个判断成立吗？为什么？", learningFeedback: { ...feedback, privateNote: "PRIVATE_NOTE" } };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(raw) }] }] }), { status: 200 })).mockResolvedValueOnce(completion(reviewPass));
+    const result = await new DeepSeekProvider({ fetcher: passingContentReview(fetcher) }).createCoachTurn({ ...coachInput, knowledgePolicy: "MODEL_FALLBACK" });
+    expect(String(fetcher.mock.calls[0]?.[0])).toMatch(/\/responses$/u);
+    expect(result.assistantMessage).toBe("这个判断成立吗，为什么？");
+    expect(result.learningFeedback).toEqual(feedback);
+    expect(JSON.stringify(fetcher.mock.calls.slice(1))).not.toContain("PRIVATE_NOTE");
+  });
+
+  it.each(["content", "teaching"])("still rejects normalized turns when %s quality review fails", async (failedAudit) => {
+    configure();
+    const raw = { ...output, assistantMessage: "这个判断成立吗？为什么？", learningFeedback: { ...feedback, privateNote: "PRIVATE_NOTE" } };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion(raw))
+      .mockResolvedValueOnce(completion(failedAudit === "content" ? { ...contentReviewPass, verdict: "UNCERTAIN" } : contentReviewPass))
+      .mockResolvedValueOnce(completion({ ...reviewPass, noAnswerLeak: false }));
+    await expect(new DeepSeekProvider({ fetcher: passingDisclosureReview(fetcher) }).createCoachTurn(coachInput)).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
+    expect(fetcher).toHaveBeenCalledTimes(failedAudit === "content" ? 2 : 3);
+  });
+
+  it.each([null, [], "feedback"])("keeps invalid non-object feedback unchanged for schema rejection (%j)", async (learningFeedback) => {
+    configure();
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion({ ...output, learningFeedback }));
+    await expect(new DeepSeekProvider({ fetcher }).createCoachTurn(coachInput)).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    "风险是什么？它有哪些类型？", "风险是什么？它有哪些类型？为什么？",
+    "- 风险是什么？\n为什么？", "1. 风险是什么？依据是什么？",
+    "风险是什么？为什么？请给出例子。", "风险是什么？为什么这样判断？", " ？为什么？",
+  ])("rejects independent questions or unsupported formatting in %s", async (assistantMessage) => {
+    configure();
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion({ ...output, assistantMessage }));
+    await expect(new DeepSeekProvider({ fetcher }).createCoachTurn(coachInput)).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["top-level", "learner-state", "content-review"])("preserves strict unknown-field checks for %s", async (location) => {
+    configure();
+    const raw = location === "top-level" ? { ...output, internalAnswer: "PRIVATE" } : location === "learner-state" ? { ...output, learnerState: { ...output.learnerState, internalAnswer: "PRIVATE" } } : output;
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion(raw)).mockResolvedValueOnce(completion({ ...contentReviewPass, internalAnswer: "PRIVATE" }));
+    await expect(new DeepSeekProvider({ fetcher: passingDisclosureReview(fetcher) }).createCoachTurn(coachInput)).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
+    expect(fetcher).toHaveBeenCalledTimes(location === "content-review" ? 2 : 1);
+  });
+});
+
 describe("prompt and output boundaries", () => {
   it("rejects multiple questions and wraps untrusted content", () => {
     expect(coachTurnSchema.safeParse({ assistantMessage: "问题一？问题二？", questionType: "CAUSE_PROBE", learnerState: { masteryEstimate: 0, confirmedPoints: [], gaps: [], misconceptions: [] }, nextAction: "ASK_QUESTION", transitionReason: "test" }).success).toBe(false);

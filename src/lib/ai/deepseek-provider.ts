@@ -393,9 +393,21 @@ function extractAnnotationSources(value: unknown): WebSource[] {
 
 type StructuredPayload<T> = T & { webSources?: WebSource[] };
 
-function parseStructuredPayload<T>(schema: z.ZodType<T>, content: string, allowWebSources = true): StructuredPayload<T> {
+function parseStructuredPayload<T>(schema: z.ZodType<T>, content: string, operation: Operation): StructuredPayload<T> {
   const raw: unknown = JSON.parse(content);
   if (!isRecord(raw)) throw new AIProviderError("AI_INVALID_OUTPUT", "模型输出无法解析。", 502, true);
+  // Normalize only generated learner-facing turns, before any quality audit.
+  // Keep every declared field and all other strict schema boundaries intact.
+  if (operation === "coach" || operation === "diagnostic") {
+    if (isRecord(raw.learningFeedback)) {
+      raw.learningFeedback = Object.fromEntries(Object.entries(raw.learningFeedback).filter(([key]) => Object.hasOwn(learningFeedbackSchema.shape, key)));
+    }
+    if (typeof raw.assistantMessage === "string") {
+      const reasonSuffix = raw.assistantMessage.match(/^([^?？]+)[?？](\s*)(为什么|依据是什么|你的依据是什么)[?？](\s*)$/u);
+      if (reasonSuffix?.[1]?.trim()) raw.assistantMessage = `${reasonSuffix[1]}，${reasonSuffix[2]}${reasonSuffix[3]}？${reasonSuffix[4]}`;
+    }
+  }
+  const allowWebSources = !boundedOperations.includes(operation);
   const webSources = z.array(webSourceSchema).max(5).optional().safeParse(raw.webSources);
   const base = allowWebSources ? Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "webSources")) : raw;
   const validated = schema.safeParse(base);
@@ -578,7 +590,7 @@ export class DeepSeekProvider implements AIProvider {
         const responseTextParts = responsesOutput?.output.flatMap((item) => item.content ?? []).filter((item) => item.type === "output_text").map((item) => item.text ?? "") ?? [];
         const content = (completion?.choices[0]?.message.content ?? responseTextParts.join("\n")).trim();
         if (!content) throw new AIProviderError("AI_INVALID_OUTPUT", "模型返回了空输出。", 502, true);
-        const validated = parseStructuredPayload(schema, content, !boundedOperations.includes(operation));
+        const validated = parseStructuredPayload(schema, content, operation);
         if (review) await review(validated);
         execution?.signal.throwIfAborted();
         const annotationSources = uniqueSources(responsesOutput?.output.flatMap((item) => [
