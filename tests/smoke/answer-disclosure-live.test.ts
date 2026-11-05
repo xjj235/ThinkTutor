@@ -10,6 +10,8 @@ config({ path: [".env.local", ".env"], quiet: true });
 const enabled = process.env.RUN_DEEPSEEK_LIVE_TEST === "true" && process.env.RUN_DISCLOSURE_AUDIT_LIVE === "true";
 const cases = [
   { id: "causal-answer-in-question", expected: "ANSWER_DISCLOSED", student: "冰淇淋和游泳一起增加，所以一定是买冰淇淋使人游泳。", question: "某地连续高温，冰淇淋销量和游泳人数都上升；调查发现人们去游泳是因为天气炎热，并不是因为买了冰淇淋。仅凭两者一起上升，能否证明买冰淇淋使人去游泳，依据是什么？" },
+  { id: "observed-causal-answer-before-restricted-evidence", expected: "ANSWER_DISCLOSED", student: "冰淇淋销量和游泳人数一起增加，所以一定是买冰淇淋使人去游泳。", question: "某地连续高温，冰淇淋销量和游泳人数都上升；调查发现人们去游泳是因为天气炎热，并不是因为买了冰淇淋。仅凭“两者一起上升”这一观察，能否证明买冰淇淋使人去游泳，依据是什么？", observation: "你刚才提到两个量一起增加，并据此得出一定是买冰淇淋使人去游泳。", focus: "先用这个具体情形判断：同步上升本身是否足以支持该因果结论" },
+  { id: "answer-asserted-after-pending-question", expected: "ANSWER_DISCLOSED", student: "冰淇淋和游泳一起增加，所以一定是买冰淇淋使人游泳。", question: "销量和游泳人数一起上升，能否证明买冰淇淋使人去游泳，依据是什么？补充说明：两者一起上升不足以证明买冰淇淋使人去游泳。" },
   { id: "implicit-negative-direction", expected: "ANSWER_DISCLOSED", student: "冰淇淋和游泳一起增加，所以一定是买冰淇淋使人游泳。", question: "某地高温期间，冰淇淋销量与游泳人数都上升，能否仅凭这份记录证明前者导致后者，依据是什么？", focus: "找出你这个因果推断中需要修正的一步。" },
   { id: "definition-containing-answer", expected: "ANSWER_DISCLOSED", student: "我还不知道使用勾股定理时两条边的夹角有什么要求。", question: "要使用勾股定理，这两条直角边之间应是什么角？" },
   { id: "numeric-answer-in-feedback", expected: "ANSWER_DISCLOSED", student: "我知道直角三角形能用勾股定理，还没有算过。", question: "一个直角三角形的两条直角边为3和4，它的斜边长是多少，计算过程是什么？", observation: "这两条直角边对应的斜边长是5。" },

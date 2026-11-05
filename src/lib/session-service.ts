@@ -421,7 +421,7 @@ export async function submitLearningAnswer(sessionId: string, input: { answer: s
     retrievedContext: context.retrievedContext,
     knowledgePolicy: context.knowledgePolicy,
     selectedAction: action ?? undefined,
-  }), 4);
+  }), 5);
   coach.learningFeedback = requireAnswerFeedback(coach.learningFeedback, input.answer, session.messages.filter((message) => message.role === "USER").map((message) => message.content));
   if (action) {
     coach.assistantMessage = action.assistantMessage;

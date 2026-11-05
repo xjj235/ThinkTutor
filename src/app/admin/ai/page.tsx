@@ -1,7 +1,7 @@
 import { listAIUsagePage } from "@/lib/admin-service";
 import { requirePageUser } from "@/lib/page-auth";
 import { EmptyState, PageShell } from "@/components/page-shell";
-import { aiOperationLabel, aiOperationLabels, aiUsageStatusLabels } from "@/lib/display-labels";
+import { aiOperationLabel, aiOperationLabels, aiUsageStatusLabel, aiUsageStatusLabels } from "@/lib/display-labels";
 import { AdminFilterError, AdminLogFilters } from "@/components/admin-log-filters";
 import { Pagination } from "@/components/pagination";
 import { adminSearchValues, aiUsageListSchema } from "@/lib/admin-list-query";
@@ -44,7 +44,7 @@ export default async function AdminAIPage({ searchParams }: { searchParams: Prom
                   <td>{new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "medium", timeZone: "Asia/Shanghai" }).format(row.createdAt)}</td>
                   <td>{row.model}</td>
                   <td>{aiOperationLabel(row.operation)}</td>
-                  <td>{aiUsageStatusLabels[row.status]}</td>
+                  <td>{aiUsageStatusLabel(row.status, row.errorCode)}</td>
                   <td>{(row.promptTokens ?? 0) + (row.completionTokens ?? 0)}</td>
                   <td>{row.latencyMs} ms</td>
                   <td>{row.errorCode ?? "—"}</td>

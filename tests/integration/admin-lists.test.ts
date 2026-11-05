@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { listAIUsage, listAIUsagePage, listAuditLogsPage, listMaterialJobsPage } from "@/lib/admin-service";
+import { getAdminOverview, listAIUsage, listAIUsagePage, listAuditLogsPage, listMaterialJobsPage } from "@/lib/admin-service";
 import { adminDateRange, aiUsageListSchema, auditLogListSchema, materialJobListSchema } from "@/lib/admin-list-query";
 import { prisma } from "@/lib/db";
 import { createTestUser } from "../factories";
@@ -75,6 +75,32 @@ describe("administrator record filters and pagination", () => {
     expect(ready.total).toBe(1);
     expect(ready.items[0].title).toBe(`${marker} 22`);
     expect((await listMaterialJobsPage({ ...input, query: "nonexistent-" + marker })).total).toBe(0);
+  });
+
+  it("keeps cancelled usage searchable and excludes it from failures without dropping legacy rows", async () => {
+    const before = await getAdminOverview();
+    const rows = [
+      { suffix: "cancelled", status: "FAILED" as const, errorCode: "AI_CANCELLED" },
+      { suffix: "timeout", status: "FAILED" as const, errorCode: "AI_TIMEOUT" },
+      { suffix: "legacy", status: "FAILED" as const, errorCode: null },
+      { suffix: "success", status: "SUCCESS" as const, errorCode: null },
+    ];
+    await prisma.aIUsage.createMany({ data: rows.map((row) => ({
+      id: `${marker}-${row.suffix}`, requestId: `${marker}-${row.suffix}`, provider: "deepseek", model: marker,
+      operation: "coach", status: row.status, errorCode: row.errorCode,
+      promptTokens: 91, completionTokens: 37, latencyMs: 100, createdAt: timestamp,
+    })) });
+    const query = aiUsageListSchema.parse({ query: marker, operation: "coach", from: "2035-01-01", to: "2035-01-01" });
+    const all = await listAIUsagePage(query);
+    expect(all.total).toBe(4);
+    expect(all.items.find((row) => row.errorCode === "AI_CANCELLED")).toMatchObject({ promptTokens: 91, completionTokens: 37 });
+    const failed = await listAIUsagePage({ ...query, status: "FAILED" });
+    expect(failed.total).toBe(2);
+    expect(failed.items.map((row) => row.id).sort()).toEqual([`${marker}-legacy`, `${marker}-timeout`]);
+    expect((await listAIUsagePage({ ...query, status: "FAILED", query: "absent-" + marker })).total).toBe(0);
+    expect((await listAIUsagePage({ ...query, query: "AI_CANCELLED" })).items.some((row) => row.id === `${marker}-cancelled`)).toBe(true);
+    expect((await listAIUsagePage({ ...query, status: "FAILED", query: "AI_CANCELLED" })).total).toBe(0);
+    expect((await getAdminOverview()).failedAI - before.failedAI).toBe(2);
   });
 
   it("filters audit events by actor and action with inclusive Beijing date boundaries and minimal disclosure", async () => {

@@ -33,4 +33,31 @@ describe("independent disclosure audit evidence contract", () => {
     const directed = buildDisclosureAuditInput(question, { observation: "纠正这个斜边长度判断。", focus: "计算斜边。", whyItMatters: "核对判断。", progress: null }, []);
     expect(validateDisclosureAudit({ ...openAudit(), prematureDirection: { field: "observation", quote: "纠正这个斜边长度判断", reason: "明确预设这个判断需要改正" } }, directed).verdict).toBe("ANSWER_DISCLOSED");
   });
+  it.each([
+    "调查已经确认买冰淇淋会使人去游泳。",
+    "调查已经确认人们游泳并不是因为买了冰淇淋。",
+  ])("rejects a cited answer assertion before a restricted-evidence question: %s", (assertion) => {
+    const pendingTaskQuote = "仅凭销量和人数一起上升，能否证明买冰淇淋使人去游泳，依据是什么？";
+    const disclosed = buildDisclosureAuditInput(`${assertion}${pendingTaskQuote}`, {
+      observation: "你提出了一个因果判断。", focus: "核对观察支持的结论。",
+      whyItMatters: "这能帮助你区分观察与解释。", progress: null,
+    }, ["冰淇淋和游泳一起增加，所以一定是买冰淇淋使人游泳。"]);
+    const audit = {
+      ...openAudit(), pendingTaskQuote, taskKind: "BINARY_JUDGMENT",
+      prematureDirection: { field: "question", quote: assertion, reason: "题面已断言当前待判断的同一因果命题。" },
+    };
+    expect(validateDisclosureAudit(audit, disclosed).verdict).toBe("ANSWER_DISCLOSED");
+  });
+  it("rejects a cited definition that contains the property being requested", () => {
+    const pendingTaskQuote = "要使用勾股定理，这两条直角边之间应是什么角？";
+    const disclosed = buildDisclosureAuditInput(pendingTaskQuote, {
+      observation: "你还没有说明夹角条件。", focus: "说出需要的夹角条件。",
+      whyItMatters: "这能帮助你核对适用条件。", progress: null,
+    }, ["我还不知道使用时两条边的夹角有什么要求。"]);
+    const audit = {
+      ...openAudit(), pendingTaskQuote, taskKind: "IDENTIFY_PROPERTY",
+      namedTargetAttribute: { field: "question", quote: "两条直角边", reason: "名称已包含本轮待识别的直角条件。" },
+    };
+    expect(validateDisclosureAudit(audit, disclosed).verdict).toBe("ANSWER_DISCLOSED");
+  });
 });

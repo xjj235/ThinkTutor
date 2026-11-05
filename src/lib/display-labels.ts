@@ -64,6 +64,10 @@ export const aiUsageStatusLabels = {
   FAILED: "失败",
 } satisfies Record<AIUsageStatus, string>;
 
+export function aiUsageStatusLabel(status: AIUsageStatus, errorCode: string | null): string {
+  return errorCode === "AI_CANCELLED" ? "已取消" : aiUsageStatusLabels[status];
+}
+
 export const auditActionLabels = {
   KNOWLEDGE_REVIEWED: "知识与教学判断审核",
   AUTH_LOGIN: "登录",

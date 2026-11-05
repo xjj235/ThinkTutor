@@ -6,13 +6,16 @@ import { AppError } from "./errors";
 import { adminDateRange, aiUsageListSchema, auditLogListSchema, materialJobListSchema, type AIUsageListQuery, type AuditLogListQuery, type MaterialJobListQuery } from "./admin-list-query";
 
 const userSelect = { id: true, email: true, name: true, role: true, status: true, lastLoginAt: true, createdAt: true } as const;
+const nonCancelledAIUsage: Prisma.AIUsageWhereInput = {
+  OR: [{ errorCode: null }, { errorCode: { not: "AI_CANCELLED" } }],
+};
 
 export async function getAdminOverview() {
   const [users, students, teachers, activeSessions, completedSessions, failedMaterials, failedAI, courses, classrooms] = await Promise.all([
     prisma.user.count(), prisma.user.count({ where: { role: "STUDENT" } }), prisma.user.count({ where: { role: "TEACHER" } }),
     prisma.learningSession.count({ where: { phase: { in: ["DIAGNOSIS", "SOCRATIC", "FEYNMAN", "REPORTING"] } } }),
     prisma.learningSession.count({ where: { phase: "COMPLETED" } }), prisma.material.count({ where: { status: "FAILED" } }),
-    prisma.aIUsage.count({ where: { status: "FAILED" } }), prisma.course.count(), prisma.classroom.count(),
+    prisma.aIUsage.count({ where: { status: "FAILED", ...nonCancelledAIUsage } }), prisma.course.count(), prisma.classroom.count(),
   ]);
   return { users, students, teachers, activeSessions, completedSessions, failedMaterials, failedAI, courses, classrooms };
 }
@@ -74,9 +77,10 @@ function pageMeta(total: number, input: { page: number; limit: number }) {
 
 export async function listAIUsagePage(query: AIUsageListQuery) {
   const input = aiUsageListSchema.parse(query);
-  const where = {
+  const where: Prisma.AIUsageWhereInput = {
     createdAt: adminDateRange(input),
     ...(input.status ? { status: input.status } : {}),
+    ...(input.status === "FAILED" ? { AND: [nonCancelledAIUsage] } : {}),
     ...(input.operation ? { operation: input.operation } : {}),
     ...(input.query ? { OR: ["model", "provider", "errorCode", "requestId"].map((key) => ({ [key]: { contains: input.query, mode: "insensitive" as const } })) } : {}),
   };

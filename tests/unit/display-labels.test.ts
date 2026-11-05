@@ -1,5 +1,6 @@
 import {
   aiOperationLabel,
+  aiUsageStatusLabel,
   aiUsageStatusLabels,
   assignmentProgressLabels,
   assignmentStatusLabels,
@@ -44,6 +45,13 @@ describe("display labels", () => {
     expect(aiOperationLabel("coach")).toBe("苏格拉底追问");
     expect(aiOperationLabel("material_keywords")).toBe("材料关键词提取");
     expect(auditTargetTypeLabel("LearningSession")).toBe("学习会话");
+  });
+
+  it("labels cancelled AI requests while retaining historical success and failure labels", () => {
+    expect(aiUsageStatusLabel("FAILED", "AI_CANCELLED")).toBe("已取消");
+    expect(aiUsageStatusLabel("FAILED", "AI_TIMEOUT")).toBe("失败");
+    expect(aiUsageStatusLabel("FAILED", null)).toBe("失败");
+    expect(aiUsageStatusLabel("SUCCESS", null)).toBe("成功");
   });
 
   it("preserves unknown diagnostic values instead of hiding them", () => {
