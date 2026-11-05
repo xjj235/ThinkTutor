@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("mock mode completes the ThinkTutor learning loop", async ({ page }, testInfo) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "问思学伴" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "用追问理清思路，用讲解检验理解" })).toBeVisible();
   await page.getByRole("link", { name: "创建学生账号" }).click();
   await page.getByLabel("姓名").fill("端到端学生");
   await page.getByLabel("邮箱").fill(`flow-${testInfo.project.name}-${Date.now()}@example.test`);
@@ -124,6 +124,6 @@ test("mock mode completes the ThinkTutor learning loop", async ({ page }, testIn
     originalSessionId,
   );
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: "今天，想弄懂什么？" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "今天，想把哪个知识点讲清楚？" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("workspace-records.png"), fullPage: true });
 });

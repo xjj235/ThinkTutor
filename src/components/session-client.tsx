@@ -20,6 +20,7 @@ import {
 } from "@/lib/contracts";
 import { PhaseProgress } from "./phase-progress";
 import { makeClientRequestId as makeRequestId } from "@/lib/client-request-id";
+import { publicErrorMessage } from "@/lib/errors";
 import { SafeMarkdown } from "./safe-markdown";
 import { LearningFeedbackView } from "./learning-feedback";
 import { LearningJourney } from "./learning-journey";
@@ -36,7 +37,7 @@ async function fetchSessionPayload(sessionId: string) {
   });
   const result = (await response.json()) as ApiResponse<SessionPayload>;
   if (isApiFailure(result)) {
-    throw new Error(result.error.message);
+    throw new Error(publicErrorMessage(result.error.code, result.error.message));
   }
   return result.data;
 }
@@ -88,7 +89,7 @@ export function SessionClient({ sessionId, readOnly = false }: { sessionId: stri
     if (status === 409) {
       unresolvedActionRef.current = action;
       setUnresolvedAction(action);
-      setError(failure.message);
+      setError(publicErrorMessage(failure.code, failure.message));
       setRetryAction("sync");
       return;
     }
@@ -97,7 +98,7 @@ export function SessionClient({ sessionId, readOnly = false }: { sessionId: stri
       markUnresolved(action);
       return;
     }
-    setError(failure.message);
+    setError(publicErrorMessage(failure.code, failure.message));
     // A failed retry cannot establish whether an earlier disconnected request committed.
     setRetryAction(unresolvedActionRef.current && status >= 400 && status < 500 && !failure.retryable
       ? "sync"

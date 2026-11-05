@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { AppError } from "./errors";
+import { AppError, publicErrorMessage } from "./errors";
 import { logger, safeErrorForLog } from "./logger";
 
 const privateResponseHeaders = {
@@ -29,7 +29,7 @@ export function apiFail(
   requestId = createRequestId(),
 ) {
   return NextResponse.json(
-    { error: { code, message, retryable }, requestId },
+    { error: { code, message: publicErrorMessage(code, message), retryable }, requestId },
     { status, headers: privateResponseHeaders },
   );
 }

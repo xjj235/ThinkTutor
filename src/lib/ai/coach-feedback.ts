@@ -10,6 +10,28 @@ export const coachPrerequisiteEvidenceSchema = z.object({
 }).strict();
 export type CoachPrerequisiteEvidence = z.infer<typeof coachPrerequisiteEvidenceSchema>;
 
+export type CoachEvidenceSources = Record<"STUDENT" | "REFERENCE" | "QUESTION", readonly string[]>;
+
+// Correct only a uniquely identifiable source label. The quote and fact stay
+// intact, and unsupported knowledge never becomes evidence through this path.
+export function normalizeCoachPrerequisiteSources(evidence: readonly CoachPrerequisiteEvidence[], sources: CoachEvidenceSources): CoachPrerequisiteEvidence[] {
+  const sourceNames = ["STUDENT", "REFERENCE", "QUESTION"] as const;
+  return evidence.map((item) => {
+    if (item.kind !== "READING_ARITHMETIC" || item.source === "STUDENT" || item.source === "UNSUPPORTED" || item.source === "BASIC_OPERATION" || item.quote === null) return item;
+    const quote = item.quote;
+    if (sources[item.source].some((text) => text.includes(quote))) return item;
+    const matches = sourceNames.filter((source) => sources[source].some((text) => text.includes(quote)));
+    return matches.length === 1 && matches[0] !== "STUDENT" ? { ...item, source: matches[0]! } : item;
+  });
+}
+
+export function hasCoachPrerequisiteQuote(item: CoachPrerequisiteEvidence, sources: CoachEvidenceSources): boolean {
+  if (item.source === "UNSUPPORTED") return false;
+  if (item.source === "BASIC_OPERATION") return item.kind === "READING_ARITHMETIC" && item.quote === null;
+  const quote = item.quote;
+  return quote !== null && sources[item.source].some((text) => text.includes(quote));
+}
+
 // An internal, compact account of a conditional inference, not student metadata.
 // The model checks source meaning; this gate checks its declared logical direction.
 export const coachConditionalCheckSchema = z.object({

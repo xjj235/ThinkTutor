@@ -1,10 +1,54 @@
 import { describe, expect, it } from "vitest";
 import {
   coachConditionalCheckSchema,
+  hasCoachPrerequisiteQuote,
+  normalizeCoachPrerequisiteSources,
   validateCoachConditionalReasoning,
   type CoachConditionalCheck,
   type CoachPrerequisiteEvidence,
 } from "@/lib/ai/coach-feedback";
+
+describe("prerequisite source metadata", () => {
+  const quote = "货款为100万美元";
+  const sources = { STUDENT: ["本币现金流"], REFERENCE: [], QUESTION: [quote] };
+  const item: CoachPrerequisiteEvidence = { fact: "货款使用美元计价", kind: "READING_ARITHMETIC", source: "REFERENCE", quote };
+
+  it("corrects only the source of a uniquely located verbatim quotation", () => {
+    const [resolved] = normalizeCoachPrerequisiteSources([item], sources);
+    expect(resolved).toEqual({ ...item, source: "QUESTION" });
+    expect(item.source).toBe("REFERENCE");
+    expect(hasCoachPrerequisiteQuote(resolved!, sources)).toBe(true);
+  });
+
+  it("leaves missing or ambiguous quotations invalid", () => {
+    const ambiguous = { ...sources, STUDENT: [quote] };
+    for (const currentSources of [ambiguous, { ...sources, QUESTION: [] }]) {
+      const [resolved] = normalizeCoachPrerequisiteSources([item], currentSources);
+      expect(resolved).toEqual(item);
+      expect(hasCoachPrerequisiteQuote(resolved!, currentSources)).toBe(false);
+    }
+  });
+
+  it.each(["UNSUPPORTED", "BASIC_OPERATION"] as const)("never promotes %s domain knowledge through source correction", (source) => {
+    const rule: CoachPrerequisiteEvidence = { ...item, kind: "DOMAIN_RULE", source };
+    const [resolved] = normalizeCoachPrerequisiteSources([rule], sources);
+    expect(resolved).toEqual(rule);
+    expect(hasCoachPrerequisiteQuote(resolved!, sources)).toBe(false);
+  });
+
+  it("accepts only quote-free basic reading and arithmetic", () => {
+    expect(hasCoachPrerequisiteQuote({ ...item, source: "BASIC_OPERATION", quote: null }, sources)).toBe(true);
+    expect(hasCoachPrerequisiteQuote({ ...item, source: "BASIC_OPERATION" }, sources)).toBe(false);
+    expect(hasCoachPrerequisiteQuote({ ...item, quote: null }, sources)).toBe(false);
+  });
+
+  it("never relocates domain rules or student statements", () => {
+    const rule: CoachPrerequisiteEvidence = { ...item, kind: "DOMAIN_RULE" };
+    const student: CoachPrerequisiteEvidence = { ...item, source: "STUDENT" };
+    expect(normalizeCoachPrerequisiteSources([rule, student], sources)).toEqual([rule, student]);
+    expect(normalizeCoachPrerequisiteSources([item], { ...sources, QUESTION: [], STUDENT: [quote] })).toEqual([item]);
+  });
+});
 
 const conclusionQuestion = "三个角分别为50°、60°、70°的三角形中，两条较短边的平方和等于最长边的平方吗？";
 const applicationQuestion = "三个角分别为50°、60°、70°的三角形，能否直接应用已给出的勾股定理，依据是什么？";

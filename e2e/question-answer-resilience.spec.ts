@@ -97,6 +97,41 @@ test("a slow answer shows honest elapsed time and preserves a copy without submi
   expect(requests).toBe(1);
 });
 
+test("a review failure uses student copy and retries the retained answer with the same request id", async ({ page }) => {
+  await register(page);
+  const created = await createSession(page);
+  await page.goto(`/session/${created.session.id}`);
+  const requests: Array<z.infer<typeof answerSchema>> = [];
+  const internalMessage = "追问内容未通过答案暴露、题设或前提检查，请重试。";
+  await page.route("**/api/sessions/*/answers", async (route) => {
+    requests.push(answerSchema.parse(route.request().postDataJSON()));
+    if (requests.length === 1) {
+      await route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({
+        error: { code: "AI_INVALID_OUTPUT", message: internalMessage, retryable: true },
+      }) });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.getByLabel("独立作答").fill(originalAnswer);
+  await page.getByRole("button", { name: "提交回答", exact: true }).click();
+  const alert = page.locator("main").getByRole("alert");
+  await expect(alert).toContainText("学习教练暂时未能生成回复，请重试。");
+  await expect(page.locator("main")).not.toContainText(internalMessage);
+  await expect(page.getByLabel("独立作答")).toHaveValue(originalAnswer);
+  await expect(page.getByLabel("独立作答")).toBeEnabled();
+  expect(await readSession(page, created.session.id)).toEqual(created);
+
+  await page.getByRole("button", { name: "重试本次操作", exact: true }).click();
+  await expect(alert).toHaveCount(0);
+  await expect(page.getByLabel("独立作答")).toHaveValue("");
+  expect(requests).toHaveLength(2);
+  expect(requests[1]).toEqual(requests[0]);
+  const saved = await readSession(page, created.session.id);
+  expect(saved.messages.filter((message) => message.clientRequestId === requests[0].clientRequestId)).toHaveLength(1);
+});
+
 for (const failureMode of ["disconnect", "server-error"] as const) {
 test(`a committed answer with ${failureMode} locks edits and recovers the same request`, async ({ page }) => {
   await register(page);
@@ -287,9 +322,9 @@ test("curated knowledge goal and resume events retry their own action and reques
   });
   await page.getByLabel("独立作答").fill("系统性风险需要判断金融体系的功能是否受损。");
   await page.getByRole("button", { name: "提交回答", exact: true }).click();
-  await expect(page.locator("main").getByRole("alert")).toContainText("本次回答尚未提交。");
+  await expect(page.locator("main").getByRole("alert")).toContainText("本次等待超时，请重试。");
   await page.getByRole("button", { name: "恢复核验", exact: true }).click();
-  await expect(page.locator("main").getByRole("alert")).toContainText("恢复核验暂未开始，请重试。");
+  await expect(page.locator("main").getByRole("alert")).toContainText("本次等待超时，请重试。");
   await page.getByRole("button", { name: "重试本次操作", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "恢复核验进行中" })).toBeVisible();
   expect(answers).toBe(1);

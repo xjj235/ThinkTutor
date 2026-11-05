@@ -518,7 +518,7 @@ describe("ThinkTutor API flow", () => {
     expect(await failedAnswer.json()).toMatchObject({
       error: {
         code: "AI_TIMEOUT",
-        message: "模型超时。",
+        message: "本次等待超时，请重试。",
         retryable: true,
       }, requestId: expect.any(String),
     });
@@ -530,6 +530,39 @@ describe("ThinkTutor API flow", () => {
     expect(persisted.phase).toBe("DIAGNOSIS");
     expect(persisted.socraticTurns).toBe(0);
     expect(persisted.messages).toHaveLength(1);
+  });
+
+  it("returns a public review failure and retries the original answer once", async () => {
+    const created = await createSession();
+    const sessionId = created.data.session.id;
+    const answer = "系统性风险会沿机构之间的关联传导，我还需要解释具体的传导环节。";
+    const clientRequestId = "api-private-review-failure";
+    const internalMessage = "追问内容未通过答案暴露、题设或前提检查，请重试。";
+    const provider = vi.spyOn(MockAIProvider.prototype, "createCoachTurn").mockRejectedValueOnce(
+      new AIProviderError("AI_INVALID_OUTPUT", internalMessage, 502, true),
+    );
+
+    const failed = await postAnswer(sessionId, answer, clientRequestId);
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toMatchObject({
+      error: { code: "AI_INVALID_OUTPUT", message: "学习教练暂时未能生成回复，请重试。", retryable: true },
+      requestId: expect.any(String),
+    });
+    const afterFailure = await parseSessionResponse(await getSessionRoute(new Request(`http://localhost/api/sessions/${sessionId}`), sessionContext(sessionId)));
+    expect(afterFailure.data).toEqual(created.data);
+
+    const retried = await postAnswer(sessionId, answer, clientRequestId);
+    expect(retried.status).toBe(200);
+    const saved = await parseSessionResponse(retried);
+    expect(saved.data.messages.filter((message) => message.clientRequestId === clientRequestId)).toEqual([
+      expect.objectContaining({ role: "USER", content: answer }),
+    ]);
+    expect(provider).toHaveBeenCalledTimes(2);
+    expect(provider.mock.calls[1][0].latestAnswer).toBe(answer);
+
+    const replay = await postAnswer(sessionId, answer, clientRequestId);
+    expect((await parseSessionResponse(replay)).data.duplicate).toBe(true);
+    expect(provider).toHaveBeenCalledTimes(2);
   });
 
   it("validates every API body and dynamic route parameter", async () => {
