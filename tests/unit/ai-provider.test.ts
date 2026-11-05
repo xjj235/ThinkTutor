@@ -462,6 +462,26 @@ describe("AI turn format normalization", () => {
     resetServerEnvForTests();
   };
 
+  it.each([false, true])("requires null for angle-only extraction and keeps empty sides invalid=%s", async (emptySides) => {
+    configure();
+    const question = "一个三角形的三个内角分别为50°、60°、70°，已知其中两条边的长度，能否直接使用勾股定理求第三条边，依据是什么？";
+    const constraints = emptySides ? {
+      exact: true, angles: [50, 60, 70].map((value) => ({ value, literal: `${value}°`, quote: "三个内角分别为50°、60°、70°" })), sides: [],
+    } : null;
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(completion({ ...output, assistantMessage: question }))
+      .mockResolvedValueOnce(completion({ ...contentReviewPass, triangleConstraints: constraints }))
+      .mockResolvedValueOnce(completion(reviewPass));
+    const pending = new DeepSeekProvider({ fetcher: passingDisclosureReview(fetcher) }).createCoachTurn(coachInput);
+    if (emptySides) await expect(pending).rejects.toMatchObject({ code: "AI_INVALID_OUTPUT" });
+    else expect((await pending).assistantMessage).toBe(question);
+    expect(fetcher).toHaveBeenCalledTimes(emptySides ? 2 : 3);
+    const audit = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)) as { messages: Array<{ content: string }> };
+    const system = audit.messages[0]!.content;
+    expect(system).toContain('示例 JSON：{"triangleConstraints":null');
+    expect(system).toContain("仅说已知两条边但没有边长数值时，整个字段必须为null");
+    expect(system).toContain("给全角边数值时必须完整提取，不能用null跳过");
+  });
+
   it.each([false, true])("drops undeclared feedback fields before reviews and output for diagnostic=%s", async (diagnostic) => {
     configure();
     const unknownFields = { internalAnswer: "INTERNAL_ONLY_DO_NOT_RETURN", score: 99, ["__proto__"]: "PRIVATE_PROTOTYPE", constructor: "PRIVATE_CONSTRUCTOR" };

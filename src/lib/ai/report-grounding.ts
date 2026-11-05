@@ -1,5 +1,6 @@
 import { dimensionKeys, type LearningReportDraft } from "../contracts";
 import { AIProviderError } from "../errors";
+import { parseEvidenceQuotes } from "../evidence-quotes";
 
 // This checks attribution, not the correctness of the model's interpretation.
 export function assertReportGrounding(
@@ -7,10 +8,8 @@ export function assertReportGrounding(
   studentMessages: readonly string[],
 ): void {
   function check(evidence: string, quoteRequired: boolean): void {
-    const quotePattern = /[“「"]([^”」"\r\n]{1,600})[”」"]/gu;
-    const quotes = [...evidence.matchAll(quotePattern)].map((match) => match[1]);
-    if ((quoteRequired && !quotes.some((quote) => quote.length >= 2))
-      || /[“「”」"]/.test(evidence.replace(quotePattern, ""))
+    const { quotes, valid } = parseEvidenceQuotes(evidence);
+    if (!valid || (quoteRequired && !quotes.some((quote) => quote.length >= 2))
       || quotes.some((quote) => !studentMessages.some((message) => message.includes(quote)))) {
       throw new AIProviderError("AI_INVALID_OUTPUT", "报告证据未能对应学生原文，请重试。", 502, true);
     }

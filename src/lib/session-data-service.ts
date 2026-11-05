@@ -12,7 +12,7 @@ import {
   textLimits,
 } from "./contracts";
 import { prisma } from "./db";
-import { sessionRelations } from "./serializers";
+import { reportRelations, sessionRelations } from "./serializers";
 
 export const saveMessageInputSchema = z
   .object({
@@ -61,10 +61,20 @@ export async function createSession(
 export async function readSession(id: string) {
   const sessionId = sessionIdSchema.parse(id);
 
-  return prisma.learningSession.findUnique({
+  const session = await prisma.learningSession.findUnique({
     where: { id: sessionId },
-    include: sessionRelations,
+    include: {
+      messages: sessionRelations.messages,
+      report: { select: { id: true } },
+    },
   });
+  if (!session) return null;
+
+  // Load normalized report children only after a report has been saved.
+  const report = session.report
+    ? await prisma.learningReport.findUnique({ where: { id: session.report.id }, include: reportRelations })
+    : null;
+  return { ...session, report };
 }
 
 export async function saveMessage(

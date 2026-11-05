@@ -45,4 +45,14 @@ describe("report citation coverage without inferring ability", () => {
     expect(reportDimensionSources(report("学生原文：“共同暴露”。", ["student"]), "transferAbility", [student, student, message("unselected", "USER", "共同暴露")])).toEqual([student]);
     expect(reportDimensionSources(report("学生原文：“共同暴露”。", []), "transferAbility", [student])).toEqual([]);
   });
+
+  it("links a complete nested quotation to its student source in older reports", () => {
+    const original = "例句中“叫醒”和“伸着懒腰”是人的动作。";
+    const sources = reportDimensionSources(report("学生原文：“" + original + "”"), "transferAbility", [
+      message("partial", "USER", "例句中“叫醒"),
+      message("whole", "USER", original),
+      message("coach", "ASSISTANT", original),
+    ]);
+    expect(sources.map(source => source.id)).toEqual(["whole"]);
+  });
 });

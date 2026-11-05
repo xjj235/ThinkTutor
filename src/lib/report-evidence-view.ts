@@ -1,4 +1,5 @@
 import type { DimensionKey, LearningReportDTO, MessageDTO } from "./contracts";
+import { parseEvidenceQuotes } from "./evidence-quotes";
 
 /** Locate a report citation, without treating a quotation as proof of mastery. */
 export function reportDimensionSources(
@@ -6,7 +7,7 @@ export function reportDimensionSources(
   key: DimensionKey,
   messages: readonly MessageDTO[],
 ): MessageDTO[] {
-  const quotes = [...report.dimensions[key].evidence.matchAll(/[“「"]([^”」"\r\n]{2,600})[”」"]/gu)].map((match) => match[1]);
+  const quotes = parseEvidenceQuotes(report.dimensions[key].evidence).quotes.filter((quote) => quote.length >= 2);
   const linkedIds = report.evidenceLinks?.[key];
   const seen = new Set<string>();
   return messages.filter((message) => {

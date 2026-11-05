@@ -133,11 +133,14 @@ describe("learning session integration flow", () => {
     expect(feynmanPhase.messages.at(-1)?.learningFeedback?.answerQuote).toContain("例如共同资产");
     expect(feynmanPhase.messages.at(-1)?.content).toContain("不代表已经掌握");
 
+    const reportSessionReads = vi.spyOn(prisma.learningSession, "findUnique");
     const completed = await submitFeynmanExplanation(created.session.id, {
       explanation:
         "系统性风险是局部冲击通过关联、杠杆和流动性扩散为整体风险。例如一家大机构被迫卖资产会导致价格下跌，所以其他机构也受损。如果换到供应链场景，也要看节点之间是否高度关联。",
       clientRequestId: "feynman-1",
     });
+    expect(reportSessionReads).toHaveBeenCalledTimes(2);
+    reportSessionReads.mockRestore();
     expect(completed.payload.session.phase).toBe("COMPLETED");
     if (!completed.report) throw new Error("Expected completed report");
     expect(completed.report.overallScore).toBeGreaterThan(0);

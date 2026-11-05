@@ -39,7 +39,7 @@ import { submitV12Turn } from "./knowledge/v12-session-service";
 import { selectCoaching } from "./knowledge/coaching-service";
 import { recordCoaching } from "./knowledge/coaching";
 import type { SourcedDiagnosticQuestion } from "./ai/types";
-import { reportRelations, serializePayload, serializeReport, sessionRelations } from "./serializers";
+import { serializeMessage, serializePayload, serializeReport, serializeSession, sessionRelations } from "./serializers";
 import {
   answeredSocraticQuestionTypes,
   canEnterFeynmanVoluntarily,
@@ -567,7 +567,7 @@ async function saveFeynmanExplanation(sessionId: string, input: { explanation: s
     if (!payload.report) throw new AppError("NOT_FOUND", "学习报告不存在。", 404);
     return { payload, report: payload.report, duplicate: true };
   }
-  const session = await getRequiredSessionRecord(sessionId);
+  const session = v12Session;
   assertExpectedSessionVersion(session, input.expectedVersion);
   if (!canSubmitFeynman(session)) throw new AppError("CONFLICT", "当前阶段不能提交费曼讲解。", 409);
   assertMessageCapacity(session.messages.length, 1);
@@ -632,10 +632,9 @@ async function saveFeynmanExplanation(sessionId: string, input: { explanation: s
 }
 
 export async function getReportPayload(sessionId: string) {
-  const report = await prisma.learningReport.findUnique({ where: { sessionId }, include: reportRelations });
-  if (!report) throw new AppError("NOT_FOUND", "学习报告不存在。", 404);
-  const session = await getRequiredSessionRecord(sessionId);
-  return { session: serializePayload(session).session, report: serializeReport(report), messages: serializePayload(session).messages };
+  const session = await readSession(sessionId);
+  if (!session?.report) throw new AppError("NOT_FOUND", "学习报告不存在。", 404);
+  return { session: serializeSession(session), report: serializeReport(session.report), messages: session.messages.map(serializeMessage) };
 }
 
 export async function createRetrySession(sessionId: string, input: { clientRequestId: string }): Promise<SessionPayload & { duplicate: boolean }> {

@@ -87,7 +87,7 @@ const claimTruthCheckSchema = z.object({
   questionQuote: z.string().trim().min(1).max(500),
 }).strict();
 const coachContentReviewSchema = z.object({
-  triangleConstraints: triangleConstraintsSchema.nullable().default(null),
+  triangleConstraints: triangleConstraintsSchema.nullable().default(null).describe("只有题面明确给同一三角形全部三个内角和至少两条具体数值边长时才输出完整对象。只有角度，或仅说已知两条边但没有边长数值时，整个字段必须为null。禁止用sides空数组、缺失或null代替完整对象；给全角边数值时必须完整提取，不能用null跳过。"),
   claimTruthCheck: claimTruthCheckSchema.nullable().default(null),
   selfExplanationQuestionQuote: z.string().trim().min(1).max(500).nullable().default(null),
   minimumAnswer: z.string().trim().min(1).max(300),
@@ -293,7 +293,7 @@ const COACH_HEDGE_DELAY_MS = 250;
 const examples: Record<Operation, string> = {
   coach_disclosure_review: '{"pendingTaskQuote":"实际待答问句","taskKind":"EXPLAIN_OR_APPLY","prematureDirection":null,"namedTargetAttribute":null,"remainingWork":"学生仍需完成的任务","fields":[{"id":"question","status":"OPEN","quote":null,"reason":null},{"id":"observation","status":"OPEN","quote":null,"reason":null},{"id":"focus","status":"OPEN","quote":null,"reason":null},{"id":"whyItMatters","status":"OPEN","quote":null,"reason":null},{"id":"progress","status":"OPEN","quote":null,"reason":null}]}',
   diagnostic_review: '{"minimumAnswer":"学生表达自己当前的理解或不知道","attributedStudentClaims":[],"missingInformationQuote":null,"questionAnswerable":true,"singleMainQuestion":true,"noAnswerLeak":true,"answerLeakQuote":null}',
-  coach_content_review: '{"claimTruthCheck":null,"minimumAnswer":"实际题目的最短答案","verdict":"PASS","prerequisiteEvidence":[],"conditionalCheck":null,"answerDisclosure":null,"inconsistentGivens":null,"missingInformationQuote":null}',
+  coach_content_review: '{"triangleConstraints":null,"claimTruthCheck":null,"minimumAnswer":"实际题目的最短答案","verdict":"PASS","prerequisiteEvidence":[],"conditionalCheck":null,"answerDisclosure":null,"inconsistentGivens":null,"missingInformationQuote":null}',
   retry_review: '{"verdict":"INSUFFICIENT_EVIDENCE","confidence":0,"rationale":"尚无足够证据确认原知识漏洞已修复。","evidence":[]}',
   teaching_selection: '{"choiceId":"an_id_from_choices","openingId":"an_id_from_openings"}',
   teaching_review: '{"minimumAnswer":"按候选问题实际给定条件作答","requirementChecks":[{"evidenceId":"锁定要求中的ID","status":"ELICITED","questionQuote":"候选问题中的实际提问原文","rationale":"该回答实际取得本项证据的理由"}],"answerLeakQuote":null,"missingInformation":null,"grounded":true,"targetAligned":true,"answerConnected":true,"nonRedundant":true,"noAnswerLeak":true,"questionAnswerable":true}',

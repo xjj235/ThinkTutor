@@ -4,6 +4,7 @@ import { DeepSeekProvider } from "@/lib/ai/deepseek-provider";
 import { assertReportGrounding } from "@/lib/ai/report-grounding";
 import { dimensionKeys } from "@/lib/contracts";
 import { resetServerEnvForTests } from "@/lib/env";
+import { linkReportEvidence } from "@/lib/knowledge/report-evidence";
 
 const task = { course: undefined, chapter: undefined, referenceText: undefined, topic: "汇率风险", objective: "解释汇率变化如何影响企业", learnerLevel: "入门" };
 const answer = "企业收入与支出的币种不同，汇率变化可能改变本币利润。";
@@ -84,4 +85,29 @@ it("accepts a genuine student gap quotation without requiring a magic attributio
   const draft = await validDraft();
   draft.gaps[0].evidence = `学生回答：“${answer}”，尚未说明变化的不利方向。`;
   expect(() => assertReportGrounding(draft, [answer])).not.toThrow();
+});
+
+it("accepts and links complete nested student quotes without matching a partial inner quote", async () => {
+  const draft = await validDraft();
+  const original = "另如“太阳露出了笑脸”也把人的动作神态赋予太阳。";
+  draft.dimensions.exampleAbility.evidence = "学生原文：“" + original + "”";
+  expect(() => assertReportGrounding(draft, [answer, original])).not.toThrow();
+  const links = linkReportEvidence(draft, [
+    { id: "complete", role: "USER", content: original },
+    { id: "partial", role: "USER", content: "另如“太阳露出了笑脸" },
+    { id: "coach", role: "ASSISTANT", content: original },
+  ]);
+  expect(links.exampleAbility).toEqual(["complete"]);
+});
+
+it("rejects a nested citation assembled across different student messages", async () => {
+  const draft = await validDraft();
+  draft.dimensions.exampleAbility.evidence = "学生原文：“前半“动作”，后半解释。”";
+  expect(() => assertReportGrounding(draft, [answer, "前半“动作”，", "后半解释。"])).toThrow("学生原文");
+});
+
+it.each(["伪造“没有说过的动作”的说明。", "教师提出“春风像邮差”的例句。"])("still rejects unsupported nested quotations: %s", async (quote) => {
+  const draft = await validDraft();
+  draft.dimensions.exampleAbility.evidence = "学生原文：“" + quote + "”";
+  expect(() => assertReportGrounding(draft, [answer])).toThrow("学生原文");
 });
